@@ -70,6 +70,9 @@ public class CoachResponseMapper {
 				sourceContextIds(question.sourceContextIds(), fallbackSourceContextIds)
 			))
 			.toList();
+		if (questions.isEmpty()) {
+			throw new GeminiException("Gemini returned no usable interview questions");
+		}
 		return new InterviewQuestionsResponse(questions, "gemini");
 	}
 
@@ -101,17 +104,19 @@ public class CoachResponseMapper {
 	}
 
 	private List<String> sourceContextIds(List<String> responseContextIds, List<String> fallbackContextIds) {
-		List<String> cleaned = safeList(responseContextIds).stream()
-			.filter(Objects::nonNull)
-			.map(String::trim)
-			.filter(value -> !value.isBlank())
-			.distinct()
-			.limit(12)
-			.toList();
-		if (!cleaned.isEmpty()) {
-			return cleaned;
+		List<String> availableIds = cleanContextIds(fallbackContextIds);
+		List<String> responseIds = cleanContextIds(responseContextIds);
+		if (availableIds.isEmpty()) {
+			return responseIds;
 		}
-		return safeList(fallbackContextIds).stream()
+		List<String> retrievedIds = responseIds.stream()
+			.filter(availableIds::contains)
+			.toList();
+		return retrievedIds.isEmpty() ? availableIds : retrievedIds;
+	}
+
+	private List<String> cleanContextIds(List<String> contextIds) {
+		return safeList(contextIds).stream()
 			.filter(Objects::nonNull)
 			.map(String::trim)
 			.filter(value -> !value.isBlank())

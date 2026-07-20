@@ -33,6 +33,28 @@ class SectionAwareTextChunkerTests {
 	}
 
 	@Test
+	void recognizesCommonResumeHeadingAliases() {
+		String resume = """
+			RESEARCH EXPERIENCE
+			Studied distributed systems.
+
+			PERSONAL PROJECTS
+			Built an interview coach.
+
+			CORE COMPETENCIES
+			Java, PostgreSQL, Redis
+
+			RELEVANT COURSEWORK
+			Databases and software construction
+			""";
+
+		List<TextChunk> chunks = chunker.chunk(resume, 500, 50);
+
+		assertThat(chunks).extracting(TextChunk::section)
+			.containsExactly("Research Experience", "Projects", "Skills", "Coursework");
+	}
+
+	@Test
 	void splitsLongSectionsWithOverlap() {
 		String content = "EXPERIENCE\n" + "Built production backend services. ".repeat(80);
 

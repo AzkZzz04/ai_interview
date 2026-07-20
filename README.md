@@ -12,7 +12,7 @@ This repository currently contains the Spring Boot backend, the first local infr
 - Next.js frontend.
 - PostgreSQL with pgvector.
 - Redis.
-- LocalStack S3-compatible object storage.
+- LocalStack S3-compatible object storage and SQS queues with a DLQ.
 
 See [docs/project-design.md](docs/project-design.md) for the proposed architecture, domain model, API surface, repository structure, and implementation milestones.
 
@@ -35,7 +35,12 @@ docker compose up -d
 This starts:
 
 - Redis on `localhost:6380` by default when managed by Compose
-- LocalStack S3 on `localhost:4566`
+- LocalStack S3 and SQS on `localhost:4566`
+
+LocalStack initializes the `ai-interview-jobs` standard queue and the
+`ai-interview-jobs-dlq` dead-letter queue. Native SQS redrive moves malformed or
+repeatedly interrupted messages after three receives; application retries that
+exhaust their database attempt limit are published to the same DLQ explicitly.
 
 The backend defaults to PostgreSQL on `localhost:5432` because this workspace already has pgvector there. If you need Compose to manage a separate PostgreSQL instance later, run:
 
@@ -47,9 +52,16 @@ The managed PostgreSQL service binds to `localhost:55432` by default, or to `POS
 
 The backend defaults to Redis on `localhost:6379`. The bundled Compose Redis service publishes container port `6379` to `localhost:6380` by default, so set `REDIS_PORT=6380` only if you are using that Compose-managed Redis instance. If your Docker Redis is already mapped to host port `6379`, leave `REDIS_PORT=6379`.
 
-Redis is used for operational guardrails only: per-client limits on expensive upload/AI requests and short-lived duplicate in-flight locks around Gemini calls. PostgreSQL remains the durable source of truth.
+Redis is used for submission-time operational guardrails only: per-client limits,
+`Idempotency-Key` responses, and a five-minute completed-job lookup cache.
+PostgreSQL remains the source of truth for job status and results; database
+leases prevent concurrent workers from owning the same job.
 
 Mutation endpoints also support an optional `Idempotency-Key` header. When present, Redis stores the successful response for the same client, endpoint, and request fingerprint for `REDIS_IDEMPOTENCY_TTL_SECONDS` seconds. Retrying the same request with the same key returns the cached response; reusing the key with a different payload returns `409`.
+
+The job submission service also fingerprints the complete AI request. The same
+local user, job type, resume, job description, target role, and seniority reuse
+an active or completed job for 300 seconds instead of calling Gemini again.
 
 The backend stores original uploaded resume files in S3-compatible storage and defaults to LocalStack:
 
@@ -62,6 +74,17 @@ S3_SECRET_KEY=test
 ```
 
 Application-owned persistence tables are created under the `ai_interview_app` schema to avoid collisions with existing local tables in `public`.
+
+The same Spring Boot build supports three process modes:
+
+```properties
+JOB_RUNTIME_MODE=all     # local default: API and worker
+JOB_RUNTIME_MODE=api     # submit and query jobs only
+JOB_RUNTIME_MODE=worker  # consume SQS jobs only
+```
+
+Workers use 20-second SQS long polling, two processing threads, a 300-second
+visibility timeout, and a 60-second SQS/database lease heartbeat by default.
 
 Gemini calls use the Gemini Developer API key from local `.env`. To enable Gemini chat and embeddings for development, update `.env`:
 
@@ -90,14 +113,40 @@ Keep `.env` local and untracked. Do not put real API keys in `.env.example`.
 
 ## Backend API
 
-The first no-auth API persists uploaded resumes, extracted chunks, generated assessments, interview sessions, questions, and answer feedback for a single local user:
+The no-auth API creates persistent jobs for a single internal local user:
 
-- `POST /api/resumes` with multipart field `file`
+- `POST /api/resumes` with multipart field `file` returns `202`
 - `GET /api/resumes/current`
-- `POST /api/assessments`
-- `POST /api/interview/questions`
-- `POST /api/interview/feedback`
+- `POST /api/analyses` returns one job for assessment and question generation
+- `POST /api/interview/feedback` returns `202`
+- `GET /api/jobs/{jobId}` returns status, stage, attempts, result, and error
+
+The legacy `POST /api/assessments` and `POST /api/interview/questions` routes
+also submit the combined asynchronous analysis job.
 
 Supported upload formats: PDF, DOC, DOCX, TXT, and Markdown.
 
-The AI endpoints call Gemini and return typed JSON for the frontend. If Gemini is unavailable or the configured key/model has no quota, the frontend falls back to local draft scoring so the workflow remains usable during development.
+The frontend stores active job IDs in `localStorage` and resumes polling after a
+refresh. It displays backend stages rather than estimated percentages. Failed
+jobs use local draft output; partial analysis jobs retain the completed Gemini
+assessment and only replace missing questions.
+
+## Verification
+
+Run the backend and frontend checks:
+
+```bash
+./gradlew check
+cd apps/web
+npm test
+npm run typecheck
+npm run build
+```
+
+With LocalStack running, exercise real SQS publish, visibility, redelivery, and
+DLQ behavior with the opt-in integration test:
+
+```bash
+RUN_LOCALSTACK_TESTS=true ./gradlew test \
+  --tests dev.jiaming.ai_interview.jobs.JobQueueServiceLocalStackTests
+```

@@ -63,7 +63,8 @@ The initial release should avoid video, audio, live coding, and complex collabor
 
 - PostgreSQL as primary relational database.
 - pgvector for RAG retrieval across resume, job description, question, and answer embeddings.
-- Redis for rate limiting, short-lived workflow state, and background job locks.
+- Redis for rate limiting, idempotency responses, and five-minute completed-job lookup caching.
+- AWS SQS Standard Queue for asynchronous job delivery, with a dedicated DLQ.
 - LocalStack S3-compatible storage for local original resume files and generated artifacts.
 - Docker Compose for local development.
 - OpenTelemetry for traces and metrics.
@@ -95,6 +96,7 @@ ai_interview/
     common/                      # API errors, config, local user helper
     gemini/                      # Gemini client boundary
     interview/                   # Interview endpoints and persistence
+    jobs/                        # Durable jobs, SQS transport, leases, worker
     rag/                         # RAG indexing and retrieval
     resume/                      # Upload, extraction, chunking, latest-resume persistence
     storage/                     # S3-compatible object storage
@@ -126,6 +128,7 @@ dev.jiaming.ai_interview
   common/
   gemini/
   interview/
+  jobs/
   rag/
   resume/
   storage/
@@ -375,21 +378,23 @@ The current prototype is no-auth and single-resume from the API perspective, wit
 
 ### Resumes
 
-- `POST /api/resumes` multipart upload for PDF, DOC, DOCX, TXT, or Markdown.
+- `POST /api/resumes` multipart upload for PDF, DOC, DOCX, TXT, or Markdown; returns `202` with a `RESUME_EXTRACTION` job.
 - `GET /api/resumes/current`
 
 ### Assessments
 
-- `POST /api/assessments`
+- `POST /api/analyses`; returns `202` with one `ANALYSIS` job that checkpoints assessment before generating questions.
 
 Request includes resume text or uses the latest uploaded resume, optional job description, target role, and seniority.
 
 ### Interview Practice
 
-- `POST /api/interview/questions`
-- `POST /api/interview/feedback`
+- `POST /api/interview/feedback`; returns `202` with an `ANSWER_FEEDBACK` job.
+- `GET /api/jobs/{jobId}`
 
-Questions are generated from the resume/job context. Feedback scores one text answer against the active question and expected signals.
+The legacy assessment and question routes submit the same combined analysis job.
+Job status is one of `QUEUED`, `PROCESSING`, `RETRYING`, `SUCCEEDED`, `PARTIAL`,
+or `FAILED`; stages report real work and never estimated percentages.
 
 ### Future Persistent APIs
 
@@ -451,9 +456,8 @@ First screen should be the working dashboard, not a marketing page. It should sh
 
 1. Upload resume or paste resume text.
 2. Optionally paste job description.
-3. Start assessment.
-4. Review score and recommendations.
-5. Generate interview session.
+3. Start the combined assessment and question-generation job.
+4. Review score, recommendations, and generated questions.
 6. Answer questions one by one.
 7. Review feedback and session summary.
 8. Re-upload revised resume and compare scores.
@@ -482,23 +486,22 @@ USING hnsw (embedding vector_cosine_ops);
 
 ## Redis Usage
 
-The current implementation uses Redis as an operational guardrail, not as product storage:
+The current implementation uses Redis at the HTTP submission boundary, not as product storage:
 
 - Rate limit AI-heavy endpoints per client.
 - Rate limit resume uploads per client.
-- Store short-lived in-flight locks for duplicate assessment, question-generation, and answer-feedback calls.
-- Cache successful mutation responses for retry when clients send an `Idempotency-Key` header.
+- Cache accepted-job responses for retry when clients send an `Idempotency-Key` header.
+- Cache completed job IDs for five minutes by user, job type, and request fingerprint.
 
-Later options:
-
-- Cache short-lived assessment status if long-running background jobs are introduced.
-- Lock background processing jobs.
-
-Do not use Redis as the source of truth for assessments, answers, or user history.
+Do not use Redis as the source of truth for jobs, assessments, answers, or user
+history. PostgreSQL stores job state and leases.
 
 ## Object Storage Usage
 
-The current upload API extracts text from the uploaded file, stores the original file in LocalStack S3-compatible storage, and persists the latest processed resume for the local internal user.
+The upload API validates and stores the original file synchronously, creates a
+pending resume plus extraction job, and returns `202`. The worker reads the file
+from S3, extracts with PDFBox/Apache Tika, and completes the same resume row and
+chunks. `/api/resumes/current` only returns completed resumes from PostgreSQL.
 
 Use the S3-compatible storage boundary for:
 
@@ -510,18 +513,29 @@ Store only object keys in PostgreSQL. Keep object storage private and serve down
 
 ## Background Processing
 
-The initial release can process synchronously for a small prototype, but the backend should be designed around jobs:
+The implemented job types are `RESUME_EXTRACTION`, `ANALYSIS`, and
+`ANSWER_FEEDBACK`. PostgreSQL stores request/result JSON, status, stage, attempts,
+timestamps, fingerprints, errors, and worker leases. SQS messages contain only
+the job ID so resume and answer content never enters the queue body.
 
-- `resume_text_extraction`
-- `resume_embedding`
-- `job_description_embedding`
-- `resume_assessment`
-- `interview_question_generation`
-- `answer_feedback_generation`
+The API commits a job before dispatching it. A scheduled recovery scan republishes
+queued rows whose `enqueued_at` is null, closing the database-commit/SQS-send
+failure window. Duplicate queue deliveries are safe because a worker must claim
+the row with a conditional lease update before processing it.
 
-Start with Spring `@Async` or a simple database-backed job table. Add a queue only after there is real need. Redis can provide locks, but PostgreSQL should keep durable job state.
+Workers use 20-second long polling, two processing threads, 300-second visibility
+and lease timeouts, and 60-second heartbeats. Temporary Gemini/network failures
+retry up to three attempts; invalid documents and validation failures do not.
+Application retries use a fresh SQS message after the database `run_after` delay;
+the consumed message is deleted only after that retry is durable. An exhausted
+job is explicitly published to the DLQ before its final main-queue message is
+deleted. Native SQS redrive still handles malformed messages and worker crashes.
+An analysis checkpoint prevents a question-generation retry from scoring the
+resume twice, and produces `PARTIAL` when only the assessment succeeds.
 
-For the current prototype, resume upload and text extraction run synchronously in the request and persist the latest processed resume for a local internal user.
+The application supports `all`, `api`, and `worker` runtime modes. EventBridge
+Scheduler is deliberately deferred; a future production schedule can invoke the
+same seven-day payload-cleanup operation for reminders or batch maintenance.
 
 ## Security and Privacy
 

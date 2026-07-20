@@ -87,7 +87,13 @@ public class GeminiClient {
 				elapsedMillis(startedAt)
 			);
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				throw new GeminiException("Gemini request failed: " + geminiErrorMessage(response.body()));
+				int statusCode = response.statusCode();
+				boolean retryable = statusCode == 408 || statusCode == 429 || statusCode >= 500;
+				throw new GeminiException(
+					"Gemini request failed: " + geminiErrorMessage(response.body()),
+					statusCode,
+					retryable
+				);
 			}
 
 			return extractText(response.body());

@@ -1,4 +1,5 @@
 import { createIdempotencyKey } from "@/lib/api/idempotency";
+import { JobAcceptedResponse, responseMessage } from "@/lib/api/jobs";
 
 export type ResumeUploadResponse = {
   id: string;
@@ -20,7 +21,7 @@ export type ResumeUploadResponse = {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8080";
 
-export async function uploadResume(file: File): Promise<ResumeUploadResponse> {
+export async function uploadResume(file: File): Promise<JobAcceptedResponse> {
   const formData = new FormData();
   formData.append("file", file);
   const controller = new AbortController();
@@ -41,11 +42,11 @@ export async function uploadResume(file: File): Promise<ResumeUploadResponse> {
       throw new Error(await responseMessage(response));
     }
 
-    return response.json() as Promise<ResumeUploadResponse>;
+    return response.json() as Promise<JobAcceptedResponse>;
   }
   catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("Resume extraction timed out after 30 seconds. This PDF may be scanned or malformed.");
+      throw new Error("The resume could not be uploaded within 30 seconds. Check object storage and try again.");
     }
     throw error;
   }
@@ -66,16 +67,4 @@ export async function getCurrentResume(): Promise<ResumeUploadResponse | null> {
   }
 
   return response.json() as Promise<ResumeUploadResponse>;
-}
-
-async function responseMessage(response: Response) {
-  const fallback = `Resume upload failed with status ${response.status}`;
-  const contentType = response.headers.get("content-type") ?? "";
-
-  if (!contentType.includes("application/json")) {
-    return (await response.text()) || fallback;
-  }
-
-  const body = (await response.json()) as { message?: string; error?: string };
-  return body.message ?? body.error ?? fallback;
 }

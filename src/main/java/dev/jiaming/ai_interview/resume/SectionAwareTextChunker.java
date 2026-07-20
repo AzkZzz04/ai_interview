@@ -25,13 +25,25 @@ public class SectionAwareTextChunker {
 		"work experience",
 		"professional experience",
 		"employment",
+		"work history",
+		"research experience",
 		"projects",
+		"project experience",
 		"selected projects",
+		"personal projects",
+		"academic projects",
+		"technical projects",
 		"skills",
 		"technical skills",
+		"core competencies",
 		"technologies",
+		"tools and technologies",
 		"education",
+		"academic background",
+		"coursework",
+		"relevant coursework",
 		"certifications",
+		"certificates",
 		"publications",
 		"awards",
 		"leadership",
@@ -155,9 +167,15 @@ public class SectionAwareTextChunker {
 	private String canonicalSectionName(String heading) {
 		String cleaned = heading.replace(":", "").trim().toLowerCase(Locale.ROOT);
 		return switch (cleaned) {
-			case "work experience", "professional experience", "employment" -> "Experience";
+			case "work experience", "professional experience", "employment", "work history" -> "Experience";
+			case "research experience" -> "Research Experience";
 			case "technical skills", "technologies" -> "Skills";
-			case "selected projects" -> "Projects";
+			case "core competencies", "tools and technologies" -> "Skills";
+			case "project experience", "selected projects", "personal projects", "academic projects",
+				"technical projects" -> "Projects";
+			case "academic background" -> "Education";
+			case "coursework", "relevant coursework" -> "Coursework";
+			case "certificates" -> "Certifications";
 			case "professional summary", "profile", "objective" -> "Summary";
 			default -> Character.toUpperCase(cleaned.charAt(0)) + cleaned.substring(1);
 		};

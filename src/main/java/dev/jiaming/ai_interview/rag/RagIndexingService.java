@@ -29,6 +29,8 @@ public class RagIndexingService {
 
 	private static final Logger log = LoggerFactory.getLogger(RagIndexingService.class);
 
+	private static final String CONTEXT_ID_SCHEMA = "section-context";
+
 	private final ObjectProvider<VectorStore> vectorStoreProvider;
 
 	private final ResumeTextNormalizer normalizer;
@@ -95,7 +97,7 @@ public class RagIndexingService {
 		String seniority
 	) {
 		for (TextChunk chunk : chunks) {
-			String contextId = sourceType + ":" + chunk.index();
+			String contextId = RagContextId.forChunk(sourceType, chunk);
 			String documentId = documentId(corpusId, contextId);
 			Map<String, Object> metadata = new LinkedHashMap<>();
 			metadata.put("corpusId", corpusId);
@@ -112,6 +114,7 @@ public class RagIndexingService {
 	private String corpusId(String resumeText, String jobDescription, String targetRole, String seniority) {
 		String input = String.join(
 			"\n---\n",
+			CONTEXT_ID_SCHEMA,
 			fallback(resumeText),
 			fallback(jobDescription),
 			fallback(targetRole).toLowerCase(Locale.ROOT),

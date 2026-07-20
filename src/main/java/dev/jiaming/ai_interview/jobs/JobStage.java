@@ -1,0 +1,14 @@
+package dev.jiaming.ai_interview.jobs;
+
+public enum JobStage {
+
+	QUEUED,
+	READING_FILE,
+	EXTRACTING_TEXT,
+	NORMALIZING_TEXT,
+	CHUNKING_TEXT,
+	ASSESSING_RESUME,
+	GENERATING_QUESTIONS,
+	SCORING_ANSWER,
+	COMPLETED
+}

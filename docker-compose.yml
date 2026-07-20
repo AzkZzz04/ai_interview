@@ -37,14 +37,20 @@ services:
     image: localstack/localstack:3
     container_name: ai-interview-localstack
     environment:
-      SERVICES: s3
+      SERVICES: s3,sqs
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
-      DEFAULT_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+      SQS_QUEUE_NAME: "${SQS_QUEUE_NAME:-ai-interview-jobs}"
+      SQS_DLQ_NAME: "${SQS_DLQ_NAME:-ai-interview-jobs-dlq}"
+      SQS_MAX_RECEIVE_COUNT: "${SQS_MAX_RECEIVE_COUNT:-3}"
+      JOB_VISIBILITY_TIMEOUT_SECONDS: "${JOB_VISIBILITY_TIMEOUT_SECONDS:-300}"
+      JOB_LONG_POLL_SECONDS: "${JOB_LONG_POLL_SECONDS:-20}"
     ports:
       - "${LOCALSTACK_PORT:-4566}:4566"
     volumes:
       - localstack-data:/var/lib/localstack
+      - ./infra/localstack/init-jobs.sh:/etc/localstack/init/ready.d/init-jobs.sh:ro
 
 volumes:
   postgres-data:

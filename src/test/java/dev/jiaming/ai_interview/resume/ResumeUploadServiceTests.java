@@ -45,7 +45,7 @@ class ResumeUploadServiceTests {
 		assertThat(response.normalizedText()).contains("Java, Spring Boot, PostgreSQL");
 		assertThat(response.chunks()).extracting("section")
 			.contains("Skills", "Experience");
-		assertThat(service.current()).contains(response);
+		assertThat(service.current()).isEmpty();
 	}
 
 	@Test

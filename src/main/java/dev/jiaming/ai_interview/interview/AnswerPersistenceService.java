@@ -21,7 +21,7 @@ public class AnswerPersistenceService {
 		this.jsonSupport = jsonSupport;
 	}
 
-	public void save(UUID questionId, AnswerFeedbackRequest request, AnswerFeedbackResponse response) {
+	public void save(UUID answerId, UUID questionId, AnswerFeedbackRequest request, AnswerFeedbackResponse response) {
 		jdbcTemplate.update(
 			"""
 				INSERT INTO ai_interview_app.interview_answers (
@@ -29,7 +29,7 @@ public class AnswerPersistenceService {
 				)
 				VALUES (?, ?, ?, ?, ?::jsonb, ?, ?)
 				""",
-			UUID.randomUUID(),
+			answerId,
 			questionId,
 			request.answerText(),
 			response.score(),

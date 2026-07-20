@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, ClipboardCheck, Loader2, MessageSquareText, Send } from "lucide-react";
+import type { EvidenceChunk } from "@/lib/evidence";
 import { AnswerFeedback, InterviewQuestion } from "@/lib/mockAssessment";
 import { EmptyState } from "./EmptyState";
 import { EvidenceRefs } from "./EvidenceRefs";
@@ -11,9 +12,11 @@ export function InterviewPracticePanel({
   answer,
   answerFeedback,
   isSubmittingAnswer,
+  evidenceResumeText,
+  evidenceJobDescription,
+  evidenceResumeChunks,
   onActiveQuestionChange,
   onAnswerChange,
-  onClearAnswerFeedback,
   onSubmitAnswer
 }: {
   questions: InterviewQuestion[];
@@ -21,11 +24,17 @@ export function InterviewPracticePanel({
   answer: string;
   answerFeedback: AnswerFeedback | null;
   isSubmittingAnswer: boolean;
+  evidenceResumeText?: string;
+  evidenceJobDescription?: string;
+  evidenceResumeChunks?: EvidenceChunk[];
   onActiveQuestionChange: (questionId: string) => void;
   onAnswerChange: (value: string) => void;
-  onClearAnswerFeedback: () => void;
   onSubmitAnswer: () => void;
 }) {
+  const evidenceHint = activeQuestion
+    ? [activeQuestion.questionText, ...activeQuestion.expectedSignals].join(" ")
+    : "";
+
   return (
     <section className="panel" id="interview">
       <div className="panel-heading">
@@ -44,10 +53,8 @@ export function InterviewPracticePanel({
                 className={question.id === activeQuestion.id ? "question-tab active" : "question-tab"}
                 key={question.id}
                 type="button"
-                onClick={() => {
-                  onActiveQuestionChange(question.id);
-                  onClearAnswerFeedback();
-                }}
+                onClick={() => onActiveQuestionChange(question.id)}
+                disabled={isSubmittingAnswer}
               >
                 <span>{question.category}</span>
                 <small>{question.difficulty}</small>
@@ -67,13 +74,20 @@ export function InterviewPracticePanel({
               ))}
             </div>
 
-            <EvidenceRefs ids={activeQuestion.sourceContextIds} />
+            <EvidenceRefs
+              ids={activeQuestion.sourceContextIds}
+              resumeText={evidenceResumeText}
+              jobDescription={evidenceJobDescription}
+              resumeChunks={evidenceResumeChunks}
+              evidenceHint={evidenceHint}
+            />
 
             <textarea
               className="answer-textarea"
               placeholder="Type your answer here."
               value={answer}
               onChange={(event) => onAnswerChange(event.target.value)}
+              disabled={isSubmittingAnswer}
             />
 
             <button
@@ -86,7 +100,15 @@ export function InterviewPracticePanel({
               {isSubmittingAnswer ? "Scoring answer" : "Get feedback"}
             </button>
 
-            {answerFeedback ? <AnswerFeedbackPanel answerFeedback={answerFeedback} /> : null}
+            {answerFeedback ? (
+              <AnswerFeedbackPanel
+                answerFeedback={answerFeedback}
+                evidenceResumeText={evidenceResumeText}
+                evidenceJobDescription={evidenceJobDescription}
+                evidenceResumeChunks={evidenceResumeChunks}
+                evidenceHint={evidenceHint}
+              />
+            ) : null}
           </div>
         </div>
       ) : (
@@ -100,7 +122,19 @@ export function InterviewPracticePanel({
   );
 }
 
-function AnswerFeedbackPanel({ answerFeedback }: { answerFeedback: AnswerFeedback }) {
+function AnswerFeedbackPanel({
+  answerFeedback,
+  evidenceResumeText,
+  evidenceJobDescription,
+  evidenceResumeChunks,
+  evidenceHint
+}: {
+  answerFeedback: AnswerFeedback;
+  evidenceResumeText?: string;
+  evidenceJobDescription?: string;
+  evidenceResumeChunks?: EvidenceChunk[];
+  evidenceHint: string;
+}) {
   return (
     <div className="feedback">
       <div className="feedback-score">
@@ -133,7 +167,13 @@ function AnswerFeedbackPanel({ answerFeedback }: { answerFeedback: AnswerFeedbac
           <span>{answerFeedback.followUpQuestion}</span>
         </div>
       ) : null}
-      <EvidenceRefs ids={answerFeedback.sourceContextIds} />
+      <EvidenceRefs
+        ids={answerFeedback.sourceContextIds}
+        resumeText={evidenceResumeText}
+        jobDescription={evidenceJobDescription}
+        resumeChunks={evidenceResumeChunks}
+        evidenceHint={evidenceHint}
+      />
     </div>
   );
 }

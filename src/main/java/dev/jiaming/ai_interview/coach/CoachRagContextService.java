@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
+import dev.jiaming.ai_interview.rag.RagContextId;
 import dev.jiaming.ai_interview.rag.RagContextSnippet;
 import dev.jiaming.ai_interview.rag.RagCorpus;
 import dev.jiaming.ai_interview.rag.RagIndexingService;
@@ -190,11 +191,12 @@ public class CoachRagContextService {
 	private List<RagContextSnippet> fallbackSnippets(String resumeText, String jobDescription, int maxSnippets) {
 		List<RagContextSnippet> snippets = new ArrayList<>();
 		for (TextChunk chunk : chunker.chunk(resumeText)) {
+			String contextId = RagContextId.forChunk("resume", chunk);
 			snippets.add(new RagContextSnippet(
 				"local-resume-" + chunk.index(),
 				chunk.content(),
 				Map.of(
-					"contextId", "resume:" + chunk.index(),
+					"contextId", contextId,
 					"sourceType", "resume",
 					"section", chunk.section(),
 					"chunkIndex", chunk.index()
@@ -207,11 +209,12 @@ public class CoachRagContextService {
 		}
 
 		for (TextChunk chunk : chunker.chunk(fallback(jobDescription, ""))) {
+			String contextId = RagContextId.forChunk("job_description", chunk);
 			snippets.add(new RagContextSnippet(
 				"local-job-description-" + chunk.index(),
 				chunk.content(),
 				Map.of(
-					"contextId", "job_description:" + chunk.index(),
+					"contextId", contextId,
 					"sourceType", "job_description",
 					"section", chunk.section(),
 					"chunkIndex", chunk.index()

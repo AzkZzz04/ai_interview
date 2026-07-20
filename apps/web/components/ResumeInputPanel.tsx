@@ -13,7 +13,6 @@ export type UploadedResume = {
 
 export type ExtractionProgress = {
   startedAt: number;
-  percent: number;
   stage: string;
 };
 
@@ -71,7 +70,7 @@ export function ResumeInputPanel({
             type="file"
             accept=".pdf,.doc,.docx,.txt,.text,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
             onChange={onResumeUpload}
-            disabled={isUploadingResume}
+            disabled={isUploadingResume || isAnalyzing}
           />
         </label>
       </div>
@@ -89,7 +88,12 @@ export function ResumeInputPanel({
               {formatFileSize(uploadedResume.size)} · {uploadedResume.message}
             </span>
             {uploadedResume.status === "error" ? (
-              <button className="recover-upload-button" type="button" onClick={onRecoverLatestResume}>
+              <button
+                className="recover-upload-button"
+                type="button"
+                onClick={onRecoverLatestResume}
+                disabled={isAnalyzing}
+              >
                 Use backend text
               </button>
             ) : null}
@@ -103,20 +107,28 @@ export function ResumeInputPanel({
             <strong>{extractionProgress.stage}</strong>
             <span>{elapsedSeconds}s</span>
           </div>
-          <div className="progress-track" aria-label={`Extraction progress ${extractionProgress.percent}%`}>
-            <span style={{ width: `${extractionProgress.percent}%` }} />
+          <div className="progress-track indeterminate" aria-label="Resume extraction is in progress">
+            <span />
           </div>
         </div>
       ) : null}
 
       <label className="field">
         <span>Target role</span>
-        <input value={targetRole} onChange={(event) => onTargetRoleChange(event.target.value)} />
+        <input
+          value={targetRole}
+          onChange={(event) => onTargetRoleChange(event.target.value)}
+          disabled={isAnalyzing}
+        />
       </label>
 
       <label className="field">
         <span>Seniority</span>
-        <select value={seniority} onChange={(event) => onSeniorityChange(event.target.value)}>
+        <select
+          value={seniority}
+          onChange={(event) => onSeniorityChange(event.target.value)}
+          disabled={isAnalyzing}
+        >
           <option>Entry-level</option>
           <option>Mid-level</option>
           <option>Senior</option>
@@ -136,7 +148,7 @@ export function ResumeInputPanel({
           }
           value={resumeText}
           onChange={(event) => onResumeTextChange(event.target.value)}
-          readOnly={isUploadingResume}
+          disabled={isUploadingResume || isAnalyzing}
         />
       </label>
 
@@ -147,6 +159,7 @@ export function ResumeInputPanel({
           placeholder="Paste a job description to make scoring and questions role-specific."
           value={jobDescription}
           onChange={(event) => onJobDescriptionChange(event.target.value)}
+          disabled={isAnalyzing}
         />
       </label>
 

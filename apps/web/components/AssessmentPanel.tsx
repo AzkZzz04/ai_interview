@@ -1,6 +1,7 @@
 "use client";
 
 import { BarChart3 } from "lucide-react";
+import type { EvidenceChunk } from "@/lib/evidence";
 import { Assessment, AssessmentScoreKey } from "@/lib/mockAssessment";
 import { EmptyState } from "./EmptyState";
 import { EvidenceRefs } from "./EvidenceRefs";
@@ -17,11 +18,17 @@ const scoreLabels: Record<AssessmentScoreKey, string> = {
 export function AssessmentPanel({
   targetRole,
   seniority,
-  assessment
+  assessment,
+  evidenceResumeText,
+  evidenceJobDescription,
+  evidenceResumeChunks
 }: {
   targetRole: string;
   seniority: string;
   assessment: Assessment | null;
+  evidenceResumeText?: string;
+  evidenceJobDescription?: string;
+  evidenceResumeChunks?: EvidenceChunk[];
 }) {
   return (
     <section className="panel" id="assessment">
@@ -68,7 +75,12 @@ export function AssessmentPanel({
             ))}
           </div>
 
-          <EvidenceRefs ids={assessment.sourceContextIds} />
+          <EvidenceRefs
+            ids={assessment.sourceContextIds}
+            resumeText={evidenceResumeText}
+            jobDescription={evidenceJobDescription}
+            resumeChunks={evidenceResumeChunks}
+          />
         </>
       ) : (
         <EmptyState

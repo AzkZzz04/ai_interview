@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +40,6 @@ public class ResumeUploadService {
 	private final RedisRequestGuard redisRequestGuard;
 
 	private final ResumePersistenceService resumePersistenceService;
-
-	private final AtomicReference<ResumeUploadResponse> currentResume = new AtomicReference<>();
 
 	@Autowired
 	public ResumeUploadService(
@@ -90,13 +87,10 @@ public class ResumeUploadService {
 					return process(fileContent, startedAt);
 				}
 			);
-			currentResume.set(response);
 			return response;
 		}
 
-		ResumeUploadResponse response = process(fileContent, startedAt);
-		currentResume.set(response);
-		return response;
+		return process(fileContent, startedAt);
 	}
 
 	private ResumeUploadResponse process(ResumeFileContent fileContent, long startedAt) {
@@ -147,6 +141,9 @@ public class ResumeUploadService {
 				normalizedText,
 				chunks
 			);
+		if (storageKey != null) {
+			storageService.markReady(storageKey);
+		}
 		log.info(
 			"resume_upload_complete filename={} storageKey={} extractMs={} normalizeMs={} chunkMs={} totalMs={} chunks={} rawChars={} normalizedChars={}",
 			fileContent.originalFilename(),
@@ -163,16 +160,10 @@ public class ResumeUploadService {
 	}
 
 	public Optional<ResumeUploadResponse> current() {
-		ResumeUploadResponse cachedResume = currentResume.get();
-		if (cachedResume != null) {
-			return Optional.of(cachedResume);
-		}
 		if (resumePersistenceService == null) {
 			return Optional.empty();
 		}
-		Optional<ResumeUploadResponse> latest = resumePersistenceService.findLatest();
-		latest.ifPresent(currentResume::set);
-		return latest;
+		return resumePersistenceService.findLatest();
 	}
 
 	public List<ResumeChunkResponse> chunksFor(String normalizedText) {

@@ -24,6 +24,7 @@ html {
 
 body {
   margin: 0;
+  min-height: 100vh;
   background: var(--bg);
   color: var(--ink);
   font-family:
@@ -319,6 +320,20 @@ h2 {
   border-radius: inherit;
   background: var(--blue);
   transition: width 280ms ease;
+}
+
+.progress-track.indeterminate span {
+  width: 32%;
+  animation: progress-indeterminate 1.35s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(315%);
+  }
 }
 
 .field span {

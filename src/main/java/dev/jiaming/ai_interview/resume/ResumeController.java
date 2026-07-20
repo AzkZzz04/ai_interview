@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import dev.jiaming.ai_interview.jobs.JobAcceptedResponse;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -19,14 +20,20 @@ public class ResumeController {
 
 	private final ResumeUploadService resumeUploadService;
 
-	public ResumeController(ResumeUploadService resumeUploadService) {
+	private final ResumeJobSubmissionService resumeJobSubmissionService;
+
+	public ResumeController(
+		ResumeUploadService resumeUploadService,
+		ResumeJobSubmissionService resumeJobSubmissionService
+	) {
 		this.resumeUploadService = resumeUploadService;
+		this.resumeJobSubmissionService = resumeJobSubmissionService;
 	}
 
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-	@ResponseStatus(HttpStatus.CREATED)
-	public ResumeUploadResponse upload(@RequestPart("file") MultipartFile file) {
-		return resumeUploadService.process(file);
+	@ResponseStatus(HttpStatus.ACCEPTED)
+	public JobAcceptedResponse upload(@RequestPart("file") MultipartFile file) {
+		return resumeJobSubmissionService.submit(file);
 	}
 
 	@GetMapping("/current")

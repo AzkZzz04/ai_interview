@@ -137,6 +137,48 @@ public class RedisRequestGuard {
 		return response;
 	}
 
+	public <T> T withAiResultCache(
+		String action,
+		Object requestFingerprintSource,
+		Class<T> responseType,
+		Supplier<T> work
+	) {
+		if (!properties.aiResultCache().enabled()) {
+			return work.get();
+		}
+
+		String key = "ai-result:%s:%s:%s".formatted(action, clientId(), fingerprint(action, requestFingerprintSource));
+		try {
+			String responseJson = redisTemplate.opsForValue().get(key);
+			if (responseJson != null) {
+				return objectMapper.readValue(responseJson, responseType);
+			}
+		}
+		catch (JsonProcessingException exception) {
+			log.warn("redis_ai_result_cache_decode_failed action={} reason={}", action, exception.getMessage());
+		}
+		catch (RuntimeException exception) {
+			log.warn("redis_ai_result_cache_unavailable action={} reason={}", action, exception.getMessage());
+			return work.get();
+		}
+
+		T response = work.get();
+		try {
+			redisTemplate.opsForValue().set(
+				key,
+				objectMapper.writeValueAsString(response),
+				Duration.ofSeconds(properties.aiResultCache().ttlSeconds())
+			);
+		}
+		catch (JsonProcessingException exception) {
+			log.warn("redis_ai_result_cache_encode_failed action={} reason={}", action, exception.getMessage());
+		}
+		catch (RuntimeException exception) {
+			log.warn("redis_ai_result_cache_store_failed action={} reason={}", action, exception.getMessage());
+		}
+		return response;
+	}
+
 	private void assertAllowed(String action, int limit) {
 		if (!properties.rateLimit().enabled()) {
 			return;

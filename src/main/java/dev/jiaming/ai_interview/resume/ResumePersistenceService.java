@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import dev.jiaming.ai_interview.common.LocalUserService;
+import dev.jiaming.ai_interview.rag.RagContextId;
 
 @Service
 public class ResumePersistenceService {
@@ -36,15 +37,33 @@ public class ResumePersistenceService {
 		String normalizedText,
 		List<ResumeChunkResponse> chunks
 	) {
+		UUID resumeId = createPending(
+			originalFilename,
+			contentType,
+			detectedContentType,
+			sizeBytes,
+			storageKey
+		);
+		return completeExtraction(resumeId, rawText, normalizedText, chunks);
+	}
+
+	public UUID createPending(
+		String originalFilename,
+		String contentType,
+		String detectedContentType,
+		long sizeBytes,
+		String storageKey
+	) {
 		UUID resumeId = UUID.randomUUID();
 		UUID userId = localUserService.localUserId();
 		jdbcTemplate.update(
 			"""
 				INSERT INTO ai_interview_app.resumes (
 					id, user_id, original_filename, content_type, detected_content_type,
-					size_bytes, storage_key, raw_text, normalized_text, parsed_skills
+					size_bytes, storage_key, raw_text, normalized_text, parsed_skills,
+					processing_status, failure_code, failure_message, updated_at
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]'::jsonb)
+				VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, '[]'::jsonb, 'PENDING', NULL, NULL, now())
 				""",
 			resumeId,
 			userId,
@@ -52,11 +71,39 @@ public class ResumePersistenceService {
 			contentType,
 			detectedContentType,
 			sizeBytes,
-			storageKey,
-			rawText,
-			normalizedText
+			storageKey
 		);
+		return resumeId;
+	}
 
+	@Transactional
+	public ResumeUploadResponse completeExtraction(
+		UUID resumeId,
+		String rawText,
+		String normalizedText,
+		List<ResumeChunkResponse> chunks
+	) {
+		int updated = jdbcTemplate.update(
+			"""
+				UPDATE ai_interview_app.resumes
+				SET raw_text = ?,
+					normalized_text = ?,
+					processing_status = 'READY',
+					failure_code = NULL,
+					failure_message = NULL,
+					updated_at = now()
+				WHERE id = ? AND user_id = ? AND processing_status IN ('PENDING', 'READY')
+				""",
+			rawText,
+			normalizedText,
+			resumeId,
+			localUserService.localUserId()
+		);
+		if (updated != 1) {
+			throw new IllegalStateException("Pending resume does not exist: " + resumeId);
+		}
+
+		jdbcTemplate.update("DELETE FROM ai_interview_app.resume_chunks WHERE resume_id = ?", resumeId);
 		for (ResumeChunkResponse chunk : chunks) {
 			jdbcTemplate.update(
 				"""
@@ -68,22 +115,86 @@ public class ResumePersistenceService {
 				chunk.index(),
 				chunk.section(),
 				chunk.content(),
-				"resume:" + chunk.index()
+				RagContextId.forChunk("resume", chunk.section(), chunk.index())
 			);
 		}
+		return findById(resumeId).orElseThrow();
+	}
 
-		return new ResumeUploadResponse(
-			resumeId.toString(),
-			originalFilename,
-			contentType,
-			detectedContentType,
-			sizeBytes,
-			rawText.length(),
-			normalizedText.length(),
-			normalizedText,
-			chunks,
-			Instant.now()
+	public void deletePending(UUID resumeId) {
+		jdbcTemplate.update(
+			"DELETE FROM ai_interview_app.resumes WHERE id = ? AND processing_status = 'PENDING'",
+			resumeId
 		);
+	}
+
+	public Optional<String> markFailed(UUID resumeId, String errorCode, String errorMessage) {
+		jdbcTemplate.update(
+			"""
+				UPDATE ai_interview_app.resumes
+				SET processing_status = 'FAILED',
+					failure_code = ?,
+					failure_message = ?,
+					updated_at = now()
+				WHERE id = ? AND processing_status IN ('PENDING', 'READY', 'FAILED')
+				""",
+			errorCode,
+			truncate(errorMessage),
+			resumeId
+		);
+		return findStorageKey(resumeId);
+	}
+
+	public List<FailedResumeStorage> findFailedStorageObjects(int limit) {
+		return jdbcTemplate.query(
+			"""
+				SELECT id, storage_key
+				FROM ai_interview_app.resumes
+				WHERE processing_status = 'FAILED'
+				  AND storage_key IS NOT NULL
+				  AND btrim(storage_key) <> ''
+				ORDER BY updated_at
+				LIMIT ?
+				""",
+			(rs, rowNum) -> new FailedResumeStorage(
+				rs.getObject("id", UUID.class),
+				rs.getString("storage_key")
+			),
+			limit
+		);
+	}
+
+	public List<FailedResumeJob> findUnappliedTerminalFailures(int limit) {
+		return jdbcTemplate.query(
+			"""
+				SELECT r.id, j.error_code, j.last_error
+				FROM ai_interview_app.resumes r
+				JOIN ai_interview_app.background_jobs j
+				  ON j.resource_id = r.id AND j.job_type = 'RESUME_EXTRACTION'
+				WHERE j.status = 'FAILED'
+				  AND r.processing_status <> 'FAILED'
+				ORDER BY j.completed_at
+				LIMIT ?
+				""",
+			(rs, rowNum) -> new FailedResumeJob(
+				rs.getObject("id", UUID.class),
+				rs.getString("error_code"),
+				rs.getString("last_error")
+			),
+			limit
+		);
+	}
+
+	public boolean clearStorageKey(UUID resumeId, String expectedStorageKey) {
+		return jdbcTemplate.update(
+			"""
+				UPDATE ai_interview_app.resumes
+				SET storage_key = NULL, updated_at = now()
+				WHERE id = ? AND processing_status = 'FAILED' AND storage_key = ?
+				""",
+			resumeId,
+			expectedStorageKey
+		) == 1;
 	}
 
 	public Optional<ResumeUploadResponse> findLatest() {
@@ -93,7 +204,8 @@ public class ResumePersistenceService {
 				SELECT id, original_filename, content_type, detected_content_type, size_bytes,
 				       raw_text, normalized_text, created_at
 				FROM ai_interview_app.resumes
-				WHERE user_id = ?
+				WHERE user_id = ? AND processing_status = 'READY'
+				  AND normalized_text IS NOT NULL AND btrim(normalized_text) <> ''
 				ORDER BY created_at DESC
 				LIMIT 1
 				""",
@@ -109,7 +221,8 @@ public class ResumePersistenceService {
 			"""
 				SELECT id, normalized_text
 				FROM ai_interview_app.resumes
-				WHERE user_id = ?
+				WHERE user_id = ? AND processing_status = 'READY'
+				  AND normalized_text IS NOT NULL AND btrim(normalized_text) <> ''
 				ORDER BY created_at DESC
 				LIMIT 1
 				""",
@@ -118,6 +231,20 @@ public class ResumePersistenceService {
 				rs.getString("normalized_text")
 			),
 			userId
+		);
+		return resumes.stream().findFirst();
+	}
+
+	private Optional<ResumeUploadResponse> findById(UUID resumeId) {
+		List<ResumeUploadResponse> resumes = jdbcTemplate.query(
+			"""
+				SELECT id, original_filename, content_type, detected_content_type, size_bytes,
+				       raw_text, normalized_text, created_at
+				FROM ai_interview_app.resumes
+				WHERE id = ?
+				""",
+			(rs, rowNum) -> toUploadResponse(rs),
+			resumeId
 		);
 		return resumes.stream().findFirst();
 	}
@@ -178,6 +305,22 @@ public class ResumePersistenceService {
 			),
 			resumeId
 		);
+	}
+
+	private Optional<String> findStorageKey(UUID resumeId) {
+		List<String> storageKeys = jdbcTemplate.query(
+			"SELECT storage_key FROM ai_interview_app.resumes WHERE id = ?",
+			(rs, rowNum) -> rs.getString("storage_key"),
+			resumeId
+		);
+		return storageKeys.stream().filter(value -> value != null && !value.isBlank()).findFirst();
+	}
+
+	private String truncate(String value) {
+		if (value == null || value.length() <= 4_000) {
+			return value;
+		}
+		return value.substring(0, 4_000);
 	}
 
 	private String value(String value) {

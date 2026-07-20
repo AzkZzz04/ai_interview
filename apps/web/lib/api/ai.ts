@@ -1,8 +1,8 @@
-import { AnswerFeedback, Assessment, InterviewQuestion } from "@/lib/mockAssessment";
 import { createIdempotencyKey } from "@/lib/api/idempotency";
+import { JobAcceptedResponse, responseMessage } from "@/lib/api/jobs";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8080";
-const REQUEST_TIMEOUT_MS = 120_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export type AiAnalysisPayload = {
   resumeText: string;
@@ -18,17 +18,12 @@ export type AnswerFeedbackPayload = AiAnalysisPayload & {
   answerText: string;
 };
 
-export async function createAiAssessment(payload: AiAnalysisPayload): Promise<Assessment> {
-  return postJson<Assessment>("/api/assessments", payload);
+export async function createAiAnalysis(payload: AiAnalysisPayload): Promise<JobAcceptedResponse> {
+  return postJson<JobAcceptedResponse>("/api/analyses", payload);
 }
 
-export async function createAiQuestions(payload: AiAnalysisPayload): Promise<InterviewQuestion[]> {
-  const response = await postJson<{ questions: InterviewQuestion[] }>("/api/interview/questions", payload);
-  return response.questions;
-}
-
-export async function createAiAnswerFeedback(payload: AnswerFeedbackPayload): Promise<AnswerFeedback> {
-  return postJson<AnswerFeedback>("/api/interview/feedback", payload);
+export async function createAiAnswerFeedback(payload: AnswerFeedbackPayload): Promise<JobAcceptedResponse> {
+  return postJson<JobAcceptedResponse>("/api/interview/feedback", payload);
 }
 
 async function postJson<TResponse>(path: string, body: unknown): Promise<TResponse> {
@@ -48,7 +43,7 @@ async function postJson<TResponse>(path: string, body: unknown): Promise<TRespon
     });
 
     if (!response.ok) {
-      const message = await apiErrorMessage(response);
+      const message = await responseMessage(response);
       throw new Error(message);
     }
 
@@ -56,21 +51,11 @@ async function postJson<TResponse>(path: string, body: unknown): Promise<TRespon
   }
   catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("AI request timed out after 120 seconds. Try again with a shorter resume or job description.");
+      throw new Error("The job could not be submitted within 15 seconds. Check the API connection and try again.");
     }
     throw error;
   }
   finally {
     window.clearTimeout(timeoutId);
-  }
-}
-
-async function apiErrorMessage(response: Response) {
-  try {
-    const payload = await response.json() as { message?: string; error?: string };
-    return payload.message ?? payload.error ?? `Request failed with status ${response.status}`;
-  }
-  catch {
-    return `Request failed with status ${response.status}`;
   }
 }

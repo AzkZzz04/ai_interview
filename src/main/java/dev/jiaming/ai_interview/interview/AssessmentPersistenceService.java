@@ -39,7 +39,13 @@ public class AssessmentPersistenceService {
 		this.jsonSupport = jsonSupport;
 	}
 
-	public void save(UUID userId, AiAnalysisRequest request, String resumeText, AssessmentResponse response) {
+	public void save(
+		UUID assessmentId,
+		UUID userId,
+		AiAnalysisRequest request,
+		String resumeText,
+		AssessmentResponse response
+	) {
 		PersistedResume resume = resumeFor(resumeText);
 		UUID jobDescriptionId = jobDescriptionPersistenceService.save(userId, request.jobDescription()).orElse(null);
 		jdbcTemplate.update(
@@ -51,7 +57,7 @@ public class AssessmentPersistenceService {
 				)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?, ?)
 				""",
-			UUID.randomUUID(),
+			assessmentId,
 			userId,
 			resume.id(),
 			jobDescriptionId,

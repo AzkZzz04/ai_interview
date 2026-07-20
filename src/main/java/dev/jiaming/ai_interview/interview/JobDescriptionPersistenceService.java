@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import dev.jiaming.ai_interview.rag.RagContextId;
 import dev.jiaming.ai_interview.resume.ResumeTextNormalizer;
 import dev.jiaming.ai_interview.resume.SectionAwareTextChunker;
 
@@ -63,7 +64,7 @@ public class JobDescriptionPersistenceService {
 			chunk.index(),
 			chunk.section(),
 			chunk.content(),
-			"job_description:" + chunk.index()
+			RagContextId.forChunk("job_description", chunk)
 		));
 
 		return Optional.of(jobDescriptionId);

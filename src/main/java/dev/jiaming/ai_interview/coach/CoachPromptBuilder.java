@@ -16,6 +16,7 @@ public class CoachPromptBuilder {
 			Use job description context only if it appears in the retrieved context.
 			Be direct, concrete, and evidence-based. Do not invent experience that is not in the retrieved context.
 			If evidence is missing, mark it as a gap.
+			For sourceContextIds, copy only exact contextId values shown in the retrieved context.
 			Return only valid JSON matching this shape:
 			{
 			  "overallScore": 0,
@@ -31,7 +32,7 @@ public class CoachPromptBuilder {
 			  "recommendations": [
 			    {"section": "Experience", "priority": "high", "message": "specific rewrite guidance"}
 			  ],
-			  "sourceContextIds": ["resume:0"]
+			  "sourceContextIds": ["resume:experience:0"]
 			}
 			All scores must be integers from 0 to 100.
 
@@ -53,6 +54,7 @@ public class CoachPromptBuilder {
 			Use only the retrieved resume and job-description context below.
 			Create questions that test the candidate's actual claimed experience and the target role.
 			Do not assume facts outside the retrieved context.
+			For sourceContextIds, copy only exact contextId values shown in the retrieved context.
 			Include a mix of resume deep dive, technical fundamentals, system design, project architecture, debugging, collaboration, and role-specific tooling.
 			Return only valid JSON matching this shape:
 			{
@@ -63,7 +65,7 @@ public class CoachPromptBuilder {
 			      "difficulty": "Warmup",
 			      "questionText": "question",
 			      "expectedSignals": ["signal 1", "signal 2", "signal 3"],
-			      "sourceContextIds": ["resume:0"]
+			      "sourceContextIds": ["resume:projects:2"]
 			    }
 			  ]
 			}
@@ -87,6 +89,7 @@ public class CoachPromptBuilder {
 			Score the answer against the question, expected signals, and retrieved context. Be specific and actionable.
 			Do not reward claims that are not supported by the answer.
 			Do not invent resume details beyond the retrieved context.
+			For sourceContextIds, copy only exact contextId values shown in the retrieved context.
 			Return only valid JSON matching this shape:
 			{
 			  "score": 0,
@@ -96,7 +99,7 @@ public class CoachPromptBuilder {
 			  "gaps": ["1-3 gaps"],
 			  "betterAnswerOutline": ["context", "action", "tradeoff", "result"],
 			  "followUpQuestion": "one follow-up question",
-			  "sourceContextIds": ["resume:0"]
+			  "sourceContextIds": ["resume:experience:0"]
 			}
 			Score must be an integer from 0 to 100.
 

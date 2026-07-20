@@ -8,6 +8,11 @@ public record StorageProperties(
 	String region,
 	String bucket,
 	String accessKey,
-	String secretKey
+	String secretKey,
+	int pendingRetentionHours
 ) {
+
+	public StorageProperties {
+		pendingRetentionHours = pendingRetentionHours <= 0 ? 24 : pendingRetentionHours;
+	}
 }

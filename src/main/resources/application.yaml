@@ -80,9 +80,42 @@ app:
     idempotency:
       enabled: ${REDIS_IDEMPOTENCY_ENABLED:true}
       ttl-seconds: ${REDIS_IDEMPOTENCY_TTL_SECONDS:86400}
+    ai-result-cache:
+      enabled: ${REDIS_AI_RESULT_CACHE_ENABLED:true}
+      ttl-seconds: ${REDIS_AI_RESULT_CACHE_TTL_SECONDS:300}
   storage:
     endpoint: ${S3_ENDPOINT:http://localhost:4566}
     region: ${S3_REGION:us-east-1}
     bucket: ${S3_BUCKET:ai-interview}
     access-key: ${S3_ACCESS_KEY:test}
     secret-key: ${S3_SECRET_KEY:test}
+    pending-retention-hours: ${RESUME_PENDING_RETENTION_HOURS:24}
+    cleanup-interval-ms: ${RESUME_STORAGE_CLEANUP_INTERVAL_MS:300000}
+  resume-extraction:
+    queue-capacity: ${RESUME_PARSER_QUEUE_CAPACITY:2}
+    timeout-seconds: ${RESUME_EXTRACTION_TIMEOUT_SECONDS:20}
+    max-parse-chars: ${RESUME_MAX_PARSE_CHARS:250000}
+    max-pdf-pages: ${RESUME_MAX_PDF_PAGES:50}
+    max-embedded-resources: ${RESUME_MAX_EMBEDDED_RESOURCES:20}
+  jobs:
+    enabled: ${JOBS_ENABLED:true}
+    runtime-mode: ${JOB_RUNTIME_MODE:all}
+    endpoint: ${SQS_ENDPOINT:http://localhost:4566}
+    region: ${SQS_REGION:us-east-1}
+    access-key: ${SQS_ACCESS_KEY:test}
+    secret-key: ${SQS_SECRET_KEY:test}
+    queue-name: ${SQS_QUEUE_NAME:ai-interview-jobs}
+    dlq-name: ${SQS_DLQ_NAME:ai-interview-jobs-dlq}
+    max-receive-count: ${SQS_MAX_RECEIVE_COUNT:3}
+    worker-concurrency: ${JOB_WORKER_CONCURRENCY:2}
+    long-poll-seconds: ${JOB_LONG_POLL_SECONDS:20}
+    visibility-timeout-seconds: ${JOB_VISIBILITY_TIMEOUT_SECONDS:300}
+    heartbeat-seconds: ${JOB_HEARTBEAT_SECONDS:60}
+    max-attempts: ${JOB_MAX_ATTEMPTS:3}
+    retry-base-seconds: ${JOB_RETRY_BASE_SECONDS:15}
+    reuse-window-seconds: ${JOB_REUSE_WINDOW_SECONDS:300}
+    dispatch-interval-ms: ${JOB_DISPATCH_INTERVAL_MS:5000}
+    lease-reaper-interval-ms: ${JOB_LEASE_REAPER_INTERVAL_MS:30000}
+    cleanup-interval-ms: ${JOB_CLEANUP_INTERVAL_MS:3600000}
+    shutdown-grace-seconds: ${JOB_SHUTDOWN_GRACE_SECONDS:120}
+    retention-days: ${JOB_RETENTION_DAYS:7}

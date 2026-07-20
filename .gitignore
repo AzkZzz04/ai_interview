@@ -6,6 +6,7 @@ HELP.md
 build/
 node_modules/
 .next/
+.next-build/
 *.tsbuildinfo
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/

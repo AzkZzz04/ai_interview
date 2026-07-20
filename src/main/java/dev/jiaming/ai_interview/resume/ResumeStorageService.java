@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import dev.jiaming.ai_interview.storage.ObjectStorageService;
 import dev.jiaming.ai_interview.storage.StoredObject;
+import dev.jiaming.ai_interview.storage.StoredObjectContent;
 
 @Service
 public class ResumeStorageService {
@@ -20,15 +21,44 @@ public class ResumeStorageService {
 
 	public String store(ResumeFileContent fileContent) {
 		if (objectStorageService == null) {
-			return null;
+			throw new IllegalStateException("Object storage is required for asynchronous resume extraction");
 		}
 		StoredObject storedObject = objectStorageService.put(
 			storageKey(fileContent.originalFilename()),
 			fileContent.bytes(),
 			fileContent.detectedContentType(),
-			Map.of("original-filename", safeMetadata(fileContent.originalFilename()))
+			Map.of("original-filename", safeMetadata(fileContent.originalFilename())),
+			Map.of("processing-status", "pending")
 		);
 		return storedObject.key();
+	}
+
+	public ResumeFileContent read(ResumeExtractionJobPayload payload) {
+		if (objectStorageService == null) {
+			throw new IllegalStateException("Object storage is required for asynchronous resume extraction");
+		}
+		StoredObjectContent storedObject = objectStorageService.get(payload.storageKey());
+		return new ResumeFileContent(
+			payload.originalFilename(),
+			payload.contentType(),
+			storedObject.bytes().length,
+			storedObject.bytes(),
+			payload.detectedContentType(),
+			payload.extension()
+		);
+	}
+
+	public void delete(String storageKey) {
+		if (objectStorageService != null) {
+			objectStorageService.delete(storageKey);
+		}
+	}
+
+	public void markReady(String storageKey) {
+		if (objectStorageService == null) {
+			throw new IllegalStateException("Object storage is required for asynchronous resume extraction");
+		}
+		objectStorageService.tag(storageKey, Map.of("processing-status", "ready"));
 	}
 
 	private String storageKey(String filename) {

@@ -43,10 +43,23 @@ public class InterviewSessionPersistenceService {
 		this.jsonSupport = jsonSupport;
 	}
 
-	public void saveQuestions(UUID userId, AiAnalysisRequest request, String resumeText, InterviewQuestionsResponse response) {
-		PersistedResume resume = resumeFor(resumeText);
-		UUID jobDescriptionId = jobDescriptionPersistenceService.save(userId, request.jobDescription()).orElse(null);
-		UUID sessionId = createSession(userId, resume.id(), jobDescriptionId, request.targetRole(), request.seniority());
+	public void saveQuestions(
+		UUID sessionId,
+		UUID userId,
+		UUID assessmentId,
+		AiAnalysisRequest request,
+		InterviewQuestionsResponse response
+	) {
+		AssessmentContext context = assessmentContext(userId, assessmentId);
+		createSession(
+			sessionId,
+			userId,
+			context.resumeId(),
+			context.jobDescriptionId(),
+			assessmentId,
+			request.targetRole(),
+			request.seniority()
+		);
 
 		int index = 0;
 		for (InterviewQuestionResponse question : response.questions()) {
@@ -77,7 +90,8 @@ public class InterviewSessionPersistenceService {
 	public UUID createQuestionForAnswer(UUID userId, AnswerFeedbackRequest request, String resumeText) {
 		PersistedResume resume = resumeFor(resumeText);
 		UUID jobDescriptionId = jobDescriptionPersistenceService.save(userId, request.jobDescription()).orElse(null);
-		UUID sessionId = createSession(userId, resume.id(), jobDescriptionId, request.targetRole(), request.seniority());
+		UUID sessionId = UUID.randomUUID();
+		createSession(sessionId, userId, resume.id(), jobDescriptionId, null, request.targetRole(), request.seniority());
 		UUID questionId = UUID.randomUUID();
 		jdbcTemplate.update(
 			"""
@@ -97,23 +111,50 @@ public class InterviewSessionPersistenceService {
 		return questionId;
 	}
 
-	private UUID createSession(UUID userId, UUID resumeId, UUID jobDescriptionId, String targetRole, String seniority) {
-		UUID sessionId = UUID.randomUUID();
+	private void createSession(
+		UUID sessionId,
+		UUID userId,
+		UUID resumeId,
+		UUID jobDescriptionId,
+		UUID assessmentId,
+		String targetRole,
+		String seniority
+	) {
 		jdbcTemplate.update(
 			"""
 				INSERT INTO ai_interview_app.interview_sessions (
-					id, user_id, resume_id, job_description_id, target_role, seniority, status
+					id, user_id, resume_id, job_description_id, assessment_id, target_role, seniority, status
 				)
-				VALUES (?, ?, ?, ?, ?, ?, 'READY')
+				VALUES (?, ?, ?, ?, ?, ?, ?, 'READY')
 				""",
 			sessionId,
 			userId,
 			resumeId,
 			jobDescriptionId,
+			assessmentId,
 			targetRole,
 			seniority
 		);
-		return sessionId;
+	}
+
+	private AssessmentContext assessmentContext(UUID userId, UUID assessmentId) {
+		List<AssessmentContext> contexts = jdbcTemplate.query(
+			"""
+				SELECT resume_id, job_description_id
+				FROM ai_interview_app.resume_assessments
+				WHERE id = ? AND user_id = ?
+				""",
+			(rs, rowNum) -> new AssessmentContext(
+				rs.getObject("resume_id", UUID.class),
+				rs.getObject("job_description_id", UUID.class)
+			),
+			assessmentId,
+			userId
+		);
+		if (contexts.isEmpty()) {
+			throw new IllegalStateException("Assessment context does not exist: " + assessmentId);
+		}
+		return contexts.getFirst();
 	}
 
 	private void saveQuestion(UUID sessionId, InterviewQuestionResponse question, int orderIndex) {
@@ -148,5 +189,8 @@ public class InterviewSessionPersistenceService {
 				))
 				.toList()
 		);
+	}
+
+	private record AssessmentContext(UUID resumeId, UUID jobDescriptionId) {
 	}
 }

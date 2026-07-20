@@ -1,15 +1,10 @@
 package dev.jiaming.ai_interview.coach;
 
-import java.util.Optional;
-
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import dev.jiaming.ai_interview.common.RedisRequestGuard;
 import dev.jiaming.ai_interview.gemini.GeminiClient;
-import dev.jiaming.ai_interview.interview.InterviewPersistenceService;
 
 @Service
 public class AiResumeCoachService {
@@ -24,71 +19,28 @@ public class AiResumeCoachService {
 
 	private final CoachResponseMapper responseMapper;
 
-	private final RedisRequestGuard redisRequestGuard;
-
-	private final ObjectProvider<InterviewPersistenceService> interviewPersistenceServiceProvider;
-
 	public AiResumeCoachService(
 		GeminiClient geminiClient,
 		CoachResumeResolver resumeResolver,
 		CoachRagContextService ragContextService,
 		CoachPromptBuilder promptBuilder,
-		CoachResponseMapper responseMapper,
-		RedisRequestGuard redisRequestGuard,
-		ObjectProvider<InterviewPersistenceService> interviewPersistenceServiceProvider
+		CoachResponseMapper responseMapper
 	) {
 		this.geminiClient = geminiClient;
 		this.resumeResolver = resumeResolver;
 		this.ragContextService = ragContextService;
 		this.promptBuilder = promptBuilder;
 		this.responseMapper = responseMapper;
-		this.redisRequestGuard = redisRequestGuard;
-		this.interviewPersistenceServiceProvider = interviewPersistenceServiceProvider;
 	}
 
 	public AssessmentResponse assess(AiAnalysisRequest request) {
 		String resumeText = resumeResolver.resolve(request.resumeText());
-		Object fingerprintSource = fingerprintSource(resumeText, request.jobDescription(), request.targetRole(), request.seniority());
-		return redisRequestGuard.withIdempotentRetryCache(
-			"assessment",
-			fingerprintSource,
-			AssessmentResponse.class,
-			() -> {
-				redisRequestGuard.assertAiAllowed("assessment");
-				return redisRequestGuard.withInFlightLock("assessment", fingerprintSource, () -> {
-					CoachRagContext context = ragContextService.assessmentContext(request, resumeText);
-					String prompt = promptBuilder.buildAssessmentPrompt(request, context);
-					AssessmentResponse response = responseMapper.parse(geminiClient.generateJson(prompt), AssessmentResponse.class);
-					AssessmentResponse normalizedResponse = responseMapper.normalizeAssessment(response, context.sourceContextIds());
-					persistenceService().ifPresent(service -> service.saveAssessment(request, resumeText, normalizedResponse));
-					return normalizedResponse;
-				});
-			}
-		);
+		return runAssessment(request, resumeText);
 	}
 
 	public InterviewQuestionsResponse generateQuestions(AiAnalysisRequest request) {
 		String resumeText = resumeResolver.resolve(request.resumeText());
-		Object fingerprintSource = fingerprintSource(resumeText, request.jobDescription(), request.targetRole(), request.seniority());
-		return redisRequestGuard.withIdempotentRetryCache(
-			"questions",
-			fingerprintSource,
-			InterviewQuestionsResponse.class,
-			() -> {
-				redisRequestGuard.assertAiAllowed("questions");
-				return redisRequestGuard.withInFlightLock("questions", fingerprintSource, () -> {
-					CoachRagContext context = ragContextService.questionContext(request, resumeText);
-					String prompt = promptBuilder.buildQuestionPrompt(request, context);
-					InterviewQuestionsResponse response = responseMapper.parse(
-						geminiClient.generateJson(prompt),
-						InterviewQuestionsResponse.class
-					);
-					InterviewQuestionsResponse normalizedResponse = responseMapper.normalizeQuestions(response, context.sourceContextIds());
-					persistenceService().ifPresent(service -> service.saveQuestions(request, resumeText, normalizedResponse));
-					return normalizedResponse;
-				});
-			}
-		);
+		return runQuestions(request, resumeText);
 	}
 
 	public AnswerFeedbackResponse scoreAnswer(AnswerFeedbackRequest request) {
@@ -97,43 +49,38 @@ public class AiResumeCoachService {
 		}
 
 		String resumeText = resumeResolver.resolve(request.resumeText());
-		Object fingerprintSource = fingerprintSource(
-			resumeText,
-			request.jobDescription(),
-			request.targetRole(),
-			request.seniority(),
-			request.questionText(),
-			request.category(),
-			request.expectedSignals(),
-			request.answerText()
-		);
-		return redisRequestGuard.withIdempotentRetryCache(
-			"feedback",
-			fingerprintSource,
-			AnswerFeedbackResponse.class,
-			() -> {
-				redisRequestGuard.assertAiAllowed("feedback");
-				return redisRequestGuard.withInFlightLock("feedback", fingerprintSource, () -> {
-					CoachRagContext context = ragContextService.feedbackContext(request, resumeText);
-					String prompt = promptBuilder.buildFeedbackPrompt(request, context);
-					AnswerFeedbackResponse response = responseMapper.parse(geminiClient.generateJson(prompt), AnswerFeedbackResponse.class);
-					AnswerFeedbackResponse normalizedResponse = responseMapper.normalizeFeedback(response, context.sourceContextIds());
-					persistenceService().ifPresent(service -> service.saveAnswer(request, resumeText, normalizedResponse));
-					return normalizedResponse;
-				});
-			}
-		);
+		return runFeedback(request, resumeText);
 	}
 
-	private Optional<InterviewPersistenceService> persistenceService() {
-		return Optional.ofNullable(interviewPersistenceServiceProvider.getIfAvailable());
+	public AssessmentResponse runAssessment(AiAnalysisRequest request, String resumeText) {
+		CoachRagContext context = ragContextService.assessmentContext(request, resumeText);
+		String prompt = promptBuilder.buildAssessmentPrompt(request, context);
+		AssessmentResponse response = responseMapper.parse(geminiClient.generateJson(prompt), AssessmentResponse.class);
+		return responseMapper.normalizeAssessment(response, context.sourceContextIds());
+	}
+
+	public InterviewQuestionsResponse runQuestions(AiAnalysisRequest request, String resumeText) {
+		CoachRagContext context = ragContextService.questionContext(request, resumeText);
+		String prompt = promptBuilder.buildQuestionPrompt(request, context);
+		InterviewQuestionsResponse response = responseMapper.parse(
+			geminiClient.generateJson(prompt),
+			InterviewQuestionsResponse.class
+		);
+		return responseMapper.normalizeQuestions(response, context.sourceContextIds());
+	}
+
+	public AnswerFeedbackResponse runFeedback(AnswerFeedbackRequest request, String resumeText) {
+		if (blank(request.answerText())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer text is required");
+		}
+		CoachRagContext context = ragContextService.feedbackContext(request, resumeText);
+		String prompt = promptBuilder.buildFeedbackPrompt(request, context);
+		AnswerFeedbackResponse response = responseMapper.parse(geminiClient.generateJson(prompt), AnswerFeedbackResponse.class);
+		return responseMapper.normalizeFeedback(response, context.sourceContextIds());
 	}
 
 	private boolean blank(String value) {
 		return value == null || value.isBlank();
 	}
 
-	private Object fingerprintSource(Object... values) {
-		return java.util.Arrays.asList(values);
-	}
 }
