@@ -5,8 +5,6 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import dev.jiaming.ai_interview.coach.AiAnalysisRequest;
-import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest;
 import dev.jiaming.ai_interview.coach.AnswerFeedbackResponse;
 import dev.jiaming.ai_interview.coach.AssessmentResponse;
 import dev.jiaming.ai_interview.coach.InterviewQuestionsResponse;
@@ -33,35 +31,30 @@ public class InterviewPersistenceService {
 	@Transactional
 	public void saveAssessment(
 		UUID assessmentId,
-		UUID userId,
-		AiAnalysisRequest request,
-		String resumeText,
+		AnalysisPersistenceInput input,
 		AssessmentResponse response
 	) {
-		assessmentPersistenceService.save(assessmentId, userId, request, resumeText, response);
+		assessmentPersistenceService.save(assessmentId, input, response);
 	}
 
 	@Transactional
 	public void saveQuestions(
 		UUID sessionId,
-		UUID userId,
 		UUID assessmentId,
-		AiAnalysisRequest request,
+		AnalysisPersistenceInput input,
 		InterviewQuestionsResponse response
 	) {
-		interviewSessionPersistenceService.saveQuestions(sessionId, userId, assessmentId, request, response);
+		interviewSessionPersistenceService.saveQuestions(sessionId, assessmentId, input, response);
 	}
 
 	@Transactional
 	public void saveAnswer(
 		UUID answerId,
-		UUID userId,
-		AnswerFeedbackRequest request,
-		String resumeText,
+		FeedbackPersistenceInput input,
 		AnswerFeedbackResponse response
 	) {
-		UUID questionId = interviewSessionPersistenceService.findLatestQuestion(userId, request.questionText())
-			.orElseGet(() -> interviewSessionPersistenceService.createQuestionForAnswer(userId, request, resumeText));
-		answerPersistenceService.save(answerId, questionId, request, response);
+		UUID questionId = interviewSessionPersistenceService.findLatestQuestion(input)
+			.orElseGet(() -> interviewSessionPersistenceService.createQuestionForAnswer(input));
+		answerPersistenceService.save(answerId, questionId, input, response);
 	}
 }

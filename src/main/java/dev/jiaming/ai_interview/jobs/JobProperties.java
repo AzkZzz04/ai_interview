@@ -1,14 +1,12 @@
 package dev.jiaming.ai_interview.jobs;
 
 import java.time.Duration;
-import java.util.Locale;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app.jobs")
 public record JobProperties(
 	boolean enabled,
-	String runtimeMode,
 	String endpoint,
 	String region,
 	String accessKey,
@@ -31,10 +29,6 @@ public record JobProperties(
 ) {
 
 	public JobProperties {
-		runtimeMode = nonBlank(runtimeMode, "all").toLowerCase(Locale.ROOT);
-		if (!"all".equals(runtimeMode) && !"api".equals(runtimeMode) && !"worker".equals(runtimeMode)) {
-			throw new IllegalArgumentException("JOB_RUNTIME_MODE must be all, api, or worker");
-		}
 		region = nonBlank(region, "us-east-1");
 		queueName = nonBlank(queueName, "ai-interview-jobs");
 		dlqName = nonBlank(dlqName, queueName + "-dlq");
@@ -52,14 +46,6 @@ public record JobProperties(
 		cleanupIntervalMs = cleanupIntervalMs <= 0 ? 3_600_000 : cleanupIntervalMs;
 		shutdownGraceSeconds = shutdownGraceSeconds <= 0 ? 120 : shutdownGraceSeconds;
 		retentionDays = retentionDays <= 0 ? 7 : retentionDays;
-	}
-
-	public boolean apiEnabled() {
-		return enabled && !"worker".equals(runtimeMode);
-	}
-
-	public boolean workerEnabled() {
-		return enabled && !"api".equals(runtimeMode);
 	}
 
 	public Duration visibilityTimeout() {

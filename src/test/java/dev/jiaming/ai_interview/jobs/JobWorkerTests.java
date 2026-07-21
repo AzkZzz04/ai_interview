@@ -28,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.jiaming.ai_interview.gemini.GeminiException;
+import dev.jiaming.ai_interview.common.RuntimeModeProperties;
 import dev.jiaming.ai_interview.resume.ResumeExtractionException;
 import software.amazon.awssdk.services.sqs.model.Message;
 
@@ -39,17 +40,16 @@ class JobWorkerTests {
 
 	private final JobProcessor processor = mock(JobProcessor.class);
 
-	private final JobResultCache resultCache = mock(JobResultCache.class);
-
 	private final JobMetrics metrics = mock(JobMetrics.class);
 
 	private final JobProperties properties = new JobProperties(
-		true, "all", "http://localhost:4566", "us-east-1", "test", "test", "jobs", "jobs-dlq", 3,
+		true, "http://localhost:4566", "us-east-1", "test", "test", "jobs", "jobs-dlq", 3,
 		2, 20, 300, 60, 3, 15, 300, 5_000, 30_000, 3_600_000, 120, 7
 	);
 
 	private final JobWorker worker = new JobWorker(
-		properties, queueService, jobStore, processor, new JobFailureClassifier(), resultCache, metrics, java.util.List.of()
+		properties, queueService, jobStore, processor, new JobFailureClassifier(), metrics,
+		new RuntimeModeProperties("all"), new JobRetryDelayStrategy(bound -> bound - 1), java.util.List.of()
 	);
 
 	private ScheduledExecutorService heartbeatExecutor;
@@ -95,7 +95,7 @@ class JobWorkerTests {
 		when(jobStore.claim(eq(jobId), any(), eq(properties.visibilityTimeout())))
 			.thenReturn(Optional.of(processing));
 		when(processor.process(eq(processing), any())).thenThrow(new GeminiException("timeout"));
-		when(jobStore.markRetrying(eq(jobId), any(), eq("GEMINI_ERROR"), eq("timeout"), eq(java.time.Duration.ofSeconds(15))))
+		when(jobStore.markRetrying(eq(jobId), any(), eq("GEMINI_UPSTREAM_ERROR"), eq("timeout"), eq(java.time.Duration.ofSeconds(15))))
 			.thenReturn(true);
 
 		worker.processMessage(message);
@@ -132,7 +132,7 @@ class JobWorkerTests {
 			.thenReturn(Optional.of(processing));
 		when(processor.process(eq(processing), any())).thenThrow(new GeminiException("timeout"));
 		when(jobStore.findById(jobId)).thenReturn(Optional.of(processing));
-		when(jobStore.markFailed(eq(jobId), any(), eq("RETRIES_EXHAUSTED_GEMINI_ERROR"), eq("timeout"), eq(false)))
+		when(jobStore.markFailed(eq(jobId), any(), eq("RETRIES_EXHAUSTED_GEMINI_UPSTREAM_ERROR"), eq("timeout"), eq(false)))
 			.thenReturn(true);
 
 		worker.processMessage(message);
@@ -171,7 +171,7 @@ class JobWorkerTests {
 			.thenReturn(Optional.of(processing));
 		when(processor.process(eq(processing), any())).thenThrow(new GeminiException("timeout"));
 		when(jobStore.findById(jobId)).thenReturn(Optional.of(processing));
-		when(jobStore.markFailed(eq(jobId), any(), eq("RETRIES_EXHAUSTED_GEMINI_ERROR"), eq("timeout"), eq(false)))
+		when(jobStore.markFailed(eq(jobId), any(), eq("RETRIES_EXHAUSTED_GEMINI_UPSTREAM_ERROR"), eq("timeout"), eq(false)))
 			.thenReturn(true);
 		when(queueService.receiveCount(message)).thenReturn(1);
 		org.mockito.Mockito.doThrow(new IllegalStateException("DLQ unavailable"))
@@ -197,7 +197,6 @@ class JobWorkerTests {
 		worker.processMessage(message);
 
 		verify(queueService, never()).delete(message);
-		verifyNoResultCacheWrite();
 	}
 
 	@Test
@@ -272,7 +271,8 @@ class JobWorkerTests {
 		JobProperties shutdownProperties = properties(10, 1);
 		JobWorker shutdownWorker = new JobWorker(
 			shutdownProperties, queueService, jobStore, processor,
-			new JobFailureClassifier(), resultCache, metrics, List.of()
+			new JobFailureClassifier(), metrics, new RuntimeModeProperties("all"),
+			new JobRetryDelayStrategy(bound -> bound - 1), List.of()
 		);
 		UUID jobId = UUID.randomUUID();
 		Message message = message();
@@ -312,14 +312,11 @@ class JobWorkerTests {
 		verify(jobStore, never()).markFailed(any(), any(), any(), any(), anyBoolean());
 	}
 
-	private void verifyNoResultCacheWrite() {
-		verify(resultCache, never()).put(any(), any(), any(), any());
-	}
-
 	private JobWorker worker(JobProperties jobProperties, List<JobTerminalFailureHandler> handlers) {
 		JobWorker configured = new JobWorker(
 			jobProperties, queueService, jobStore, processor,
-			new JobFailureClassifier(), resultCache, metrics, handlers
+			new JobFailureClassifier(), metrics, new RuntimeModeProperties("all"),
+			new JobRetryDelayStrategy(bound -> bound - 1), handlers
 		);
 		ReflectionTestUtils.setField(configured, "heartbeatExecutor", heartbeatExecutor);
 		return configured;
@@ -327,7 +324,7 @@ class JobWorkerTests {
 
 	private JobProperties properties(int heartbeatSeconds, int shutdownGraceSeconds) {
 		return new JobProperties(
-			true, "all", "http://localhost:4566", "us-east-1", "test", "test", "jobs", "jobs-dlq", 3,
+			true, "http://localhost:4566", "us-east-1", "test", "test", "jobs", "jobs-dlq", 3,
 			2, 1, 30, heartbeatSeconds, 3, 15, 300, 5_000, 30_000, 3_600_000,
 			shutdownGraceSeconds, 7
 		);

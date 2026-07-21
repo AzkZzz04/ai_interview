@@ -33,7 +33,7 @@ class JobPropertiesTests {
 		int heartbeat
 	) {
 		return new JobProperties(
-			true, "all", "http://localhost:4566", "us-east-1", "test", "test",
+			true, "http://localhost:4566", "us-east-1", "test", "test",
 			queue, dlq, maxReceiveCount, 2, 20, visibility, heartbeat, maxAttempts,
 			15, 300, 5_000, 30_000, 3_600_000, 120, 7
 		);

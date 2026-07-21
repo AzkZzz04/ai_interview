@@ -62,8 +62,8 @@ The initial release should avoid video, audio, live coding, and complex collabor
 ### Data and Infrastructure
 
 - PostgreSQL as primary relational database.
-- pgvector for RAG retrieval across resume, job description, question, and answer embeddings.
-- Redis for rate limiting, idempotency responses, and five-minute completed-job lookup caching.
+- pgvector for document-level resume and job-description retrieval.
+- Redis for rate limiting and HTTP idempotency responses; PostgreSQL owns five-minute job reuse.
 - AWS SQS Standard Queue for asynchronous job delivery, with a dedicated DLQ.
 - LocalStack S3-compatible storage for local original resume files and generated artifacts.
 - Docker Compose for local development.
@@ -215,14 +215,12 @@ The prototype is single-user and single-resume from the API perspective. API req
 - `feedback_json`
 - `created_at`
 
-### Embedding Tables
+### RAG Persistence
 
-Use pgvector for RAG retrieval, semantic matching, and deduplication:
-
-- `resume_chunks`: resume section chunks and embeddings.
-- `job_description_chunks`: job requirement chunks and embeddings.
-- `question_embeddings`: generated question embeddings for deduplication.
-- `answer_embeddings`: optional in the initial release, useful for analytics and future coaching.
+- `resume_chunks` and `job_description_chunks` persist normalized, section-aware source chunks.
+- `vector_store` contains the active Spring AI vectors and metadata used by retrieval.
+- `rag_document_indexes` records document identity, model/config identity, indexing status, and claim fencing.
+- The older question and answer embedding tables remain for schema compatibility but are not part of the current retrieval flow.
 
 ## RAG Design
 
@@ -230,21 +228,12 @@ RAG is required in the initial release. The application should not ask Gemini to
 
 ### Indexing Pipeline
 
-1. Extract resume text with Apache Tika.
-2. Normalize whitespace, remove repeated headers/footers, and preserve section labels.
-3. Split into chunks by resume section first, then by token/character limits.
-4. Attach metadata to each chunk:
-   - `userId`
-   - `resumeId`
-   - `sourceType`
-   - `section`
-   - `chunkIndex`
-   - `detectedRole`
-   - `detectedSeniority`
-5. Generate embeddings with Google GenAI text embeddings.
-6. Store chunk text, metadata, and vector in PostgreSQL/pgvector.
-
-Job descriptions follow the same process, with metadata for title, company, requirement category, and seniority signal.
+1. Extract uploaded resume text with PDFBox or Apache Tika, normalize it, and persist section-aware chunks.
+2. Persist each resume and pasted job description with a SHA-256 hash of the exact normalized text.
+3. For resume plus job-description inputs up to 6,000 characters, use all persisted chunks directly and skip embedding.
+4. For longer inputs, call `ensureIndexed` independently for each document. Role and seniority are not part of index identity, so one resume embedding is reused across jobs.
+5. Claim a new index with `INDEXING` and `claim_version=1`. Fresh competing claims use local chunks; stale or failed claims can be fenced by incrementing `claim_version`.
+6. Store vectors with `indexId`, `claimVersion`, `contextId`, source type, section, and chunk index metadata. Only a matching claim can transition the registry row to `READY`.
 
 ### Retrieval Pipeline
 
@@ -271,18 +260,20 @@ For answer feedback, retrieve:
 
 ### Prompt Grounding Rules
 
-- Gemini should receive only retrieved context snippets, user-visible question/answer text, scoring rubric, and schema instructions.
+- Gemini receives resolved local or retrieved context snippets, user-visible question/answer text, scoring rubric, and schema instructions.
 - Prompts must tell Gemini to avoid inventing experience not present in the retrieved context.
 - Every response should include `sourceContextIds` where possible so the UI can explain which resume or job description snippets influenced the result.
 - If retrieval confidence is weak, the output should say what information is missing instead of guessing.
+- Retrieval filters by both `indexId` and `claimVersion`; vectors from stale claims cannot enter a new analysis.
+- Resume and job-description results are merged and deduplicated by source context ID. If indexing or retrieval is unavailable, persisted local chunks remain the fallback.
 
 ### Retrieval Defaults
 
 - Embedding dimensions: `1024`.
 - Similarity metric: cosine distance.
 - Default top K: `8`.
-- Store enough metadata to filter by `userId`, `resumeId`, `jobDescriptionId`, and `sourceType`.
-- Use separate domain chunk tables for application-owned queries and Spring AI `vector_store` for framework-backed retrieval experiments.
+- Filter active vectors by `indexId` and `claimVersion`, with source metadata retained for attribution.
+- Use domain chunk tables as the durable source text and Spring AI `vector_store` for active semantic retrieval.
 
 ## Resume Scoring Design
 
@@ -472,15 +463,11 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 Use vector dimensions matching the selected embedding model. The initial release uses Google GenAI `gemini-embedding-001` configured to 1024 dimensions, but this must remain configurable because embedding providers and model options vary.
 
-Recommended vector indexes:
+The existing Flyway migrations create HNSW indexes for vector columns, including the active Spring AI `vector_store`:
 
 ```sql
-CREATE INDEX idx_resume_chunks_embedding
-ON resume_chunks
-USING hnsw (embedding vector_cosine_ops);
-
-CREATE INDEX idx_job_description_chunks_embedding
-ON job_description_chunks
+CREATE INDEX idx_vector_store_embedding
+ON vector_store
 USING hnsw (embedding vector_cosine_ops);
 ```
 
@@ -491,7 +478,7 @@ The current implementation uses Redis at the HTTP submission boundary, not as pr
 - Rate limit AI-heavy endpoints per client.
 - Rate limit resume uploads per client.
 - Cache accepted-job responses for retry when clients send an `Idempotency-Key` header.
-- Cache completed job IDs for five minutes by user, job type, and request fingerprint.
+- Do not cache AI results or in-flight AI locks in Redis. PostgreSQL reuses matching active or completed jobs for five minutes by user, job type, and content-based request fingerprint.
 
 Do not use Redis as the source of truth for jobs, assessments, answers, or user
 history. PostgreSQL stores job state and leases.
@@ -615,6 +602,6 @@ This makes evaluations and prompt migrations possible.
 - Use Gemini as the initial AI provider for chat and embeddings.
 - Use PostgreSQL as the durable source of truth and pgvector for RAG semantic retrieval.
 - Use Redis only for ephemeral workflow concerns.
-- Defer object storage in the prototype; when persistence is added, store uploaded files in object storage rather than PostgreSQL.
+- Store uploaded files in S3-compatible object storage and keep storage keys plus extracted content metadata in PostgreSQL.
 - Treat every AI response as untrusted data until it passes schema validation.
 - Keep the initial release text-only to reduce product and infrastructure complexity.

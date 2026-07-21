@@ -11,7 +11,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import dev.jiaming.ai_interview.common.ContentHasher;
 import dev.jiaming.ai_interview.common.LocalUserService;
+import dev.jiaming.ai_interview.document.DocumentChunk;
+import dev.jiaming.ai_interview.document.DocumentSourceType;
+import dev.jiaming.ai_interview.document.ResolvedDocument;
 import dev.jiaming.ai_interview.rag.RagContextId;
 
 @Service
@@ -21,9 +25,24 @@ public class ResumePersistenceService {
 
 	private final LocalUserService localUserService;
 
-	public ResumePersistenceService(JdbcTemplate jdbcTemplate, LocalUserService localUserService) {
+	private final ResumeTextNormalizer normalizer;
+
+	private final SectionAwareTextChunker chunker;
+
+	private final ContentHasher contentHasher;
+
+	public ResumePersistenceService(
+		JdbcTemplate jdbcTemplate,
+		LocalUserService localUserService,
+		ResumeTextNormalizer normalizer,
+		SectionAwareTextChunker chunker,
+		ContentHasher contentHasher
+	) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.localUserService = localUserService;
+		this.normalizer = normalizer;
+		this.chunker = chunker;
+		this.contentHasher = contentHasher;
 	}
 
 	@Transactional
@@ -54,8 +73,25 @@ public class ResumePersistenceService {
 		long sizeBytes,
 		String storageKey
 	) {
+		return createPending(
+			localUserService.localUserId(),
+			originalFilename,
+			contentType,
+			detectedContentType,
+			sizeBytes,
+			storageKey
+		);
+	}
+
+	public UUID createPending(
+		UUID userId,
+		String originalFilename,
+		String contentType,
+		String detectedContentType,
+		long sizeBytes,
+		String storageKey
+	) {
 		UUID resumeId = UUID.randomUUID();
-		UUID userId = localUserService.localUserId();
 		jdbcTemplate.update(
 			"""
 				INSERT INTO ai_interview_app.resumes (
@@ -83,6 +119,7 @@ public class ResumePersistenceService {
 		String normalizedText,
 		List<ResumeChunkResponse> chunks
 	) {
+		String contentHash = contentHasher.sha256(normalizedText);
 		int updated = jdbcTemplate.update(
 			"""
 				UPDATE ai_interview_app.resumes
@@ -91,11 +128,13 @@ public class ResumePersistenceService {
 					processing_status = 'READY',
 					failure_code = NULL,
 					failure_message = NULL,
+					content_hash = ?,
 					updated_at = now()
 				WHERE id = ? AND user_id = ? AND processing_status IN ('PENDING', 'READY')
 				""",
 			rawText,
 			normalizedText,
+			contentHash,
 			resumeId,
 			localUserService.localUserId()
 		);
@@ -215,24 +254,91 @@ public class ResumePersistenceService {
 		return resumes.stream().findFirst();
 	}
 
-	public Optional<PersistedResume> findLatestSummary() {
-		UUID userId = localUserService.localUserId();
-		List<PersistedResume> resumes = jdbcTemplate.query(
+	public Optional<String> findProcessingStatus(UUID userId, UUID resumeId) {
+		return jdbcTemplate.query(
+			"SELECT processing_status FROM ai_interview_app.resumes WHERE id = ? AND user_id = ?",
+			(rs, rowNum) -> rs.getString("processing_status"),
+			resumeId,
+			userId
+		).stream().findFirst();
+	}
+
+	public Optional<ResolvedDocument> findReadyDocument(UUID userId, UUID resumeId) {
+		return queryDocument(
 			"""
-				SELECT id, normalized_text
+				SELECT id, normalized_text, content_hash
+				FROM ai_interview_app.resumes
+				WHERE id = ? AND user_id = ? AND processing_status = 'READY'
+				  AND normalized_text IS NOT NULL AND btrim(normalized_text) <> ''
+				""",
+			resumeId,
+			userId
+		);
+	}
+
+	public Optional<ResolvedDocument> findLatestReadyDocument(UUID userId) {
+		return queryDocument(
+			"""
+				SELECT id, normalized_text, content_hash
 				FROM ai_interview_app.resumes
 				WHERE user_id = ? AND processing_status = 'READY'
 				  AND normalized_text IS NOT NULL AND btrim(normalized_text) <> ''
 				ORDER BY created_at DESC
 				LIMIT 1
 				""",
-			(rs, rowNum) -> new PersistedResume(
-				rs.getObject("id", UUID.class),
-				rs.getString("normalized_text")
-			),
 			userId
 		);
-		return resumes.stream().findFirst();
+	}
+
+	public Optional<ResolvedDocument> findReadyDocumentByContent(
+		UUID userId,
+		String contentHash,
+		String normalizedText
+	) {
+		return queryDocument(
+			"""
+				SELECT id, normalized_text, content_hash
+				FROM ai_interview_app.resumes
+				WHERE user_id = ? AND processing_status = 'READY' AND content_hash = ?
+				  AND normalized_text = ?
+				ORDER BY created_at DESC
+				LIMIT 1
+				""",
+			userId,
+			contentHash,
+			normalizedText
+		);
+	}
+
+	@Transactional
+	public ResolvedDocument findOrCreateDocument(UUID userId, String rawText) {
+		String normalizedText = normalizer.normalize(rawText);
+		String contentHash = contentHasher.sha256(normalizedText);
+		Optional<ResolvedDocument> existing = findReadyDocumentByContent(userId, contentHash, normalizedText);
+		if (existing.isPresent()) {
+			return existing.get();
+		}
+
+		UUID resumeId = UUID.randomUUID();
+		jdbcTemplate.update(
+			"""
+				INSERT INTO ai_interview_app.resumes (
+					id, user_id, original_filename, content_type, detected_content_type,
+					size_bytes, raw_text, normalized_text, content_hash, parsed_skills,
+					processing_status, updated_at
+				)
+				VALUES (?, ?, 'pasted-resume.txt', 'text/plain', 'text/plain', ?, ?, ?, ?,
+				        '[]'::jsonb, 'READY', now())
+				""",
+			resumeId,
+			userId,
+			normalizedText.getBytes(java.nio.charset.StandardCharsets.UTF_8).length,
+			rawText,
+			normalizedText,
+			contentHash
+		);
+		insertChunks(resumeId, normalizedText);
+		return findReadyDocument(userId, resumeId).orElseThrow();
 	}
 
 	private Optional<ResumeUploadResponse> findById(UUID resumeId) {
@@ -247,28 +353,6 @@ public class ResumePersistenceService {
 			resumeId
 		);
 		return resumes.stream().findFirst();
-	}
-
-	@Transactional
-	public PersistedResume findOrCreateTextResume(String resumeText, List<ResumeChunkResponse> chunks) {
-		String normalizedText = resumeText == null ? "" : resumeText.trim();
-		Optional<PersistedResume> latest = findLatestSummary()
-			.filter(resume -> normalizedText.equals(resume.normalizedText()));
-		if (latest.isPresent()) {
-			return latest.get();
-		}
-
-		ResumeUploadResponse saved = save(
-			"pasted-resume.txt",
-			"text/plain",
-			"text/plain",
-			normalizedText.getBytes(java.nio.charset.StandardCharsets.UTF_8).length,
-			null,
-			normalizedText,
-			normalizedText,
-			chunks
-		);
-		return new PersistedResume(UUID.fromString(saved.id()), saved.normalizedText());
 	}
 
 	private ResumeUploadResponse toUploadResponse(ResultSet rs) throws SQLException {
@@ -289,7 +373,7 @@ public class ResumePersistenceService {
 		);
 	}
 
-	private List<ResumeChunkResponse> findChunks(UUID resumeId) {
+	public List<ResumeChunkResponse> findChunks(UUID resumeId) {
 		return jdbcTemplate.query(
 			"""
 				SELECT chunk_index, section, content
@@ -305,6 +389,57 @@ public class ResumePersistenceService {
 			),
 			resumeId
 		);
+	}
+
+	private Optional<ResolvedDocument> queryDocument(String sql, Object... arguments) {
+		List<ResolvedDocument> documents = jdbcTemplate.query(
+			sql,
+			(rs, rowNum) -> {
+				UUID id = rs.getObject("id", UUID.class);
+				String normalizedText = rs.getString("normalized_text");
+				String storedHash = rs.getString("content_hash");
+				String contentHash = storedHash == null
+					? contentHasher.sha256(normalizedText)
+					: storedHash;
+				return new ResolvedDocument(
+					DocumentSourceType.RESUME,
+					id,
+					contentHash,
+					normalizedText,
+					findDocumentChunks(id)
+				);
+			},
+			arguments
+		);
+		return documents.stream().findFirst();
+	}
+
+	private List<DocumentChunk> findDocumentChunks(UUID resumeId) {
+		return findChunks(resumeId).stream()
+			.map(chunk -> new DocumentChunk(
+				chunk.index(),
+				chunk.section(),
+				chunk.content(),
+				RagContextId.forChunk("resume", chunk.section(), chunk.index())
+			))
+			.toList();
+	}
+
+	private void insertChunks(UUID resumeId, String normalizedText) {
+		for (TextChunk chunk : chunker.chunk(normalizedText)) {
+			jdbcTemplate.update(
+				"""
+					INSERT INTO ai_interview_app.resume_chunks (id, resume_id, chunk_index, section, content, metadata)
+					VALUES (?, ?, ?, ?, ?, jsonb_build_object('sourceType', 'resume', 'contextId', ?))
+					""",
+				UUID.randomUUID(),
+				resumeId,
+				chunk.index(),
+				chunk.section(),
+				chunk.content(),
+				RagContextId.forChunk("resume", chunk)
+			);
+		}
 	}
 
 	private Optional<String> findStorageKey(UUID resumeId) {

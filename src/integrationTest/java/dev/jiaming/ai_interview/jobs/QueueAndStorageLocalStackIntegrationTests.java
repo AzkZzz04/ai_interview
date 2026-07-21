@@ -69,7 +69,7 @@ class QueueAndStorageLocalStackIntegrationTests {
 			))
 			.build());
 		JobProperties properties = new JobProperties(
-			true, "all", LOCALSTACK.getEndpointOverride(LocalStackContainer.Service.SQS).toString(),
+			true, LOCALSTACK.getEndpointOverride(LocalStackContainer.Service.SQS).toString(),
 			LOCALSTACK.getRegion(), LOCALSTACK.getAccessKey(), LOCALSTACK.getSecretKey(),
 			queueName, dlqName, 2, 1, 1, 30, 10, 5,
 			1, 300, 5_000, 30_000, 3_600_000, 120, 7

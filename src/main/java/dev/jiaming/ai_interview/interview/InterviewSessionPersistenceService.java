@@ -7,58 +7,38 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import dev.jiaming.ai_interview.coach.AiAnalysisRequest;
-import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest;
 import dev.jiaming.ai_interview.coach.InterviewQuestionResponse;
 import dev.jiaming.ai_interview.coach.InterviewQuestionsResponse;
-import dev.jiaming.ai_interview.resume.PersistedResume;
-import dev.jiaming.ai_interview.resume.ResumeChunkResponse;
-import dev.jiaming.ai_interview.resume.ResumePersistenceService;
-import dev.jiaming.ai_interview.resume.SectionAwareTextChunker;
 
 @Service
 public class InterviewSessionPersistenceService {
 
 	private final JdbcTemplate jdbcTemplate;
 
-	private final ResumePersistenceService resumePersistenceService;
-
-	private final SectionAwareTextChunker chunker;
-
-	private final JobDescriptionPersistenceService jobDescriptionPersistenceService;
-
 	private final PersistenceJsonSupport jsonSupport;
 
 	public InterviewSessionPersistenceService(
 		JdbcTemplate jdbcTemplate,
-		ResumePersistenceService resumePersistenceService,
-		SectionAwareTextChunker chunker,
-		JobDescriptionPersistenceService jobDescriptionPersistenceService,
 		PersistenceJsonSupport jsonSupport
 	) {
 		this.jdbcTemplate = jdbcTemplate;
-		this.resumePersistenceService = resumePersistenceService;
-		this.chunker = chunker;
-		this.jobDescriptionPersistenceService = jobDescriptionPersistenceService;
 		this.jsonSupport = jsonSupport;
 	}
 
 	public void saveQuestions(
 		UUID sessionId,
-		UUID userId,
 		UUID assessmentId,
-		AiAnalysisRequest request,
+		AnalysisPersistenceInput input,
 		InterviewQuestionsResponse response
 	) {
-		AssessmentContext context = assessmentContext(userId, assessmentId);
 		createSession(
 			sessionId,
-			userId,
-			context.resumeId(),
-			context.jobDescriptionId(),
+			input.userId(),
+			input.resumeId(),
+			input.jobDescriptionId(),
 			assessmentId,
-			request.targetRole(),
-			request.seniority()
+			input.targetRole(),
+			input.seniority()
 		);
 
 		int index = 0;
@@ -67,7 +47,8 @@ public class InterviewSessionPersistenceService {
 		}
 	}
 
-	public Optional<UUID> findLatestQuestion(UUID userId, String questionText) {
+	public Optional<UUID> findLatestQuestion(FeedbackPersistenceInput input) {
+		String questionText = input.questionText();
 		if (questionText == null || questionText.isBlank()) {
 			return Optional.empty();
 		}
@@ -76,22 +57,39 @@ public class InterviewSessionPersistenceService {
 				SELECT q.id
 				FROM ai_interview_app.interview_questions q
 				JOIN ai_interview_app.interview_sessions s ON s.id = q.session_id
-				WHERE s.user_id = ? AND q.question_text = ?
+				WHERE s.user_id = ?
+				  AND s.resume_id = ?
+				  AND s.job_description_id IS NOT DISTINCT FROM ?
+				  AND s.target_role IS NOT DISTINCT FROM ?
+				  AND s.seniority IS NOT DISTINCT FROM ?
+				  AND q.question_text = ?
+				  AND q.category = ?
 				ORDER BY q.created_at DESC
 				LIMIT 1
 				""",
 			(rs, rowNum) -> rs.getObject("id", UUID.class),
-			userId,
-			questionText
+			input.userId(),
+			input.resumeId(),
+			input.jobDescriptionId(),
+			input.targetRole(),
+			input.seniority(),
+			questionText,
+			category(input.category())
 		);
 		return questionIds.stream().findFirst();
 	}
 
-	public UUID createQuestionForAnswer(UUID userId, AnswerFeedbackRequest request, String resumeText) {
-		PersistedResume resume = resumeFor(resumeText);
-		UUID jobDescriptionId = jobDescriptionPersistenceService.save(userId, request.jobDescription()).orElse(null);
+	public UUID createQuestionForAnswer(FeedbackPersistenceInput input) {
 		UUID sessionId = UUID.randomUUID();
-		createSession(sessionId, userId, resume.id(), jobDescriptionId, null, request.targetRole(), request.seniority());
+		createSession(
+			sessionId,
+			input.userId(),
+			input.resumeId(),
+			input.jobDescriptionId(),
+			null,
+			input.targetRole(),
+			input.seniority()
+		);
 		UUID questionId = UUID.randomUUID();
 		jdbcTemplate.update(
 			"""
@@ -103,12 +101,16 @@ public class InterviewSessionPersistenceService {
 				""",
 			questionId,
 			sessionId,
-			request.questionText(),
-			request.category() == null || request.category().isBlank() ? "Interview" : request.category(),
+			input.questionText(),
+			category(input.category()),
 			"Core",
-			jsonSupport.json(request.expectedSignals())
+			jsonSupport.json(input.expectedSignals())
 		);
 		return questionId;
+	}
+
+	private String category(String value) {
+		return value == null || value.isBlank() ? "Interview" : value;
 	}
 
 	private void createSession(
@@ -137,26 +139,6 @@ public class InterviewSessionPersistenceService {
 		);
 	}
 
-	private AssessmentContext assessmentContext(UUID userId, UUID assessmentId) {
-		List<AssessmentContext> contexts = jdbcTemplate.query(
-			"""
-				SELECT resume_id, job_description_id
-				FROM ai_interview_app.resume_assessments
-				WHERE id = ? AND user_id = ?
-				""",
-			(rs, rowNum) -> new AssessmentContext(
-				rs.getObject("resume_id", UUID.class),
-				rs.getObject("job_description_id", UUID.class)
-			),
-			assessmentId,
-			userId
-		);
-		if (contexts.isEmpty()) {
-			throw new IllegalStateException("Assessment context does not exist: " + assessmentId);
-		}
-		return contexts.getFirst();
-	}
-
 	private void saveQuestion(UUID sessionId, InterviewQuestionResponse question, int orderIndex) {
 		jdbcTemplate.update(
 			"""
@@ -177,20 +159,4 @@ public class InterviewSessionPersistenceService {
 		);
 	}
 
-	private PersistedResume resumeFor(String resumeText) {
-		return resumePersistenceService.findOrCreateTextResume(
-			resumeText,
-			chunker.chunk(resumeText).stream()
-				.map(chunk -> new ResumeChunkResponse(
-					chunk.index(),
-					chunk.section(),
-					chunk.content(),
-					chunk.content().length()
-				))
-				.toList()
-		);
-	}
-
-	private record AssessmentContext(UUID resumeId, UUID jobDescriptionId) {
-	}
 }

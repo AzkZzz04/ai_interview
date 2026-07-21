@@ -5,11 +5,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Supplier;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,7 +16,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -29,11 +26,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class RedisRequestGuard {
 
 	private static final Logger log = LoggerFactory.getLogger(RedisRequestGuard.class);
-
-	private static final RedisScript<Long> RELEASE_LOCK_SCRIPT = RedisScript.of(
-		"if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-		Long.class
-	);
 
 	private final StringRedisTemplate redisTemplate;
 
@@ -57,44 +49,6 @@ public class RedisRequestGuard {
 
 	public void assertUploadAllowed() {
 		assertAllowed("resume-upload", properties.rateLimit().uploadLimit());
-	}
-
-	public <T> T withInFlightLock(String action, Object requestFingerprintSource, Supplier<T> work) {
-		if (!properties.inFlight().enabled()) {
-			return work.get();
-		}
-
-		String key = "lock:%s:%s:%s".formatted(action, clientId(), fingerprint(action, requestFingerprintSource));
-		String token = UUID.randomUUID().toString();
-		try {
-			Boolean acquired = redisTemplate.opsForValue()
-				.setIfAbsent(key, token, Duration.ofSeconds(properties.inFlight().lockTtlSeconds()));
-			if (!Boolean.TRUE.equals(acquired)) {
-				throw new ResponseStatusException(
-					HttpStatus.CONFLICT,
-					"A matching " + action + " request is already running. Wait for it to finish before retrying."
-				);
-			}
-		}
-		catch (ResponseStatusException exception) {
-			throw exception;
-		}
-		catch (RuntimeException exception) {
-			log.warn("redis_in_flight_lock_unavailable action={} reason={}", action, exception.getMessage());
-			return work.get();
-		}
-
-		try {
-			return work.get();
-		}
-		finally {
-			try {
-				redisTemplate.execute(RELEASE_LOCK_SCRIPT, Collections.singletonList(key), token);
-			}
-			catch (RuntimeException exception) {
-				log.debug("redis_in_flight_lock_delete_failed action={} reason={}", action, exception.getMessage());
-			}
-		}
 	}
 
 	public <T> T withIdempotentRetryCache(
@@ -134,48 +88,6 @@ public class RedisRequestGuard {
 
 		T response = work.get();
 		storeResponse(action, fingerprintKey, responseKey, requestFingerprint, response, ttl);
-		return response;
-	}
-
-	public <T> T withAiResultCache(
-		String action,
-		Object requestFingerprintSource,
-		Class<T> responseType,
-		Supplier<T> work
-	) {
-		if (!properties.aiResultCache().enabled()) {
-			return work.get();
-		}
-
-		String key = "ai-result:%s:%s:%s".formatted(action, clientId(), fingerprint(action, requestFingerprintSource));
-		try {
-			String responseJson = redisTemplate.opsForValue().get(key);
-			if (responseJson != null) {
-				return objectMapper.readValue(responseJson, responseType);
-			}
-		}
-		catch (JsonProcessingException exception) {
-			log.warn("redis_ai_result_cache_decode_failed action={} reason={}", action, exception.getMessage());
-		}
-		catch (RuntimeException exception) {
-			log.warn("redis_ai_result_cache_unavailable action={} reason={}", action, exception.getMessage());
-			return work.get();
-		}
-
-		T response = work.get();
-		try {
-			redisTemplate.opsForValue().set(
-				key,
-				objectMapper.writeValueAsString(response),
-				Duration.ofSeconds(properties.aiResultCache().ttlSeconds())
-			);
-		}
-		catch (JsonProcessingException exception) {
-			log.warn("redis_ai_result_cache_encode_failed action={} reason={}", action, exception.getMessage());
-		}
-		catch (RuntimeException exception) {
-			log.warn("redis_ai_result_cache_store_failed action={} reason={}", action, exception.getMessage());
-		}
 		return response;
 	}
 
@@ -273,10 +185,6 @@ public class RedisRequestGuard {
 	private String clientId() {
 		if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
 			HttpServletRequest request = attributes.getRequest();
-			String forwardedFor = request.getHeader("X-Forwarded-For");
-			if (forwardedFor != null && !forwardedFor.isBlank()) {
-				return sanitize(forwardedFor.split(",")[0].trim());
-			}
 			String remoteAddress = request.getRemoteAddr();
 			if (remoteAddress != null && !remoteAddress.isBlank()) {
 				return sanitize(remoteAddress);

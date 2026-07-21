@@ -23,6 +23,15 @@ public class JobMetrics {
 		meterRegistry.timer("app.jobs.duration", "type", type.name(), "status", status.name()).record(duration);
 	}
 
+	public void queueLag(JobType type, Duration duration) {
+		meterRegistry.timer("app.jobs.queue.lag", "type", type.name()).record(duration);
+	}
+
+	public void stageDuration(JobType type, JobStage stage, Duration duration) {
+		meterRegistry.timer("app.jobs.stage.duration", "type", type.name(), "stage", stage.name())
+			.record(duration);
+	}
+
 	public void retried(JobType type) {
 		meterRegistry.counter("app.jobs.retried", "type", type.name()).increment();
 	}

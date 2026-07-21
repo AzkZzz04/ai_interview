@@ -13,7 +13,8 @@ const accepted: JobAcceptedResponse = {
   status: "QUEUED",
   stage: "QUEUED",
   statusUrl: "/api/jobs/job-1",
-  reused: false
+  reused: false,
+  inputRefs: { resumeId: null, jobDescriptionId: null }
 };
 
 describe("job workflow persistence", () => {
@@ -91,4 +92,39 @@ describe("job workflow persistence", () => {
       restored: true
     });
   });
+
+	  it("does not publish new metadata when the private snapshot cannot be stored", () => {
+	    persistJobWorkflow(
+	      "analysis-job",
+	      accepted,
+	      { resumeText: "first" },
+	      { local: window.localStorage, session: window.sessionStorage },
+	      "generation-1"
+	    );
+	    const failingSession: Storage = {
+	      get length() { return window.sessionStorage.length; },
+	      clear: () => window.sessionStorage.clear(),
+	      getItem: (key) => window.sessionStorage.getItem(key),
+	      key: (index) => window.sessionStorage.key(index),
+	      removeItem: (key) => window.sessionStorage.removeItem(key),
+	      setItem: () => { throw new DOMException("Quota exceeded", "QuotaExceededError"); }
+	    };
+
+	    expect(() => persistJobWorkflow(
+	      "analysis-job",
+	      { ...accepted, jobId: "job-2" },
+	      { resumeText: "second" },
+	      { local: window.localStorage, session: failingSession },
+	      "generation-2"
+	    )).toThrow();
+
+	    expect(restoreJobWorkflow<{ resumeText: string }>(
+	      "analysis-job",
+	      { local: window.localStorage, session: window.sessionStorage }
+	    )).toMatchObject({
+	      jobId: "job-1",
+	      generation: "generation-1",
+	      context: { resumeText: "first" }
+	    });
+	  });
 });

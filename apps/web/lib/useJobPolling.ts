@@ -182,6 +182,7 @@ function asJobApiError(error: unknown) {
         error instanceof Error ? error.message : "Could not refresh job status",
         null,
         false,
+        "INVALID_RESPONSE",
         "INVALID_RESPONSE"
       );
 }

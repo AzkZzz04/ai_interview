@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import dev.jiaming.ai_interview.gemini.GeminiException;
+import dev.jiaming.ai_interview.gemini.GeminiErrorCode;
 
 @Component
 public class CoachResponseMapper {
@@ -25,7 +26,12 @@ public class CoachResponseMapper {
 			return objectMapper.readValue(json, responseType);
 		}
 		catch (IOException exception) {
-			throw new GeminiException("Gemini returned JSON that did not match the expected AI contract", exception);
+			throw new GeminiException(
+				GeminiErrorCode.INVALID_RESPONSE,
+				"Gemini returned JSON that did not match the expected AI contract",
+				exception,
+				false
+			);
 		}
 	}
 
@@ -71,7 +77,11 @@ public class CoachResponseMapper {
 			))
 			.toList();
 		if (questions.isEmpty()) {
-			throw new GeminiException("Gemini returned no usable interview questions");
+			throw new GeminiException(
+				GeminiErrorCode.INVALID_RESPONSE,
+				"Gemini returned no usable interview questions",
+				false
+			);
 		}
 		return new InterviewQuestionsResponse(questions, "gemini");
 	}

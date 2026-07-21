@@ -40,7 +40,7 @@ spring:
             options:
               model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
               task-type: RETRIEVAL_DOCUMENT
-              dimensions: ${GEMINI_EMBEDDING_DIMENSIONS:1024}
+              dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
     vectorstore:
       pgvector:
         initialize-schema: false
@@ -61,6 +61,8 @@ management:
         enabled: true
 
 app:
+  runtime:
+    mode: ${JOB_RUNTIME_MODE:all}
   gemini:
     request-timeout-seconds: ${GEMINI_REQUEST_TIMEOUT_SECONDS:90}
     max-output-tokens: ${GEMINI_MAX_OUTPUT_TOKENS:2048}
@@ -68,21 +70,17 @@ app:
   rag:
     embedding-dimensions: ${RAG_EMBEDDING_DIMENSIONS:1024}
     default-top-k: ${RAG_DEFAULT_TOP_K:8}
+    embedding-model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
+    chunk-schema: ${RAG_CHUNK_SCHEMA:section-context-v2}
   redis:
     rate-limit:
       enabled: ${REDIS_RATE_LIMIT_ENABLED:true}
       window-seconds: ${REDIS_RATE_LIMIT_WINDOW_SECONDS:60}
       ai-limit: ${REDIS_AI_RATE_LIMIT:12}
       upload-limit: ${REDIS_UPLOAD_RATE_LIMIT:20}
-    in-flight:
-      enabled: ${REDIS_IN_FLIGHT_LOCK_ENABLED:true}
-      lock-ttl-seconds: ${REDIS_IN_FLIGHT_LOCK_TTL_SECONDS:120}
     idempotency:
       enabled: ${REDIS_IDEMPOTENCY_ENABLED:true}
       ttl-seconds: ${REDIS_IDEMPOTENCY_TTL_SECONDS:86400}
-    ai-result-cache:
-      enabled: ${REDIS_AI_RESULT_CACHE_ENABLED:true}
-      ttl-seconds: ${REDIS_AI_RESULT_CACHE_TTL_SECONDS:300}
   storage:
     endpoint: ${S3_ENDPOINT:http://localhost:4566}
     region: ${S3_REGION:us-east-1}
@@ -99,7 +97,6 @@ app:
     max-embedded-resources: ${RESUME_MAX_EMBEDDED_RESOURCES:20}
   jobs:
     enabled: ${JOBS_ENABLED:true}
-    runtime-mode: ${JOB_RUNTIME_MODE:all}
     endpoint: ${SQS_ENDPOINT:http://localhost:4566}
     region: ${SQS_REGION:us-east-1}
     access-key: ${SQS_ACCESS_KEY:test}

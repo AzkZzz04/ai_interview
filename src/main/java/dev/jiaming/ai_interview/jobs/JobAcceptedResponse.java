@@ -8,8 +8,19 @@ public record JobAcceptedResponse(
 	JobStatus status,
 	JobStage stage,
 	String statusUrl,
-	boolean reused
+	boolean reused,
+	JobInputRefs inputRefs
 ) {
+	public JobAcceptedResponse(
+		UUID jobId,
+		JobType jobType,
+		JobStatus status,
+		JobStage stage,
+		String statusUrl,
+		boolean reused
+	) {
+		this(jobId, jobType, status, stage, statusUrl, reused, new JobInputRefs(null, null));
+	}
 
 	public static JobAcceptedResponse from(BackgroundJob job, boolean reused) {
 		return new JobAcceptedResponse(
@@ -18,7 +29,8 @@ public record JobAcceptedResponse(
 			job.status(),
 			job.stage(),
 			"/api/jobs/" + job.id(),
-			reused
+			reused,
+			JobInputRefs.from(job)
 		);
 	}
 }

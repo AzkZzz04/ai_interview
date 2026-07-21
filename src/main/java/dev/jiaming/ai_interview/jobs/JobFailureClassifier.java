@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
+import dev.jiaming.ai_interview.common.ApiRequestException;
 import dev.jiaming.ai_interview.gemini.GeminiException;
 import dev.jiaming.ai_interview.resume.ResumeExtractionException;
 import dev.jiaming.ai_interview.resume.ResumeParserBusyException;
@@ -14,8 +15,10 @@ class JobFailureClassifier {
 	JobFailure classify(Throwable throwable) {
 		Throwable cause = unwrap(throwable);
 		if (cause instanceof GeminiException exception) {
-			String suffix = exception.statusCode() == null ? "ERROR" : String.valueOf(exception.statusCode());
-			return new JobFailure("GEMINI_" + suffix, message(exception), exception.retryable());
+			return new JobFailure(exception.code(), message(exception), exception.retryable());
+		}
+		if (cause instanceof ApiRequestException exception) {
+			return new JobFailure(exception.code(), message(exception), false);
 		}
 		if (cause instanceof ResumeParserBusyException exception) {
 			return new JobFailure("RESUME_PARSER_BUSY", message(exception), true);
@@ -38,6 +41,7 @@ class JobFailureClassifier {
 		Throwable current = throwable;
 		while (current.getCause() != null && current != current.getCause()) {
 			if (current instanceof GeminiException
+				|| current instanceof ApiRequestException
 				|| current instanceof ResumeExtractionException
 				|| current instanceof ResponseStatusException
 				|| current instanceof IllegalArgumentException) {

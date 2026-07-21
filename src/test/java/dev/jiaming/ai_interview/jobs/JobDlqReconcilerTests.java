@@ -12,6 +12,7 @@ import java.util.UUID;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import dev.jiaming.ai_interview.common.RuntimeModeProperties;
 import software.amazon.awssdk.services.sqs.model.Message;
 
 class JobDlqReconcilerTests {
@@ -23,7 +24,7 @@ class JobDlqReconcilerTests {
 	private final JobMetrics metrics = mock(JobMetrics.class);
 
 	private final JobDlqReconciler reconciler = new JobDlqReconciler(
-		properties(), queueService, jobStore, metrics
+		properties(), queueService, jobStore, metrics, new RuntimeModeProperties("all")
 	);
 
 	@Test
@@ -87,7 +88,7 @@ class JobDlqReconcilerTests {
 
 	private JobProperties properties() {
 		return new JobProperties(
-			true, "all", "http://localhost:4566", "us-east-1", "test", "test",
+			true, "http://localhost:4566", "us-east-1", "test", "test",
 			"jobs", "jobs-dlq", 3, 2, 20, 300, 60, 5,
 			15, 300, 5_000, 30_000, 3_600_000, 120, 7
 		);

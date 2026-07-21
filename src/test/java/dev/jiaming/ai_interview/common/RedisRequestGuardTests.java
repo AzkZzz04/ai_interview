@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -68,9 +67,7 @@ class RedisRequestGuardTests {
 			redisTemplate,
 			new RedisUsageProperties(
 				new RedisUsageProperties.RateLimit(true, 60, 2, 2),
-				new RedisUsageProperties.InFlight(true, 120),
-				new RedisUsageProperties.Idempotency(true, 86_400),
-				new RedisUsageProperties.AiResultCache(true, 300)
+				new RedisUsageProperties.Idempotency(true, 86_400)
 			),
 			objectMapper()
 		);
@@ -150,52 +147,6 @@ class RedisRequestGuardTests {
 	}
 
 	@Test
-	void replaysAiResultCacheForSamePayloadWithoutIdempotencyKey() {
-		requestWithIdempotencyKey(null);
-		AtomicInteger calls = new AtomicInteger();
-
-		CachedResponse first = guard.withAiResultCache(
-			"assessment",
-			List.of("same-resume", "same-job"),
-			CachedResponse.class,
-			() -> new CachedResponse("gemini-" + calls.incrementAndGet())
-		);
-		CachedResponse second = guard.withAiResultCache(
-			"assessment",
-			List.of("same-resume", "same-job"),
-			CachedResponse.class,
-			() -> new CachedResponse("gemini-" + calls.incrementAndGet())
-		);
-
-		assertThat(first).isEqualTo(new CachedResponse("gemini-1"));
-		assertThat(second).isEqualTo(first);
-		assertThat(calls).hasValue(1);
-	}
-
-	@Test
-	void aiResultCacheUsesPayloadFingerprint() {
-		requestWithIdempotencyKey(null);
-		AtomicInteger calls = new AtomicInteger();
-
-		CachedResponse first = guard.withAiResultCache(
-			"assessment",
-			List.of("resume-a"),
-			CachedResponse.class,
-			() -> new CachedResponse("gemini-" + calls.incrementAndGet())
-		);
-		CachedResponse second = guard.withAiResultCache(
-			"assessment",
-			List.of("resume-b"),
-			CachedResponse.class,
-			() -> new CachedResponse("gemini-" + calls.incrementAndGet())
-		);
-
-		assertThat(first).isEqualTo(new CachedResponse("gemini-1"));
-		assertThat(second).isEqualTo(new CachedResponse("gemini-2"));
-		assertThat(calls).hasValue(2);
-	}
-
-	@Test
 	void rateLimitsAiRequestsPerClientBucket() {
 		requestWithIdempotencyKey(null);
 
@@ -222,33 +173,22 @@ class RedisRequestGuardTests {
 	}
 
 	@Test
-	void rejectsDuplicateInFlightRequests() {
-		requestWithIdempotencyKey(null);
-		when(valueOperations.setIfAbsent(startsWith("lock:assessment"), anyString(), any(Duration.class))).thenReturn(false);
+	void doesNotTrustClientSuppliedForwardedAddressForRateLimits() {
+		MockHttpServletRequest first = new MockHttpServletRequest();
+		first.setRemoteAddr("203.0.113.10");
+		first.addHeader("X-Forwarded-For", "198.51.100.1");
+		RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(first));
+		guard.assertAiAllowed("assessment");
 
-		assertThatThrownBy(() -> guard.withInFlightLock(
-			"assessment",
-			List.of("same-request"),
-			() -> "should-not-run"
-		))
+		MockHttpServletRequest second = new MockHttpServletRequest();
+		second.setRemoteAddr("203.0.113.10");
+		second.addHeader("X-Forwarded-For", "198.51.100.2");
+		RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(second));
+		guard.assertAiAllowed("assessment");
+
+		assertThatThrownBy(() -> guard.assertAiAllowed("assessment"))
 			.isInstanceOf(ResponseStatusException.class)
-			.hasMessageContaining("409 CONFLICT")
-			.hasMessageContaining("already running");
-	}
-
-	@Test
-	void failsOpenWhenInFlightRedisLockIsUnavailable() {
-		requestWithIdempotencyKey(null);
-		when(valueOperations.setIfAbsent(startsWith("lock:assessment"), anyString(), any(Duration.class)))
-			.thenThrow(new IllegalStateException("redis unavailable"));
-
-		String result = guard.withInFlightLock(
-			"assessment",
-			List.of("same-request"),
-			() -> "work-ran"
-		);
-
-		assertThat(result).isEqualTo("work-ran");
+			.hasMessageContaining("429 TOO_MANY_REQUESTS");
 	}
 
 	@Test
@@ -258,9 +198,7 @@ class RedisRequestGuardTests {
 			redisTemplate,
 			new RedisUsageProperties(
 				new RedisUsageProperties.RateLimit(true, 60, 2, 2),
-				new RedisUsageProperties.InFlight(true, 120),
-				new RedisUsageProperties.Idempotency(false, 86_400),
-				new RedisUsageProperties.AiResultCache(true, 300)
+				new RedisUsageProperties.Idempotency(false, 86_400)
 			),
 			objectMapper()
 		);

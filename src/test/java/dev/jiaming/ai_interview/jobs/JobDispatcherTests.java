@@ -20,7 +20,7 @@ class JobDispatcherTests {
 
 	@Test
 	void workerRuntimeCanDispatchDueRetryMessages() {
-		JobDispatcher dispatcher = new JobDispatcher(properties("worker"), jobStore, queueService, metrics);
+		JobDispatcher dispatcher = new JobDispatcher(properties(), jobStore, queueService, metrics);
 		UUID jobId = UUID.randomUUID();
 
 		assertThat(dispatcher.dispatch(jobId)).isTrue();
@@ -31,7 +31,7 @@ class JobDispatcherTests {
 
 	@Test
 	void recoveryPublishesEveryDueUndispatchedJob() {
-		JobDispatcher dispatcher = new JobDispatcher(properties("all"), jobStore, queueService, metrics);
+		JobDispatcher dispatcher = new JobDispatcher(properties(), jobStore, queueService, metrics);
 		UUID first = UUID.randomUUID();
 		UUID second = UUID.randomUUID();
 		when(jobStore.findUndispatched(25)).thenReturn(List.of(first, second));
@@ -46,7 +46,7 @@ class JobDispatcherTests {
 
 	@Test
 	void leaseRecoveryAndPayloadCleanupRunOnSeparateSchedules() {
-		JobDispatcher dispatcher = new JobDispatcher(properties("all"), jobStore, queueService, metrics);
+		JobDispatcher dispatcher = new JobDispatcher(properties(), jobStore, queueService, metrics);
 
 		dispatcher.recoverExpiredLeases();
 		verify(jobStore).reapExpiredLeases();
@@ -55,9 +55,9 @@ class JobDispatcherTests {
 		verify(jobStore).clearExpiredPayloads(7);
 	}
 
-	private JobProperties properties(String runtimeMode) {
+	private JobProperties properties() {
 		return new JobProperties(
-			true, runtimeMode, "http://localhost:4566", "us-east-1", "test", "test",
+			true, "http://localhost:4566", "us-east-1", "test", "test",
 			"jobs", "jobs-dlq", 3, 2, 20, 300, 60, 5,
 			15, 300, 5_000, 30_000, 3_600_000, 120, 7
 		);

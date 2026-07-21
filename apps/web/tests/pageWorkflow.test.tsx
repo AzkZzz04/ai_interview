@@ -34,7 +34,8 @@ const accepted: JobAcceptedResponse = {
   status: "QUEUED",
   stage: "QUEUED",
   statusUrl: "/api/jobs/analysis-job",
-  reused: false
+  reused: false,
+  inputRefs: { resumeId: "accepted-resume-id", jobDescriptionId: null }
 };
 
 describe("analysis workflow", () => {
@@ -58,6 +59,9 @@ describe("analysis workflow", () => {
       snapshot,
       { local: window.localStorage, session: window.sessionStorage },
       "analysis-generation"
+    );
+    vi.mocked(getCurrentResume).mockResolvedValue(
+      resumeResponse("newer-resume", "A current resume must not overwrite an active restored workflow")
     );
     vi.mocked(getJob).mockResolvedValue(job("FAILED", null, "Gemini failed"));
 
@@ -107,6 +111,73 @@ describe("analysis workflow", () => {
 
     await waitFor(() => expect(screen.getByText("No assessment yet")).toBeInTheDocument());
     expect(screen.getByText("Questions are waiting")).toBeInTheDocument();
+  });
+
+  it("uses a loaded resume ID until the user edits the resume text", async () => {
+    vi.mocked(getCurrentResume).mockResolvedValue(resumeResponse("loaded-resume-id", "Loaded backend resume"));
+    vi.mocked(createAiAnalysis).mockResolvedValue(accepted);
+    vi.mocked(getJob).mockResolvedValue(job("SUCCEEDED", {
+      assessment: createAssessment("Loaded backend resume", ""),
+      questions: { questions: [], modelProvider: "gemini" }
+    }));
+
+    render(<Home />);
+    await waitFor(() => expect(screen.getByLabelText("Resume text")).toHaveValue("Loaded backend resume"));
+    fireEvent.change(screen.getByLabelText("Resume text"), {
+      target: { value: "Edited inline resume" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Analyze resume/ }));
+
+    await waitFor(() => expect(createAiAnalysis).toHaveBeenCalled());
+    expect(vi.mocked(createAiAnalysis).mock.calls[0][0]).toMatchObject({
+      resumeId: null,
+      resumeText: "Edited inline resume"
+    });
+  });
+
+  it("captures materialized document IDs for the next analysis", async () => {
+    vi.mocked(getCurrentResume).mockResolvedValue(resumeResponse("loaded-resume-id", "Loaded backend resume"));
+    vi.mocked(createAiAnalysis).mockResolvedValue({
+      ...accepted,
+      inputRefs: { resumeId: "loaded-resume-id", jobDescriptionId: "materialized-jd-id" }
+    });
+    vi.mocked(getJob).mockResolvedValue(job("SUCCEEDED", {
+      assessment: createAssessment("Loaded backend resume", "Java role"),
+      questions: { questions: [], modelProvider: "gemini" }
+    }, undefined, { resumeId: "loaded-resume-id", jobDescriptionId: "materialized-jd-id" }));
+
+    render(<Home />);
+    await waitFor(() => expect(screen.getByLabelText("Resume text")).toHaveValue("Loaded backend resume"));
+    fireEvent.change(screen.getByLabelText("Job description"), { target: { value: "Java role" } });
+    fireEvent.click(screen.getByRole("button", { name: /Analyze resume/ }));
+    await screen.findByText(/Gemini returned no usable questions/i);
+    fireEvent.click(screen.getByRole("button", { name: /Refresh analysis/ }));
+
+    await waitFor(() => expect(createAiAnalysis).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(createAiAnalysis).mock.calls[1][0]).toMatchObject({
+      resumeId: "loaded-resume-id",
+      jobDescriptionId: "materialized-jd-id",
+      jobDescription: "Java role"
+    });
+  });
+
+  it("keeps a successful partial assessment and locally fills only missing questions", async () => {
+    const providerAssessment = {
+      ...createAssessment("Java resume", "Backend role"),
+      overallScore: 99
+    };
+    vi.mocked(createAiAnalysis).mockResolvedValue(accepted);
+    vi.mocked(getJob).mockResolvedValue(job("PARTIAL", {
+      assessment: providerAssessment,
+      questions: null
+    }, "question generation failed"));
+
+    render(<Home />);
+    fireEvent.click(screen.getByRole("button", { name: /Analyze resume/ }));
+
+    expect(await screen.findByLabelText("Overall score 99")).toBeInTheDocument();
+    expect(screen.getByText(/local draft questions fill the missing result/i)).toBeInTheDocument();
+    expect(screen.getByText("4 questions")).toBeInTheDocument();
   });
 
   it("labels legacy evidence IDs from the loaded resume chunks", async () => {
@@ -229,12 +300,60 @@ AI Interview Coach`;
     fireEvent.click(screen.getByRole("button", { name: /Question A/ }));
     expect(screen.getByText("Feedback for A")).toBeInTheDocument();
   });
+
+	  it("uses document references learned from job status when submitting feedback", async () => {
+	    const questions = [{
+	      id: "question-a",
+	      category: "Architecture",
+	      difficulty: "Core" as const,
+	      questionText: "Explain the architecture.",
+	      expectedSignals: ["tradeoffs"]
+	    }];
+	    vi.mocked(createAiAnalysis).mockResolvedValue({
+	      ...accepted,
+	      inputRefs: { resumeId: null, jobDescriptionId: null }
+	    });
+	    vi.mocked(createAiAnswerFeedback).mockResolvedValue({
+	      ...accepted,
+	      jobId: "feedback-job",
+	      jobType: "ANSWER_FEEDBACK",
+	      statusUrl: "/api/jobs/feedback-job",
+	      inputRefs: { resumeId: "status-resume-id", jobDescriptionId: "status-jd-id" }
+	    });
+	    vi.mocked(getJob).mockImplementation((jobId) => Promise.resolve(
+	      jobId === "analysis-job"
+	        ? job("SUCCEEDED", {
+	            assessment: createAssessment("Java resume", "Backend role"),
+	            questions: { questions, modelProvider: "gemini" }
+	          }, undefined, { resumeId: "status-resume-id", jobDescriptionId: "status-jd-id" })
+	        : job("QUEUED", null, undefined, {
+	            resumeId: "status-resume-id",
+	            jobDescriptionId: "status-jd-id"
+	          })
+	    ));
+
+	    render(<Home />);
+	    fireEvent.change(screen.getByLabelText("Job description"), { target: { value: "Backend role" } });
+	    fireEvent.click(screen.getByRole("button", { name: /Analyze resume/ }));
+	    await screen.findByText("Explain the architecture.");
+	    fireEvent.change(screen.getByPlaceholderText("Type your answer here."), {
+	      target: { value: "I would compare consistency and availability tradeoffs." }
+	    });
+	    fireEvent.click(screen.getByRole("button", { name: /Get feedback/ }));
+
+	    await waitFor(() => expect(createAiAnswerFeedback).toHaveBeenCalled());
+	    expect(vi.mocked(createAiAnswerFeedback).mock.calls[0][0]).toMatchObject({
+	      resumeId: "status-resume-id",
+	      jobDescriptionId: "status-jd-id"
+	    });
+	  });
 });
 
 function job<TResult>(
   status: JobStatus,
   result: TResult,
-  errorMessage?: string
+  errorMessage?: string,
+  inputRefs = { resumeId: "accepted-resume-id", jobDescriptionId: null as string | null }
 ): JobStatusResponse<TResult> {
   return {
     jobId: "analysis-job",
@@ -246,7 +365,23 @@ function job<TResult>(
     error: errorMessage ? { code: "AI_ERROR", message: errorMessage, retryable: false } : null,
     createdAt: new Date().toISOString(),
     startedAt: new Date().toISOString(),
-    completedAt: new Date().toISOString()
+    completedAt: new Date().toISOString(),
+    inputRefs
+  };
+}
+
+function resumeResponse(id: string, normalizedText: string) {
+  return {
+    id,
+    originalFilename: "resume.pdf",
+    contentType: "application/pdf",
+    detectedContentType: "application/pdf",
+    sizeBytes: 1000,
+    rawTextLength: normalizedText.length,
+    normalizedTextLength: normalizedText.length,
+    normalizedText,
+    chunks: [],
+    processedAt: new Date().toISOString()
   };
 }
 

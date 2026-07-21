@@ -21,6 +21,12 @@ export type JobAcceptedResponse = {
   stage: JobStage;
   statusUrl: string;
   reused: boolean;
+  inputRefs: JobInputRefs;
+};
+
+export type JobInputRefs = {
+  resumeId: string | null;
+  jobDescriptionId: string | null;
 };
 
 export type JobError = {
@@ -40,6 +46,7 @@ export type JobStatusResponse<TResult> = {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  inputRefs: JobInputRefs;
 };
 
 export type JobApiErrorKind = "HTTP" | "NETWORK" | "TIMEOUT" | "INVALID_RESPONSE";
@@ -49,7 +56,8 @@ export class JobApiError extends Error {
     message: string,
     readonly status: number | null,
     readonly retryable: boolean,
-    readonly kind: JobApiErrorKind
+    readonly kind: JobApiErrorKind,
+    readonly code: string | null = null
   ) {
     super(message);
     this.name = "JobApiError";
@@ -79,14 +87,17 @@ export async function getJob<TResult>(
       signal: controller.signal
     });
     if (!response.ok) {
-      let message = `Request failed with status ${response.status}`;
-      try {
-        message = await responseMessage(response);
-      }
-      catch {
-        // The HTTP status still determines retry behavior when the error body is malformed.
-      }
-      throw new JobApiError(message, response.status, isRetryableStatus(response.status), "HTTP");
+      const apiError = await responseError(response).catch(() => ({
+        code: null,
+        message: `Request failed with status ${response.status}`
+      }));
+      throw new JobApiError(
+        apiError.message,
+        response.status,
+        isRetryableStatus(response.status),
+        "HTTP",
+        apiError.code
+      );
     }
 
     let body: unknown;
@@ -129,13 +140,25 @@ export function isRetryableJobApiError(error: unknown) {
 }
 
 export async function responseMessage(response: Response) {
+  return (await responseError(response)).message;
+}
+
+export async function responseError(response: Response): Promise<{ code: string | null; message: string }> {
   const fallback = `Request failed with status ${response.status}`;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
-    return (await response.text()) || fallback;
+    return { code: null, message: (await response.text()) || fallback };
   }
-  const body = (await response.json()) as { message?: string; error?: string; detail?: string };
-  return body.message ?? body.detail ?? body.error ?? fallback;
+  const body = (await response.json()) as {
+    code?: string;
+    message?: string;
+    error?: string;
+    detail?: string;
+  };
+  return {
+    code: typeof body.code === "string" ? body.code : null,
+    message: body.message ?? body.detail ?? body.error ?? fallback
+  };
 }
 
 function isRetryableStatus(status: number) {
