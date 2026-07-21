@@ -1,14 +1,16 @@
 package dev.jiaming.ai_interview.resume;
 
 import java.util.List;
-import java.util.function.Consumer;
-
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
+import dev.jiaming.ai_interview.jobs.JobExecutionContext;
+import dev.jiaming.ai_interview.jobs.JobHandler;
 import dev.jiaming.ai_interview.jobs.JobStage;
+import dev.jiaming.ai_interview.jobs.JobType;
 
 @Service
-public class ResumeExtractionJobHandler {
+public class ResumeExtractionJobHandler implements JobHandler<ResumeExtractionJobPayload> {
 
 	private final ResumeStorageService storageService;
 
@@ -34,23 +36,31 @@ public class ResumeExtractionJobHandler {
 		this.persistenceService = persistenceService;
 	}
 
-	public ResumeUploadResponse extract(
-		ResumeExtractionJobPayload payload,
-		Consumer<JobStage> stageReporter
-	) {
-		stageReporter.accept(JobStage.READING_FILE);
+	@Override
+	public JobType type() {
+		return JobType.RESUME_EXTRACTION;
+	}
+
+	@Override
+	public Class<ResumeExtractionJobPayload> payloadType() {
+		return ResumeExtractionJobPayload.class;
+	}
+
+	@Override
+	public JsonNode handle(ResumeExtractionJobPayload payload, JobExecutionContext context) {
+		context.stage(JobStage.READING_FILE);
 		ResumeFileContent content = storageService.read(payload);
 
-		stageReporter.accept(JobStage.EXTRACTING_TEXT);
+		context.stage(JobStage.EXTRACTING_TEXT);
 		String rawText = textExtractor.extract(content);
 
-		stageReporter.accept(JobStage.NORMALIZING_TEXT);
+		context.stage(JobStage.NORMALIZING_TEXT);
 		String normalizedText = normalizer.normalize(rawText);
 		if (normalizedText.isBlank()) {
 			throw new ResumeExtractionException("No readable resume text was extracted");
 		}
 
-		stageReporter.accept(JobStage.CHUNKING_TEXT);
+		context.stage(JobStage.CHUNKING_TEXT);
 		List<ResumeChunkResponse> chunks = chunker.chunk(normalizedText).stream()
 			.map(chunk -> new ResumeChunkResponse(
 				chunk.index(),
@@ -59,10 +69,10 @@ public class ResumeExtractionJobHandler {
 				chunk.content().length()
 			))
 			.toList();
-		ResumeUploadResponse response = persistenceService.completeExtraction(
+		ResumeUploadResponse response = context.withOwnedLease(() -> persistenceService.completeExtraction(
 			payload.resumeId(), rawText, normalizedText, chunks
-		);
+		));
 		storageService.markReady(payload.storageKey());
-		return response;
+		return context.toJson(response);
 	}
 }

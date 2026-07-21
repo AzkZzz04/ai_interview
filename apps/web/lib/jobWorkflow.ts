@@ -34,7 +34,7 @@ export function persistJobWorkflow<TContext>(
   storage: JobWorkflowStorage,
   generation = createGenerationToken()
 ): ActiveJobWorkflow<TContext> {
-  removePreviousContext(storageKey, storage);
+	const previous = readMetadata(storageKey, storage.local);
 
   const metadata: JobWorkflowMetadata = {
     schemaVersion: WORKFLOW_SCHEMA_VERSION,
@@ -44,10 +44,20 @@ export function persistJobWorkflow<TContext>(
     startedAt: new Date().toISOString()
   };
 
-  storage.local.setItem(storageKey, JSON.stringify(metadata));
-  if (context !== null) {
-    storage.session.setItem(contextStorageKey(storageKey, generation), JSON.stringify(context));
-  }
+	const nextContextKey = contextStorageKey(storageKey, generation);
+	try {
+	  if (context !== null) {
+	    storage.session.setItem(nextContextKey, JSON.stringify(context));
+	  }
+	  storage.local.setItem(storageKey, JSON.stringify(metadata));
+	}
+	catch (error) {
+	  storage.session.removeItem(nextContextKey);
+	  throw error;
+	}
+	if (previous && previous.generation !== generation) {
+	  storage.session.removeItem(contextStorageKey(storageKey, previous.generation));
+	}
 
   return { ...metadata, context, restored: false };
 }
@@ -100,13 +110,6 @@ export function isCurrentWorkflowGeneration(
 
 export function contextStorageKey(storageKey: string, generation: string) {
   return `${storageKey}:context:${generation}`;
-}
-
-function removePreviousContext(storageKey: string, storage: JobWorkflowStorage) {
-  const previous = readMetadata(storageKey, storage.local);
-  if (previous) {
-    storage.session.removeItem(contextStorageKey(storageKey, previous.generation));
-  }
 }
 
 function readMetadata(storageKey: string, storage: Storage) {

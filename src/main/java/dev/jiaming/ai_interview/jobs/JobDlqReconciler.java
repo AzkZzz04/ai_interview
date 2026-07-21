@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 
+import dev.jiaming.ai_interview.common.RuntimeModeProperties;
 import software.amazon.awssdk.services.sqs.model.Message;
 
 @Component
@@ -27,6 +28,8 @@ class JobDlqReconciler implements SmartLifecycle {
 
 	private final JobMetrics metrics;
 
+	private final RuntimeModeProperties runtimeMode;
+
 	private final AtomicBoolean running = new AtomicBoolean(false);
 
 	private ExecutorService executor;
@@ -35,17 +38,19 @@ class JobDlqReconciler implements SmartLifecycle {
 		JobProperties properties,
 		JobQueueService queueService,
 		BackgroundJobStore jobStore,
-		JobMetrics metrics
+		JobMetrics metrics,
+		RuntimeModeProperties runtimeMode
 	) {
 		this.properties = properties;
 		this.queueService = queueService;
 		this.jobStore = jobStore;
 		this.metrics = metrics;
+		this.runtimeMode = runtimeMode;
 	}
 
 	@Override
 	public void start() {
-		if (!properties.workerEnabled() || !running.compareAndSet(false, true)) {
+		if (!properties.enabled() || !runtimeMode.workerEnabled() || !running.compareAndSet(false, true)) {
 			return;
 		}
 		executor = Executors.newSingleThreadExecutor(runnable -> {

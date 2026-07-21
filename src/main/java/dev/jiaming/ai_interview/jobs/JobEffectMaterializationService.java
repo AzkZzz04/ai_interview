@@ -3,16 +3,17 @@ package dev.jiaming.ai_interview.jobs;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import dev.jiaming.ai_interview.coach.AiAnalysisRequest;
-import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest;
 import dev.jiaming.ai_interview.coach.AnswerFeedbackResponse;
 import dev.jiaming.ai_interview.coach.AssessmentResponse;
 import dev.jiaming.ai_interview.coach.InterviewQuestionsResponse;
+import dev.jiaming.ai_interview.interview.AnalysisPersistenceInput;
+import dev.jiaming.ai_interview.interview.FeedbackPersistenceInput;
 import dev.jiaming.ai_interview.interview.InterviewPersistenceService;
 
 @Service
@@ -34,16 +35,14 @@ public class JobEffectMaterializationService {
 	public UUID materializeAssessment(
 		BackgroundJob job,
 		UUID leaseToken,
-		AiAnalysisRequest request,
+		AnalysisPersistenceInput input,
 		AssessmentResponse response
 	) {
 		lockOwnedLease(job.id(), leaseToken);
 		return materialize(job.id(), JobEffectType.ASSESSMENT, assessmentId ->
 			interviewPersistenceService.saveAssessment(
 				assessmentId,
-				requireUser(job),
-				request,
-				request.resumeText(),
+				input,
 				response
 			)
 		);
@@ -53,7 +52,7 @@ public class JobEffectMaterializationService {
 	public UUID materializeQuestions(
 		BackgroundJob job,
 		UUID leaseToken,
-		AiAnalysisRequest request,
+		AnalysisPersistenceInput input,
 		InterviewQuestionsResponse response
 	) {
 		lockOwnedLease(job.id(), leaseToken);
@@ -61,9 +60,8 @@ public class JobEffectMaterializationService {
 		return materialize(job.id(), JobEffectType.QUESTIONS, sessionId ->
 			interviewPersistenceService.saveQuestions(
 				sessionId,
-				requireUser(job),
 				assessmentId,
-				request,
+				input,
 				response
 			)
 		);
@@ -73,19 +71,23 @@ public class JobEffectMaterializationService {
 	public UUID materializeFeedback(
 		BackgroundJob job,
 		UUID leaseToken,
-		AnswerFeedbackRequest request,
+		FeedbackPersistenceInput input,
 		AnswerFeedbackResponse response
 	) {
 		lockOwnedLease(job.id(), leaseToken);
 		return materialize(job.id(), JobEffectType.ANSWER_FEEDBACK, answerId ->
 			interviewPersistenceService.saveAnswer(
 				answerId,
-				requireUser(job),
-				request,
-				request.resumeText(),
+				input,
 				response
 			)
 		);
+	}
+
+	@Transactional
+	public <T> T withOwnedLease(BackgroundJob job, UUID leaseToken, Supplier<T> work) {
+		lockOwnedLease(job.id(), leaseToken);
+		return work.get();
 	}
 
 	private UUID materialize(UUID jobId, JobEffectType effectType, Consumer<UUID> writer) {
@@ -155,10 +157,4 @@ public class JobEffectMaterializationService {
 		return effects.isEmpty() ? null : effects.getFirst();
 	}
 
-	private UUID requireUser(BackgroundJob job) {
-		if (job.userId() == null) {
-			throw new IllegalArgumentException("Background job has no user: " + job.id());
-		}
-		return job.userId();
-	}
 }

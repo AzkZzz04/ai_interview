@@ -53,7 +53,8 @@ The managed PostgreSQL service binds to `localhost:55432` by default, or to `POS
 The backend defaults to Redis on `localhost:6379`. The bundled Compose Redis service publishes container port `6379` to `localhost:6380` by default, so set `REDIS_PORT=6380` only if you are using that Compose-managed Redis instance. If your Docker Redis is already mapped to host port `6379`, leave `REDIS_PORT=6379`.
 
 Redis is used for submission-time operational guardrails only: per-client limits,
-`Idempotency-Key` responses, and a five-minute completed-job lookup cache.
+and `Idempotency-Key` responses. Five-minute same-input job reuse is resolved
+directly from PostgreSQL.
 PostgreSQL remains the source of truth for job status and results; database
 leases prevent concurrent workers from owning the same job.
 
@@ -97,8 +98,8 @@ GEMINI_REQUEST_TIMEOUT_SECONDS=90
 GEMINI_MAX_OUTPUT_TOKENS=2048
 GEMINI_THINKING_BUDGET=0
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
-GEMINI_EMBEDDING_DIMENSIONS=1024
 RAG_EMBEDDING_DIMENSIONS=1024
+RAG_CHUNK_SCHEMA=section-context-v2
 ```
 
 Keep `.env` local and untracked. Do not put real API keys in `.env.example`.

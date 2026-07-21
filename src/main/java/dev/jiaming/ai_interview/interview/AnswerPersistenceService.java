@@ -6,7 +6,6 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest;
 import dev.jiaming.ai_interview.coach.AnswerFeedbackResponse;
 
 @Service
@@ -21,7 +20,12 @@ public class AnswerPersistenceService {
 		this.jsonSupport = jsonSupport;
 	}
 
-	public void save(UUID answerId, UUID questionId, AnswerFeedbackRequest request, AnswerFeedbackResponse response) {
+	public void save(
+		UUID answerId,
+		UUID questionId,
+		FeedbackPersistenceInput input,
+		AnswerFeedbackResponse response
+	) {
 		jdbcTemplate.update(
 			"""
 				INSERT INTO ai_interview_app.interview_answers (
@@ -31,7 +35,7 @@ public class AnswerPersistenceService {
 				""",
 			answerId,
 			questionId,
-			request.answerText(),
+			input.answerText(),
 			response.score(),
 			jsonSupport.json(Map.of(
 				"summary", response.summary(),

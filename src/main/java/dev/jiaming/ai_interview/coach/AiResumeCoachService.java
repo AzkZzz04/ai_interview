@@ -1,17 +1,17 @@
 package dev.jiaming.ai_interview.coach;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import dev.jiaming.ai_interview.gemini.GeminiClient;
+import dev.jiaming.ai_interview.gemini.GeminiErrorCode;
+import dev.jiaming.ai_interview.gemini.GeminiException;
 
 @Service
 public class AiResumeCoachService {
 
-	private final GeminiClient geminiClient;
-
-	private final CoachResumeResolver resumeResolver;
+	private final StructuredGenerationClient generationClient;
 
 	private final CoachRagContextService ragContextService;
 
@@ -19,68 +19,80 @@ public class AiResumeCoachService {
 
 	private final CoachResponseMapper responseMapper;
 
+	private final MeterRegistry meterRegistry;
+
 	public AiResumeCoachService(
-		GeminiClient geminiClient,
-		CoachResumeResolver resumeResolver,
+		StructuredGenerationClient generationClient,
 		CoachRagContextService ragContextService,
 		CoachPromptBuilder promptBuilder,
-		CoachResponseMapper responseMapper
+		CoachResponseMapper responseMapper,
+		MeterRegistry meterRegistry
 	) {
-		this.geminiClient = geminiClient;
-		this.resumeResolver = resumeResolver;
+		this.generationClient = generationClient;
 		this.ragContextService = ragContextService;
 		this.promptBuilder = promptBuilder;
 		this.responseMapper = responseMapper;
+		this.meterRegistry = meterRegistry;
 	}
 
-	public AssessmentResponse assess(AiAnalysisRequest request) {
-		String resumeText = resumeResolver.resolve(request.resumeText());
-		return runAssessment(request, resumeText);
-	}
-
-	public InterviewQuestionsResponse generateQuestions(AiAnalysisRequest request) {
-		String resumeText = resumeResolver.resolve(request.resumeText());
-		return runQuestions(request, resumeText);
-	}
-
-	public AnswerFeedbackResponse scoreAnswer(AnswerFeedbackRequest request) {
-		if (blank(request.answerText())) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer text is required");
-		}
-
-		String resumeText = resumeResolver.resolve(request.resumeText());
-		return runFeedback(request, resumeText);
-	}
-
-	public AssessmentResponse runAssessment(AiAnalysisRequest request, String resumeText) {
-		CoachRagContext context = ragContextService.assessmentContext(request, resumeText);
-		String prompt = promptBuilder.buildAssessmentPrompt(request, context);
-		AssessmentResponse response = responseMapper.parse(geminiClient.generateJson(prompt), AssessmentResponse.class);
+	public AssessmentResponse assess(CoachAnalysisInput input) {
+		CoachRagContext context = ragContextService.assessmentContext(input);
+		String prompt = promptBuilder.buildAssessmentPrompt(input, context);
+		AssessmentResponse response = generateStructured(prompt, AssessmentResponse.class);
 		return responseMapper.normalizeAssessment(response, context.sourceContextIds());
 	}
 
-	public InterviewQuestionsResponse runQuestions(AiAnalysisRequest request, String resumeText) {
-		CoachRagContext context = ragContextService.questionContext(request, resumeText);
-		String prompt = promptBuilder.buildQuestionPrompt(request, context);
-		InterviewQuestionsResponse response = responseMapper.parse(
-			geminiClient.generateJson(prompt),
-			InterviewQuestionsResponse.class
-		);
+	public InterviewQuestionsResponse generateQuestions(CoachAnalysisInput input) {
+		CoachRagContext context = ragContextService.questionContext(input);
+		String prompt = promptBuilder.buildQuestionPrompt(input, context);
+		InterviewQuestionsResponse response = generateStructured(prompt, InterviewQuestionsResponse.class);
 		return responseMapper.normalizeQuestions(response, context.sourceContextIds());
 	}
 
-	public AnswerFeedbackResponse runFeedback(AnswerFeedbackRequest request, String resumeText) {
-		if (blank(request.answerText())) {
+	public AnswerFeedbackResponse scoreAnswer(CoachFeedbackInput input) {
+		if (blank(input.answerText())) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer text is required");
 		}
-		CoachRagContext context = ragContextService.feedbackContext(request, resumeText);
-		String prompt = promptBuilder.buildFeedbackPrompt(request, context);
-		AnswerFeedbackResponse response = responseMapper.parse(geminiClient.generateJson(prompt), AnswerFeedbackResponse.class);
+		CoachRagContext context = ragContextService.feedbackContext(input);
+		String prompt = promptBuilder.buildFeedbackPrompt(input, context);
+		AnswerFeedbackResponse response = generateStructured(prompt, AnswerFeedbackResponse.class);
 		return responseMapper.normalizeFeedback(response, context.sourceContextIds());
+	}
+
+	private <T> T generateStructured(String prompt, Class<T> responseType) {
+		String firstOutput = generationClient.generateJson(prompt);
+		try {
+			return responseMapper.parse(firstOutput, responseType);
+		}
+		catch (GeminiException firstFailure) {
+			if (!GeminiErrorCode.INVALID_RESPONSE.equals(firstFailure.code())) {
+				throw firstFailure;
+			}
+			meterRegistry.counter("ai.gemini.schema_repair", "outcome", "attempted").increment();
+			String parseError = firstFailure.getCause() == null
+				? firstFailure.getMessage()
+				: firstFailure.getCause().getMessage();
+			String repairedOutput = generationClient.generateJson(
+				promptBuilder.buildRepairPrompt(prompt, firstOutput, parseError)
+			);
+			try {
+				T repaired = responseMapper.parse(repairedOutput, responseType);
+				meterRegistry.counter("ai.gemini.schema_repair", "outcome", "succeeded").increment();
+				return repaired;
+			}
+			catch (GeminiException secondFailure) {
+				meterRegistry.counter("ai.gemini.schema_repair", "outcome", "failed").increment();
+				throw new GeminiException(
+					GeminiErrorCode.INVALID_RESPONSE,
+					"Gemini response remained invalid after one schema repair",
+					secondFailure,
+					false
+				);
+			}
+		}
 	}
 
 	private boolean blank(String value) {
 		return value == null || value.isBlank();
 	}
-
 }

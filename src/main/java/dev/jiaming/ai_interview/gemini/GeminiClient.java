@@ -6,30 +6,41 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
+
+import dev.jiaming.ai_interview.coach.StructuredGenerationClient;
 
 @Component
-public class GeminiClient {
+public class GeminiClient implements StructuredGenerationClient {
 
 	private static final Logger log = LoggerFactory.getLogger(GeminiClient.class);
 
-	private final HttpClient httpClient;
+	private static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
 
 	private final ObjectMapper objectMapper;
+
+	private final GeminiTransport transport;
+
+	private final MeterRegistry meterRegistry;
+
+	private final String baseUrl;
 
 	private final String apiKey;
 
@@ -43,70 +54,99 @@ public class GeminiClient {
 
 	private final int thinkingBudget;
 
-	public GeminiClient(ObjectMapper objectMapper, Environment environment) {
-		this.httpClient = HttpClient.newBuilder()
-			.connectTimeout(Duration.ofSeconds(10))
-			.build();
-		this.objectMapper = objectMapper;
-		this.apiKey = environment.getProperty("spring.ai.google.genai.api-key", "");
-		this.model = environment.getProperty("spring.ai.google.genai.chat.options.model", "gemini-2.0-flash");
-		this.temperature = environment.getProperty("spring.ai.google.genai.chat.options.temperature", Double.class, 0.2);
-		this.requestTimeout = Duration.ofSeconds(environment.getProperty("app.gemini.request-timeout-seconds", Long.class, 90L));
-		this.maxOutputTokens = environment.getProperty("app.gemini.max-output-tokens", Integer.class, 2_048);
-		this.thinkingBudget = environment.getProperty("app.gemini.thinking-budget", Integer.class, 0);
+	@Autowired
+	public GeminiClient(ObjectMapper objectMapper, Environment environment, MeterRegistry meterRegistry) {
+		this(
+			objectMapper,
+			jdkTransport(),
+			meterRegistry,
+			DEFAULT_BASE_URL,
+			environment.getProperty("spring.ai.google.genai.api-key", ""),
+			environment.getProperty("spring.ai.google.genai.chat.options.model", "gemini-2.5-flash"),
+			environment.getProperty("spring.ai.google.genai.chat.options.temperature", Double.class, 0.2),
+			Duration.ofSeconds(environment.getProperty("app.gemini.request-timeout-seconds", Long.class, 90L)),
+			environment.getProperty("app.gemini.max-output-tokens", Integer.class, 2_048),
+			environment.getProperty("app.gemini.thinking-budget", Integer.class, 0)
+		);
 	}
 
+	GeminiClient(
+		ObjectMapper objectMapper,
+		GeminiTransport transport,
+		MeterRegistry meterRegistry,
+		String baseUrl,
+		String apiKey,
+		String model,
+		double temperature,
+		Duration requestTimeout,
+		int maxOutputTokens,
+		int thinkingBudget
+	) {
+		this.objectMapper = objectMapper;
+		this.transport = transport;
+		this.meterRegistry = meterRegistry;
+		this.baseUrl = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+		this.apiKey = apiKey;
+		this.model = model;
+		this.temperature = temperature;
+		this.requestTimeout = requestTimeout;
+		this.maxOutputTokens = maxOutputTokens;
+		this.thinkingBudget = thinkingBudget;
+	}
+
+	@Override
 	public String generateJson(String prompt) {
 		if (apiKey == null || apiKey.isBlank()) {
-			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "GEMINI_API_KEY is not configured");
+			throw failure(GeminiErrorCode.NOT_CONFIGURED, "Gemini is not configured", null, false);
 		}
 
 		long startedAt = System.nanoTime();
 		log.info("gemini_request_start model={} timeoutSeconds={}", model, requestTimeout.toSeconds());
 		try {
-			String requestBody = objectMapper.writeValueAsString(Map.of(
-				"contents", List.of(Map.of(
-					"role", "user",
-					"parts", List.of(Map.of("text", prompt))
-				)),
-				"generationConfig", generationConfig()
-			));
-
 			HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(endpoint()))
 				.timeout(requestTimeout)
 				.header("Content-Type", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofString(requestBody))
+				.header("x-goog-api-key", apiKey)
+				.POST(HttpRequest.BodyPublishers.ofString(requestBody(prompt)))
 				.build();
 
-			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-			log.info(
-				"gemini_request_complete model={} status={} elapsedMs={}",
-				model,
-				response.statusCode(),
-				elapsedMillis(startedAt)
-			);
+			GeminiTransportResponse response = transport.send(request);
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				int statusCode = response.statusCode();
-				boolean retryable = statusCode == 408 || statusCode == 429 || statusCode >= 500;
-				throw new GeminiException(
-					"Gemini request failed: " + geminiErrorMessage(response.body()),
-					statusCode,
-					retryable
-				);
+				throw httpFailure(response.statusCode());
 			}
 
-			return extractText(response.body());
+			String result = extractText(response.body());
+			recordCall("success", startedAt);
+			return result;
+		}
+		catch (HttpTimeoutException exception) {
+			recordCall("timeout", startedAt);
+			throw failure(GeminiErrorCode.TIMEOUT, "Gemini request timed out", exception, true);
 		}
 		catch (IOException exception) {
-			log.warn("gemini_request_failed model={} elapsedMs={}", model, elapsedMillis(startedAt));
-			throw new GeminiException("Could not call Gemini", exception);
+			recordCall("network", startedAt);
+			throw failure(GeminiErrorCode.UPSTREAM_ERROR, "Gemini could not be reached", exception, true);
 		}
 		catch (InterruptedException exception) {
 			Thread.currentThread().interrupt();
-			log.warn("gemini_request_interrupted model={} elapsedMs={}", model, elapsedMillis(startedAt));
-			throw new GeminiException("Gemini request was interrupted", exception);
+			recordCall("interrupted", startedAt);
+			throw failure(GeminiErrorCode.TIMEOUT, "Gemini request was interrupted", exception, true);
 		}
+		catch (GeminiException exception) {
+			recordCall(metricReason(exception.code()), startedAt);
+			throw exception;
+		}
+	}
+
+	private String requestBody(String prompt) throws JsonProcessingException {
+		return objectMapper.writeValueAsString(Map.of(
+			"contents", List.of(Map.of(
+				"role", "user",
+				"parts", List.of(Map.of("text", prompt))
+			)),
+			"generationConfig", generationConfig()
+		));
 	}
 
 	private Map<String, Object> generationConfig() {
@@ -121,35 +161,84 @@ public class GeminiClient {
 	}
 
 	private String endpoint() {
-		String encodedModel = URLEncoder.encode(model, StandardCharsets.UTF_8);
-		String encodedKey = URLEncoder.encode(apiKey, StandardCharsets.UTF_8);
-		return "https://generativelanguage.googleapis.com/v1beta/models/" + encodedModel
-			+ ":generateContent?key=" + encodedKey;
+		return baseUrl + URLEncoder.encode(model, StandardCharsets.UTF_8) + ":generateContent";
 	}
 
 	private String extractText(String responseBody) {
+		final JsonNode root;
 		try {
-			JsonNode root = objectMapper.readTree(responseBody);
-			JsonNode textNode = root.path("candidates").path(0).path("content").path("parts").path(0).path("text");
-			if (textNode.isMissingNode() || textNode.asText().isBlank()) {
-				throw new GeminiException("Gemini returned an empty response");
+			root = objectMapper.readTree(responseBody);
+		}
+		catch (JsonProcessingException exception) {
+			throw failure(GeminiErrorCode.UPSTREAM_ERROR, "Gemini returned an unreadable response", null, true);
+		}
+
+		JsonNode candidate = root.path("candidates").path(0);
+		if (candidate.isMissingNode()) {
+			String blockReason = root.path("promptFeedback").path("blockReason").asText("")
+				.trim()
+				.toUpperCase(Locale.ROOT);
+			if (!blockReason.isEmpty()) {
+				throw finishReasonFailure(blockReason);
 			}
-			return stripJsonFence(textNode.asText());
+			throw failure(GeminiErrorCode.EMPTY_RESPONSE, "Gemini returned no candidate", null, true);
 		}
-		catch (IOException exception) {
-			throw new GeminiException("Could not parse Gemini response", exception);
+
+		String finishReason = candidate.path("finishReason").asText("").trim().toUpperCase(Locale.ROOT);
+		if (!"STOP".equals(finishReason)) {
+			throw finishReasonFailure(finishReason);
 		}
+
+		JsonNode parts = candidate.path("content").path("parts");
+		StringBuilder text = new StringBuilder();
+		if (parts.isArray()) {
+			for (JsonNode part : parts) {
+				String value = part.path("text").asText("");
+				if (!value.isBlank()) {
+					if (!text.isEmpty()) {
+						text.append('\n');
+					}
+					text.append(value);
+				}
+			}
+		}
+		if (text.isEmpty()) {
+			throw failure(GeminiErrorCode.EMPTY_RESPONSE, "Gemini returned an empty candidate", null, true);
+		}
+		return stripJsonFence(text.toString());
 	}
 
-	private String geminiErrorMessage(String responseBody) {
-		try {
-			JsonNode root = objectMapper.readTree(responseBody);
-			String message = root.path("error").path("message").asText();
-			return message.isBlank() ? "status response body was empty" : message;
+	private GeminiException finishReasonFailure(String finishReason) {
+		return switch (finishReason) {
+			case "SAFETY" -> failure(GeminiErrorCode.SAFETY, "Gemini blocked the response for safety", null, false);
+			case "RECITATION" -> failure(GeminiErrorCode.RECITATION, "Gemini blocked the response for recitation", null, false);
+			case "MAX_TOKENS" -> failure(GeminiErrorCode.MAX_TOKENS, "Gemini reached the output token limit", null, false);
+			default -> failure(GeminiErrorCode.UPSTREAM_ERROR, "Gemini ended with an unsupported finish reason", null, false);
+		};
+	}
+
+	private GeminiException httpFailure(int statusCode) {
+		if (statusCode == 429) {
+			return new GeminiException(GeminiErrorCode.RATE_LIMITED, "Gemini rate limit exceeded", statusCode, true);
 		}
-		catch (IOException exception) {
-			return "status response body could not be parsed";
-		}
+		boolean retryable = statusCode == 408 || statusCode >= 500;
+		return new GeminiException(GeminiErrorCode.UPSTREAM_ERROR, "Gemini request failed", statusCode, retryable);
+	}
+
+	private GeminiException failure(String code, String message, Throwable cause, boolean retryable) {
+		return new GeminiException(code, message, cause, retryable);
+	}
+
+	private void recordCall(String outcome, long startedAt) {
+		long elapsedMs = elapsedMillis(startedAt);
+		meterRegistry.counter("ai.gemini.calls", "outcome", outcome, "model", model).increment();
+		meterRegistry.timer("ai.gemini.duration", "outcome", outcome, "model", model)
+			.record(Duration.ofMillis(elapsedMs));
+		log.info("gemini_request_complete model={} outcome={} elapsedMs={}", model, outcome, elapsedMs);
+	}
+
+	private String metricReason(String code) {
+		return code == null ? "unknown" : code.toLowerCase(Locale.ROOT).replace("gemini_", "");
 	}
 
 	private String stripJsonFence(String value) {
@@ -163,5 +252,15 @@ public class GeminiClient {
 
 	private long elapsedMillis(long startedAt) {
 		return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+	}
+
+	private static GeminiTransport jdkTransport() {
+		HttpClient httpClient = HttpClient.newBuilder()
+			.connectTimeout(Duration.ofSeconds(10))
+			.build();
+		return request -> {
+			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+			return new GeminiTransportResponse(response.statusCode(), response.body());
+		};
 	}
 }

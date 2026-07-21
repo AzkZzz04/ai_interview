@@ -1,11 +1,13 @@
 import { createIdempotencyKey } from "@/lib/api/idempotency";
-import { JobAcceptedResponse, responseMessage } from "@/lib/api/jobs";
+import { JobAcceptedResponse, JobApiError, responseError } from "@/lib/api/jobs";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8080";
 const REQUEST_TIMEOUT_MS = 15_000;
 
 export type AiAnalysisPayload = {
+  resumeId: string | null;
   resumeText: string;
+  jobDescriptionId: string | null;
   jobDescription: string;
   targetRole: string;
   seniority: string;
@@ -19,11 +21,32 @@ export type AnswerFeedbackPayload = AiAnalysisPayload & {
 };
 
 export async function createAiAnalysis(payload: AiAnalysisPayload): Promise<JobAcceptedResponse> {
-  return postJson<JobAcceptedResponse>("/api/analyses", payload);
+  return postJson<JobAcceptedResponse>("/api/analyses", analysisRequest(payload));
 }
 
 export async function createAiAnswerFeedback(payload: AnswerFeedbackPayload): Promise<JobAcceptedResponse> {
-  return postJson<JobAcceptedResponse>("/api/interview/feedback", payload);
+  return postJson<JobAcceptedResponse>("/api/interview/feedback", feedbackRequest(payload));
+}
+
+export function analysisRequest(payload: AiAnalysisPayload) {
+  return {
+    ...(payload.resumeId ? { resumeId: payload.resumeId } : { resumeText: payload.resumeText }),
+    ...(payload.jobDescriptionId
+      ? { jobDescriptionId: payload.jobDescriptionId }
+      : payload.jobDescription.trim() ? { jobDescription: payload.jobDescription } : {}),
+    targetRole: payload.targetRole,
+    seniority: payload.seniority
+  };
+}
+
+export function feedbackRequest(payload: AnswerFeedbackPayload) {
+  return {
+    ...analysisRequest(payload),
+    questionText: payload.questionText,
+    category: payload.category,
+    expectedSignals: payload.expectedSignals,
+    answerText: payload.answerText
+  };
 }
 
 async function postJson<TResponse>(path: string, body: unknown): Promise<TResponse> {
@@ -43,15 +66,21 @@ async function postJson<TResponse>(path: string, body: unknown): Promise<TRespon
     });
 
     if (!response.ok) {
-      const message = await responseMessage(response);
-      throw new Error(message);
+      const error = await responseError(response);
+      throw new JobApiError(error.message, response.status, false, "HTTP", error.code);
     }
 
     return response.json() as Promise<TResponse>;
   }
   catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("The job could not be submitted within 15 seconds. Check the API connection and try again.");
+      throw new JobApiError(
+        "The job could not be submitted within 15 seconds. Check the API connection and try again.",
+        null,
+        true,
+        "TIMEOUT",
+        "REQUEST_TIMEOUT"
+      );
     }
     throw error;
   }

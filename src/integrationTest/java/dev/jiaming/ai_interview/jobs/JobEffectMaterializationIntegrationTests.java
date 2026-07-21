@@ -41,9 +41,12 @@ import dev.jiaming.ai_interview.coach.AssessmentResponse;
 import dev.jiaming.ai_interview.coach.AssessmentScores;
 import dev.jiaming.ai_interview.coach.InterviewQuestionResponse;
 import dev.jiaming.ai_interview.coach.InterviewQuestionsResponse;
+import dev.jiaming.ai_interview.common.ContentHasher;
 import dev.jiaming.ai_interview.common.LocalUserService;
+import dev.jiaming.ai_interview.interview.AnalysisPersistenceInput;
 import dev.jiaming.ai_interview.interview.AnswerPersistenceService;
 import dev.jiaming.ai_interview.interview.AssessmentPersistenceService;
+import dev.jiaming.ai_interview.interview.FeedbackPersistenceInput;
 import dev.jiaming.ai_interview.interview.InterviewPersistenceService;
 import dev.jiaming.ai_interview.interview.InterviewSessionPersistenceService;
 import dev.jiaming.ai_interview.interview.JobDescriptionPersistenceService;
@@ -148,12 +151,13 @@ class JobEffectMaterializationIntegrationTests {
 		UUID userId = localUserService.localUserId();
 		UUID leaseToken = UUID.randomUUID();
 		AiAnalysisRequest request = analysisRequest();
+		AnalysisPersistenceInput input = analysisInput(userId, request);
 		BackgroundJob job = createProcessingJob(userId, JobType.ANALYSIS, leaseToken, request);
 
-		UUID firstAssessment = materializationService.materializeAssessment(job, leaseToken, request, assessment());
-		UUID secondAssessment = materializationService.materializeAssessment(job, leaseToken, request, assessment());
-		UUID firstSession = materializationService.materializeQuestions(job, leaseToken, request, questions());
-		UUID secondSession = materializationService.materializeQuestions(job, leaseToken, request, questions());
+		UUID firstAssessment = materializationService.materializeAssessment(job, leaseToken, input, assessment());
+		UUID secondAssessment = materializationService.materializeAssessment(job, leaseToken, input, assessment());
+		UUID firstSession = materializationService.materializeQuestions(job, leaseToken, input, questions());
+		UUID secondSession = materializationService.materializeQuestions(job, leaseToken, input, questions());
 
 		assertThat(secondAssessment).isEqualTo(firstAssessment);
 		assertThat(secondSession).isEqualTo(firstSession);
@@ -190,6 +194,7 @@ class JobEffectMaterializationIntegrationTests {
 		UUID userId = localUserService.localUserId();
 		UUID leaseToken = UUID.randomUUID();
 		AiAnalysisRequest request = analysisRequest();
+		AnalysisPersistenceInput input = analysisInput(userId, request);
 		BackgroundJob job = createProcessingJob(userId, JobType.ANALYSIS, leaseToken, request);
 		CountDownLatch start = new CountDownLatch(1);
 		ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -197,11 +202,11 @@ class JobEffectMaterializationIntegrationTests {
 		try {
 			Future<UUID> first = executor.submit(() -> {
 				start.await();
-				return materializationService.materializeAssessment(job, leaseToken, request, assessment());
+				return materializationService.materializeAssessment(job, leaseToken, input, assessment());
 			});
 			Future<UUID> second = executor.submit(() -> {
 				start.await();
-				return materializationService.materializeAssessment(job, leaseToken, request, assessment());
+				return materializationService.materializeAssessment(job, leaseToken, input, assessment());
 			});
 			start.countDown();
 
@@ -221,12 +226,13 @@ class JobEffectMaterializationIntegrationTests {
 		UUID userId = localUserService.localUserId();
 		UUID storedLease = UUID.randomUUID();
 		AiAnalysisRequest request = analysisRequest();
+		AnalysisPersistenceInput input = analysisInput(userId, request);
 		BackgroundJob job = createProcessingJob(userId, JobType.ANALYSIS, storedLease, request);
 
 		assertThatThrownBy(() -> materializationService.materializeAssessment(
 			job,
 			UUID.randomUUID(),
-			request,
+			input,
 			assessment()
 		)).isInstanceOf(JobLeaseLostException.class);
 
@@ -234,7 +240,7 @@ class JobEffectMaterializationIntegrationTests {
 			"UPDATE ai_interview_app.background_jobs SET lease_expires_at = now() - interval '1 second' WHERE id = ?",
 			job.id()
 		);
-		assertThatThrownBy(() -> materializationService.materializeAssessment(job, storedLease, request, assessment()))
+		assertThatThrownBy(() -> materializationService.materializeAssessment(job, storedLease, input, assessment()))
 			.isInstanceOf(JobLeaseLostException.class);
 		assertThat(count("background_job_effects")).isZero();
 		assertThat(count("resume_assessments")).isZero();
@@ -247,16 +253,80 @@ class JobEffectMaterializationIntegrationTests {
 		UUID userId = localUserService.localUserId();
 		UUID leaseToken = UUID.randomUUID();
 		AnswerFeedbackRequest request = feedbackRequest();
+		FeedbackPersistenceInput input = feedbackInput(userId, request);
 		BackgroundJob job = createProcessingJob(userId, JobType.ANSWER_FEEDBACK, leaseToken, request);
 
-		UUID firstAnswer = materializationService.materializeFeedback(job, leaseToken, request, feedback());
-		UUID secondAnswer = materializationService.materializeFeedback(job, leaseToken, request, feedback());
+		UUID firstAnswer = materializationService.materializeFeedback(job, leaseToken, input, feedback());
+		UUID secondAnswer = materializationService.materializeFeedback(job, leaseToken, input, feedback());
 
 		assertThat(secondAnswer).isEqualTo(firstAnswer);
 		assertThat(count("interview_sessions")).isEqualTo(1);
 		assertThat(count("interview_questions")).isEqualTo(1);
 		assertThat(count("interview_answers")).isEqualTo(1);
 		assertThat(count("background_job_effects")).isEqualTo(1);
+	}
+
+	@Test
+	@Order(6)
+	void payloadCleanupRetainsOnlyStableInputReferences() {
+		resetDomainTables();
+		UUID userId = localUserService.localUserId();
+		UUID resumeId = UUID.randomUUID();
+		UUID jobDescriptionId = UUID.randomUUID();
+		UUID jobId = UUID.randomUUID();
+		jdbcTemplate.update(
+			"""
+				INSERT INTO ai_interview_app.background_jobs (
+					id, user_id, job_type, resource_type, resource_id, status, stage,
+					request_payload, result_payload, max_attempts, completed_at
+				) VALUES (?, ?, 'ANALYSIS', 'resume', ?, 'SUCCEEDED', 'COMPLETED',
+				          jsonb_build_object(
+				              'payloadVersion', 2,
+				              'resumeId', ?::text,
+				              'jobDescriptionId', ?::text,
+				              'resumeText', 'PII_RESUME_MARKER',
+				              'jobDescription', 'PII_JOB_MARKER',
+				              'targetRole', 'Backend Engineer'
+				          ),
+				          jsonb_build_object('assessment', jsonb_build_object('overallScore', 90)),
+				          3,
+				          now() - interval '8 days')
+				""",
+			jobId,
+			userId,
+			resumeId,
+			resumeId,
+			jobDescriptionId
+		);
+		BackgroundJobStore store = new BackgroundJobStore(jdbcTemplate, objectMapper());
+
+		assertThat(store.clearExpiredPayloads(7)).isEqualTo(1);
+		BackgroundJob cleaned = store.findById(jobId).orElseThrow();
+
+		assertThat(JobInputRefs.from(cleaned)).isEqualTo(new JobInputRefs(resumeId, jobDescriptionId));
+		assertThat(cleaned.requestPayload().toString()).doesNotContain("PII_RESUME_MARKER", "PII_JOB_MARKER");
+		assertThat(cleaned.requestPayload().fieldNames()).toIterable()
+			.containsExactlyInAnyOrder("payloadVersion", "resumeId", "jobDescriptionId");
+		assertThat(cleaned.resultPayload()).isNull();
+	}
+
+	@Test
+	@Order(7)
+	void activeFingerprintConflictReturnsNoInsertWithoutAbortingTheTransaction() {
+		resetDomainTables();
+		UUID userId = localUserService.localUserId();
+		BackgroundJobStore store = new BackgroundJobStore(jdbcTemplate, objectMapper());
+		JsonNode payload = objectMapper().createObjectNode().put("payloadVersion", 2);
+
+		assertThat(store.createIfAbsent(
+			userId, JobType.ANALYSIS, "resume", UUID.randomUUID(), payload, "same-fingerprint", 3
+		)).isPresent();
+		assertThat(store.createIfAbsent(
+			userId, JobType.ANALYSIS, "resume", UUID.randomUUID(), payload, "same-fingerprint", 3
+		)).isEmpty();
+		assertThat(store.findReusable(
+			userId, JobType.ANALYSIS, "same-fingerprint", java.time.Duration.ofMinutes(5)
+		)).isPresent();
 	}
 
 	private static void seedMigrationFixtures() {
@@ -395,6 +465,22 @@ class JobEffectMaterializationIntegrationTests {
 		);
 	}
 
+	private static AnalysisPersistenceInput analysisInput(UUID userId, AiAnalysisRequest request) {
+		var resume = context.getBean(ResumePersistenceService.class)
+			.findOrCreateDocument(userId, request.resumeText());
+		var jobDescription = context.getBean(JobDescriptionPersistenceService.class)
+			.findOrCreateDocument(userId, request.jobDescription());
+		return new AnalysisPersistenceInput(
+			userId,
+			resume.resourceId(),
+			resume.contentHash(),
+			jobDescription.resourceId(),
+			jobDescription.contentHash(),
+			request.targetRole(),
+			request.seniority()
+		);
+	}
+
 	private static AssessmentResponse assessment() {
 		return new AssessmentResponse(
 			82,
@@ -431,6 +517,26 @@ class JobEffectMaterializationIntegrationTests {
 			"System Design",
 			List.of("Unique operation keys"),
 			"I would checkpoint output and use unique database effects."
+		);
+	}
+
+	private static FeedbackPersistenceInput feedbackInput(UUID userId, AnswerFeedbackRequest request) {
+		var resume = context.getBean(ResumePersistenceService.class)
+			.findOrCreateDocument(userId, request.resumeText());
+		var jobDescription = context.getBean(JobDescriptionPersistenceService.class)
+			.findOrCreateDocument(userId, request.jobDescription());
+		return new FeedbackPersistenceInput(
+			userId,
+			resume.resourceId(),
+			resume.contentHash(),
+			jobDescription.resourceId(),
+			jobDescription.contentHash(),
+			request.targetRole(),
+			request.seniority(),
+			request.questionText(),
+			request.category(),
+			request.expectedSignals(),
+			request.answerText()
 		);
 	}
 
@@ -489,13 +595,24 @@ class JobEffectMaterializationIntegrationTests {
 		}
 
 		@Bean
+		ContentHasher contentHasher() {
+			return new ContentHasher();
+		}
+
+		@Bean
 		LocalUserService localUserService(JdbcTemplate jdbc) {
 			return new LocalUserService(jdbc);
 		}
 
 		@Bean
-		ResumePersistenceService resumePersistenceService(JdbcTemplate jdbc, LocalUserService localUser) {
-			return new ResumePersistenceService(jdbc, localUser);
+		ResumePersistenceService resumePersistenceService(
+			JdbcTemplate jdbc,
+			LocalUserService localUser,
+			ResumeTextNormalizer normalizer,
+			SectionAwareTextChunker chunker,
+			ContentHasher contentHasher
+		) {
+			return new ResumePersistenceService(jdbc, localUser, normalizer, chunker, contentHasher);
 		}
 
 		@Bean
@@ -507,31 +624,26 @@ class JobEffectMaterializationIntegrationTests {
 		JobDescriptionPersistenceService jobDescriptionPersistenceService(
 			JdbcTemplate jdbc,
 			ResumeTextNormalizer normalizer,
-			SectionAwareTextChunker chunker
+			SectionAwareTextChunker chunker,
+			ContentHasher contentHasher
 		) {
-			return new JobDescriptionPersistenceService(jdbc, normalizer, chunker);
+			return new JobDescriptionPersistenceService(jdbc, normalizer, chunker, contentHasher);
 		}
 
 		@Bean
 		AssessmentPersistenceService assessmentPersistenceService(
 			JdbcTemplate jdbc,
-			ResumePersistenceService resumes,
-			SectionAwareTextChunker chunker,
-			JobDescriptionPersistenceService jobDescriptions,
 			PersistenceJsonSupport jsonSupport
 		) {
-			return new AssessmentPersistenceService(jdbc, resumes, chunker, jobDescriptions, jsonSupport);
+			return new AssessmentPersistenceService(jdbc, jsonSupport);
 		}
 
 		@Bean
 		InterviewSessionPersistenceService interviewSessionPersistenceService(
 			JdbcTemplate jdbc,
-			ResumePersistenceService resumes,
-			SectionAwareTextChunker chunker,
-			JobDescriptionPersistenceService jobDescriptions,
 			PersistenceJsonSupport jsonSupport
 		) {
-			return new InterviewSessionPersistenceService(jdbc, resumes, chunker, jobDescriptions, jsonSupport);
+			return new InterviewSessionPersistenceService(jdbc, jsonSupport);
 		}
 
 		@Bean

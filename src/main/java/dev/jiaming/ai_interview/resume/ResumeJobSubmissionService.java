@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.multipart.MultipartFile;
 
 import dev.jiaming.ai_interview.common.RedisRequestGuard;
@@ -32,13 +33,16 @@ public class ResumeJobSubmissionService {
 
 	private final RedisRequestGuard requestGuard;
 
+	private final TransactionOperations transactionOperations;
+
 	public ResumeJobSubmissionService(
 		ResumeFileValidator validator,
 		ResumeFileReader fileReader,
 		ResumeStorageService storageService,
 		ResumePersistenceService persistenceService,
 		JobSubmissionService jobSubmissionService,
-		RedisRequestGuard requestGuard
+		RedisRequestGuard requestGuard,
+		TransactionOperations transactionOperations
 	) {
 		this.validator = validator;
 		this.fileReader = fileReader;
@@ -46,6 +50,7 @@ public class ResumeJobSubmissionService {
 		this.persistenceService = persistenceService;
 		this.jobSubmissionService = jobSubmissionService;
 		this.requestGuard = requestGuard;
+		this.transactionOperations = transactionOperations;
 	}
 
 	public JobAcceptedResponse submit(MultipartFile file) {
@@ -76,52 +81,50 @@ public class ResumeJobSubmissionService {
 		}
 
 		String storageKey = null;
-		UUID resumeId = null;
 		try {
 			storageKey = storageService.store(content);
-			resumeId = persistenceService.createPending(
-				content.originalFilename(),
-				content.contentType(),
-				content.detectedContentType(),
-				content.sizeBytes(),
-				storageKey
-			);
-			ResumeExtractionJobPayload payload = new ResumeExtractionJobPayload(
-				resumeId,
-				storageKey,
-				content.originalFilename(),
-				content.contentType(),
-				content.detectedContentType(),
-				content.sizeBytes(),
-				content.extension()
-			);
-			JobAcceptedResponse response = jobSubmissionService.createOrReuse(
-				JobType.RESUME_EXTRACTION,
-				"resume",
-				resumeId,
-				payload,
-				fingerprint
-			);
+			String committedStorageKey = storageKey;
+			JobAcceptedResponse response = java.util.Objects.requireNonNull(transactionOperations.execute(status -> {
+				UUID resumeId = persistenceService.createPending(
+					content.originalFilename(),
+					content.contentType(),
+					content.detectedContentType(),
+					content.sizeBytes(),
+					committedStorageKey
+				);
+				ResumeExtractionJobPayload payload = new ResumeExtractionJobPayload(
+					resumeId,
+					committedStorageKey,
+					content.originalFilename(),
+					content.contentType(),
+					content.detectedContentType(),
+					content.sizeBytes(),
+					content.extension()
+				);
+				JobAcceptedResponse accepted = jobSubmissionService.createOrReuse(
+					JobType.RESUME_EXTRACTION,
+					"resume",
+					resumeId,
+					payload,
+					fingerprint
+				);
+				if (accepted.reused()) {
+					persistenceService.deletePending(resumeId);
+				}
+				return accepted;
+			}));
 			if (response.reused()) {
-				compensate(resumeId, storageKey);
+				deleteStorage(storageKey);
 			}
 			return response;
 		}
 		catch (RuntimeException exception) {
-			compensate(resumeId, storageKey);
+			deleteStorage(storageKey);
 			throw exception;
 		}
 	}
 
-	private void compensate(UUID resumeId, String storageKey) {
-		if (resumeId != null) {
-			try {
-				persistenceService.deletePending(resumeId);
-			}
-			catch (RuntimeException exception) {
-				log.warn("resume_upload_compensation_db_failed resumeId={} reason={}", resumeId, exception.getMessage());
-			}
-		}
+	private void deleteStorage(String storageKey) {
 		if (storageKey != null) {
 			try {
 				storageService.delete(storageKey);

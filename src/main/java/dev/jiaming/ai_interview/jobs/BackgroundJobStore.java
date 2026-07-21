@@ -38,7 +38,7 @@ public class BackgroundJobStore {
 	}
 
 	@Transactional
-	public BackgroundJob create(
+	public Optional<BackgroundJob> createIfAbsent(
 		UUID userId,
 		JobType jobType,
 		String resourceType,
@@ -48,14 +48,17 @@ public class BackgroundJobStore {
 		int maxAttempts
 	) {
 		UUID jobId = UUID.randomUUID();
-		jdbcTemplate.update(
+		List<UUID> insertedIds = jdbcTemplate.query(
 			"""
 				INSERT INTO ai_interview_app.background_jobs (
 					id, user_id, job_type, resource_type, resource_id, status, stage,
 					request_payload, request_fingerprint, max_attempts, run_after
 				)
 				VALUES (?, ?, ?, ?, ?, 'QUEUED', 'QUEUED', ?::jsonb, ?, ?, now())
+				ON CONFLICT DO NOTHING
+				RETURNING id
 				""",
+			(rs, rowNum) -> rs.getObject("id", UUID.class),
 			jobId,
 			userId,
 			jobType.name(),
@@ -65,7 +68,7 @@ public class BackgroundJobStore {
 			requestFingerprint,
 			maxAttempts
 		);
-		return findById(jobId).orElseThrow();
+		return insertedIds.stream().findFirst().flatMap(this::findById);
 	}
 
 	public Optional<BackgroundJob> findReusable(
@@ -213,6 +216,20 @@ public class BackgroundJobStore {
 		assertLeaseOwned(jobId, updated);
 	}
 
+	public void replaceRequestPayload(UUID jobId, UUID leaseToken, JsonNode requestPayload) {
+		int updated = jdbcTemplate.update(
+			"""
+				UPDATE ai_interview_app.background_jobs
+				SET request_payload = ?::jsonb, updated_at = now()
+				WHERE id = ? AND status = 'PROCESSING' AND lease_token = ?
+				""",
+			json(requestPayload),
+			jobId,
+			leaseToken
+		);
+		assertLeaseOwned(jobId, updated);
+	}
+
 	public boolean markSucceeded(UUID jobId, UUID leaseToken, JsonNode resultPayload) {
 		return markTerminal(jobId, leaseToken, JobStatus.SUCCEEDED, resultPayload, null, null, false);
 	}
@@ -346,10 +363,19 @@ public class BackgroundJobStore {
 		return jdbcTemplate.update(
 			"""
 				UPDATE ai_interview_app.background_jobs
-				SET request_payload = '{}'::jsonb, result_payload = NULL, updated_at = now()
+				SET request_payload = jsonb_strip_nulls(jsonb_build_object(
+						'payloadVersion', request_payload -> 'payloadVersion',
+						'resumeId', COALESCE(request_payload -> 'resumeId', to_jsonb(resource_id)),
+						'jobDescriptionId', request_payload -> 'jobDescriptionId'
+					)),
+					result_payload = NULL,
+					updated_at = now()
 				WHERE status IN ('SUCCEEDED', 'PARTIAL', 'FAILED')
 				  AND completed_at < now() - (? * interval '1 day')
-				  AND (request_payload <> '{}'::jsonb OR result_payload IS NOT NULL)
+				  AND (
+					result_payload IS NOT NULL
+					OR (request_payload - 'payloadVersion' - 'resumeId' - 'jobDescriptionId') <> '{}'::jsonb
+				  )
 				""",
 			retentionDays
 		);

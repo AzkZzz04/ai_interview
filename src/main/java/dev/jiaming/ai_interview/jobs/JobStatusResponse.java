@@ -19,7 +19,8 @@ public record JobStatusResponse(
 	JobErrorResponse error,
 	Instant createdAt,
 	Instant startedAt,
-	Instant completedAt
+	Instant completedAt,
+	JobInputRefs inputRefs
 ) {
 
 	public static JobStatusResponse from(BackgroundJob job) {
@@ -36,7 +37,8 @@ public record JobStatusResponse(
 			error,
 			job.createdAt(),
 			job.startedAt(),
-			job.completedAt()
+			job.completedAt(),
+			JobInputRefs.from(job)
 		);
 	}
 

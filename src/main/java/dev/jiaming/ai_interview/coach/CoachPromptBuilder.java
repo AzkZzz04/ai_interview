@@ -9,7 +9,7 @@ public class CoachPromptBuilder {
 
 	private static final int ANSWER_PROMPT_LIMIT = 4_000;
 
-	public String buildAssessmentPrompt(AiAnalysisRequest request, CoachRagContext context) {
+	public String buildAssessmentPrompt(CoachAnalysisInput input, CoachRagContext context) {
 		return """
 			You are a senior technical recruiter and engineering interviewer.
 			Assess this tech resume for the target role using only the retrieved context below.
@@ -42,13 +42,13 @@ public class CoachPromptBuilder {
 			Retrieved context:
 			%s
 			""".formatted(
-			fallback(request.targetRole(), "Software Engineer"),
-			fallback(request.seniority(), "Mid-level"),
+			fallback(input.targetRole(), "Software Engineer"),
+			fallback(input.seniority(), "Mid-level"),
 			context.context()
 		);
 	}
 
-	public String buildQuestionPrompt(AiAnalysisRequest request, CoachRagContext context) {
+	public String buildQuestionPrompt(CoachAnalysisInput input, CoachRagContext context) {
 		return """
 			You are generating a technical interview set for a candidate.
 			Use only the retrieved resume and job-description context below.
@@ -77,13 +77,13 @@ public class CoachPromptBuilder {
 			Retrieved context:
 			%s
 			""".formatted(
-			fallback(request.targetRole(), "Software Engineer"),
-			fallback(request.seniority(), "Mid-level"),
+			fallback(input.targetRole(), "Software Engineer"),
+			fallback(input.seniority(), "Mid-level"),
 			context.context()
 		);
 	}
 
-	public String buildFeedbackPrompt(AnswerFeedbackRequest request, CoachRagContext context) {
+	public String buildFeedbackPrompt(CoachFeedbackInput input, CoachRagContext context) {
 		return """
 			You are coaching a candidate after one interview answer.
 			Score the answer against the question, expected signals, and retrieved context. Be specific and actionable.
@@ -115,14 +115,30 @@ public class CoachPromptBuilder {
 			Candidate answer:
 			%s
 			""".formatted(
-			fallback(request.targetRole(), "Software Engineer"),
-			fallback(request.seniority(), "Mid-level"),
-			fallback(request.category(), "Interview"),
-			fallback(request.questionText(), ""),
-			String.join(", ", safeList(request.expectedSignals())),
+			fallback(input.targetRole(), "Software Engineer"),
+			fallback(input.seniority(), "Mid-level"),
+			fallback(input.category(), "Interview"),
+			fallback(input.questionText(), ""),
+			String.join(", ", safeList(input.expectedSignals())),
 			context.context(),
-			truncate(request.answerText(), ANSWER_PROMPT_LIMIT)
+			truncate(input.answerText(), ANSWER_PROMPT_LIMIT)
 		);
+	}
+
+	public String buildRepairPrompt(String originalPrompt, String invalidOutput, String parseError) {
+		return """
+			Repair the JSON response below so it satisfies the original request exactly.
+			Return only corrected JSON. Do not add markdown or commentary.
+
+			Original request:
+			%s
+
+			Invalid response:
+			%s
+
+			Parser error:
+			%s
+			""".formatted(originalPrompt, invalidOutput, fallback(parseError, "JSON did not match the schema"));
 	}
 
 	private String truncate(String value, int limit) {

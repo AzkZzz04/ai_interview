@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 
+import dev.jiaming.ai_interview.common.RuntimeModeProperties;
 import software.amazon.awssdk.services.sqs.model.Message;
 
 @Component
@@ -39,9 +40,11 @@ public class JobWorker implements SmartLifecycle {
 
 	private final JobFailureClassifier failureClassifier;
 
-	private final JobResultCache resultCache;
-
 	private final JobMetrics metrics;
+
+	private final RuntimeModeProperties runtimeMode;
+
+	private final JobRetryDelayStrategy retryDelayStrategy;
 
 	private final List<JobTerminalFailureHandler> terminalFailureHandlers;
 
@@ -63,8 +66,9 @@ public class JobWorker implements SmartLifecycle {
 		BackgroundJobStore jobStore,
 		JobProcessor processor,
 		JobFailureClassifier failureClassifier,
-		JobResultCache resultCache,
 		JobMetrics metrics,
+		RuntimeModeProperties runtimeMode,
+		JobRetryDelayStrategy retryDelayStrategy,
 		List<JobTerminalFailureHandler> terminalFailureHandlers
 	) {
 		this.properties = properties;
@@ -72,14 +76,15 @@ public class JobWorker implements SmartLifecycle {
 		this.jobStore = jobStore;
 		this.processor = processor;
 		this.failureClassifier = failureClassifier;
-		this.resultCache = resultCache;
 		this.metrics = metrics;
+		this.runtimeMode = runtimeMode;
+		this.retryDelayStrategy = retryDelayStrategy;
 		this.terminalFailureHandlers = List.copyOf(terminalFailureHandlers);
 	}
 
 	@Override
 	public void start() {
-		if (!properties.workerEnabled() || !running.compareAndSet(false, true)) {
+		if (!properties.enabled() || !runtimeMode.workerEnabled() || !running.compareAndSet(false, true)) {
 			return;
 		}
 		capacity = new Semaphore(properties.workerConcurrency());
@@ -198,6 +203,7 @@ public class JobWorker implements SmartLifecycle {
 		ScheduledFuture<?> heartbeat = startHeartbeat(execution);
 		execution.heartbeat(heartbeat);
 		Instant started = Instant.now();
+		metrics.queueLag(job.jobType(), Duration.between(job.createdAt(), started));
 		log.info("job_started jobId={} type={} attempt={} receiveCount={}",
 			job.id(), job.jobType(), job.attempts(), queueService.receiveCount(message));
 		try {
@@ -210,7 +216,6 @@ public class JobWorker implements SmartLifecycle {
 				log.warn("job_completion_ignored_after_lease_loss jobId={} type={}", job.id(), job.jobType());
 				return;
 			}
-			resultCache.put(job.userId(), job.jobType(), job.requestFingerprint(), job.id());
 			metrics.completed(job.jobType(), JobStatus.SUCCEEDED, Duration.between(started, Instant.now()));
 			queueService.delete(message);
 			log.info("job_completed jobId={} type={} attempt={}", job.id(), job.jobType(), job.attempts());
@@ -247,7 +252,6 @@ public class JobWorker implements SmartLifecycle {
 				return;
 			}
 			notifyTerminalFailure(job, failure);
-			cachePartial(job, partial);
 			metrics.failed(job.jobType(), false);
 			metrics.completed(job.jobType(), partial ? JobStatus.PARTIAL : JobStatus.FAILED,
 				Duration.between(started, Instant.now()));
@@ -265,7 +269,6 @@ public class JobWorker implements SmartLifecycle {
 				return;
 			}
 			notifyTerminalFailure(job, exhausted);
-			cachePartial(job, partial);
 			metrics.failed(job.jobType(), true);
 			metrics.retriesExhausted(job.jobType());
 			metrics.completed(job.jobType(), partial ? JobStatus.PARTIAL : JobStatus.FAILED,
@@ -276,7 +279,7 @@ public class JobWorker implements SmartLifecycle {
 			return;
 		}
 
-		Duration delay = retryDelay(job.attempts());
+		Duration delay = retryDelayStrategy.delay(job.attempts(), properties.retryBaseSeconds());
 		if (!jobStore.markRetrying(job.id(), leaseToken, failure.code(), failure.message(), delay)) {
 			log.warn("job_retry_ignored_after_lease_loss jobId={}", job.id());
 			return;
@@ -397,17 +400,6 @@ public class JobWorker implements SmartLifecycle {
 			.map(BackgroundJob::resultPayload)
 			.filter(result -> result != null && result.hasNonNull("assessment"))
 			.isPresent();
-	}
-
-	private void cachePartial(BackgroundJob job, boolean partial) {
-		if (partial) {
-			resultCache.put(job.userId(), job.jobType(), job.requestFingerprint(), job.id());
-		}
-	}
-
-	private Duration retryDelay(int attempts) {
-		long multiplier = 1L << Math.min(10, Math.max(0, attempts - 1));
-		return Duration.ofSeconds(properties.retryBaseSeconds() * multiplier);
 	}
 
 	private Thread daemonThread(Runnable runnable, String name) {

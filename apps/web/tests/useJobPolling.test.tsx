@@ -121,7 +121,8 @@ function accepted(jobId: string): JobAcceptedResponse {
     status: "QUEUED",
     stage: "QUEUED",
     statusUrl: `/api/jobs/${jobId}`,
-    reused: false
+    reused: false,
+    inputRefs: { resumeId: null, jobDescriptionId: null }
   };
 }
 
@@ -136,7 +137,8 @@ function status(jobId: string, result: Result): JobStatusResponse<Result> {
     error: null,
     createdAt: new Date().toISOString(),
     startedAt: new Date().toISOString(),
-    completedAt: new Date().toISOString()
+    completedAt: new Date().toISOString(),
+    inputRefs: { resumeId: null, jobDescriptionId: null }
   };
 }
 

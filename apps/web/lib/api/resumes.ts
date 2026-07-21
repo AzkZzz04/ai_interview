@@ -1,5 +1,5 @@
 import { createIdempotencyKey } from "@/lib/api/idempotency";
-import { JobAcceptedResponse, responseMessage } from "@/lib/api/jobs";
+import { JobAcceptedResponse, JobApiError, responseError } from "@/lib/api/jobs";
 
 export type ResumeUploadResponse = {
   id: string;
@@ -39,14 +39,21 @@ export async function uploadResume(file: File): Promise<JobAcceptedResponse> {
     });
 
     if (!response.ok) {
-      throw new Error(await responseMessage(response));
+      const error = await responseError(response);
+      throw new JobApiError(error.message, response.status, false, "HTTP", error.code);
     }
 
     return response.json() as Promise<JobAcceptedResponse>;
   }
   catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("The resume could not be uploaded within 30 seconds. Check object storage and try again.");
+      throw new JobApiError(
+        "The resume could not be uploaded within 30 seconds. Check object storage and try again.",
+        null,
+        true,
+        "TIMEOUT",
+        "REQUEST_TIMEOUT"
+      );
     }
     throw error;
   }
@@ -63,7 +70,8 @@ export async function getCurrentResume(): Promise<ResumeUploadResponse | null> {
   }
 
   if (!response.ok) {
-    throw new Error(await responseMessage(response));
+    const error = await responseError(response);
+    throw new JobApiError(error.message, response.status, false, "HTTP", error.code);
   }
 
   return response.json() as Promise<ResumeUploadResponse>;

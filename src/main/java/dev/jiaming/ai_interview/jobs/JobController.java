@@ -8,8 +8,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
+import dev.jiaming.ai_interview.common.ApiRequestException;
 import dev.jiaming.ai_interview.common.LocalUserService;
 
 @RestController
@@ -30,6 +30,10 @@ public class JobController {
 	public JobStatusResponse status(@PathVariable UUID jobId) {
 		return jobStore.findForUser(jobId, localUserService.localUserId())
 			.map(JobStatusResponse::from)
-			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Background job was not found"));
+			.orElseThrow(() -> new ApiRequestException(
+				HttpStatus.NOT_FOUND,
+				"JOB_NOT_FOUND",
+				"Background job was not found"
+			));
 	}
 }
