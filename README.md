@@ -99,10 +99,28 @@ GEMINI_MAX_OUTPUT_TOKENS=2048
 GEMINI_THINKING_BUDGET=0
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 RAG_EMBEDDING_DIMENSIONS=1024
-RAG_CHUNK_SCHEMA=section-context-v2
+RAG_CHUNK_SCHEMA=section-block-v3
 ```
 
 Keep `.env` local and untracked. Do not put real API keys in `.env.example`.
+
+## Destructive local reset
+
+To remove every record in the local `interview_guide` database and the project's
+LocalStack S3/SQS state, stop the API and worker, then set these values in your
+local shell (never commit the admin URL):
+
+```bash
+RESET_CONFIRM=DROP_INTERVIEW_GUIDE \
+RESET_DATABASE_NAME=interview_guide \
+RESET_DATABASE_OWNER=ai_interview \
+RESET_DATABASE_ADMIN_URL='postgresql://…@localhost:5432/postgres' \
+./scripts/reset-local-environment.sh
+```
+
+The script refuses non-local hosts, databases other than `interview_guide`, and
+bucket/queue names outside this project. It is irreversible: resumes, job
+descriptions, interview history, jobs, chunks, and vectors must be recreated.
 
 ## First Implementation Milestones
 

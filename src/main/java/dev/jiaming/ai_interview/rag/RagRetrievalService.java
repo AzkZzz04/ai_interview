@@ -63,6 +63,13 @@ public class RagRetrievalService {
 		return search(request);
 	}
 
+	public List<RagContextSnippet> retrieve(String query, RagDocumentIndexHandle index, int topK) {
+		if (index == null) {
+			return List.of();
+		}
+		return retrieve(query, List.of(index), topK);
+	}
+
 	public void deleteIndexClaim(UUID indexId, long claimVersion) {
 		FilterExpressionBuilder builder = new FilterExpressionBuilder();
 		vectorStore().delete(builder.and(

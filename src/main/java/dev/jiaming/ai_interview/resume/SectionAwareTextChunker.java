@@ -104,7 +104,29 @@ public class SectionAwareTextChunker {
 
 	private List<TextChunk> splitSection(SectionBlock section, int startIndex, int maxChars, int overlapChars) {
 		List<TextChunk> chunks = new ArrayList<>();
-		String content = section.content();
+		if (entrySection(section.name())) {
+			for (String block : section.content().split("\\n\\s*\\n")) {
+				addChunks(chunks, section.name(), block.trim(), startIndex, maxChars, overlapChars);
+			}
+			if (!chunks.isEmpty()) {
+				return chunks;
+			}
+		}
+		addChunks(chunks, section.name(), section.content(), startIndex, maxChars, overlapChars);
+		return chunks;
+	}
+
+	private void addChunks(
+		List<TextChunk> chunks,
+		String section,
+		String content,
+		int startIndex,
+		int maxChars,
+		int overlapChars
+	) {
+		if (content.isBlank()) {
+			return;
+		}
 		int cursor = 0;
 
 		while (cursor < content.length()) {
@@ -115,7 +137,7 @@ public class SectionAwareTextChunker {
 
 			String chunkContent = content.substring(cursor, end).trim();
 			if (!chunkContent.isBlank()) {
-				chunks.add(new TextChunk(startIndex + chunks.size(), section.name(), chunkContent));
+				chunks.add(new TextChunk(startIndex + chunks.size(), section, chunkContent));
 			}
 
 			if (end >= content.length()) {
@@ -123,7 +145,12 @@ public class SectionAwareTextChunker {
 			}
 			cursor = Math.max(0, end - overlapChars);
 		}
-		return chunks;
+	}
+
+	private boolean entrySection(String section) {
+		return "Experience".equals(section)
+			|| "Research Experience".equals(section)
+			|| "Projects".equals(section);
 	}
 
 	private int findNaturalBreak(String content, int cursor, int proposedEnd) {

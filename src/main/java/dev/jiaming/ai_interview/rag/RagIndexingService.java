@@ -308,7 +308,8 @@ public class RagIndexingService {
 			metadata.put("sourceType", resolvedDocument.sourceType().metadataValue());
 			metadata.put("section", chunk.section());
 			metadata.put("chunkIndex", chunk.index());
-			documents.add(new Document(documentId, chunk.content(), metadata));
+			String embeddingText = "Section: " + chunk.section() + "\n" + chunk.content();
+			documents.add(new Document(documentId, embeddingText, metadata));
 		}
 		return documents;
 	}

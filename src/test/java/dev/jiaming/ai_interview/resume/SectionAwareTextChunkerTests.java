@@ -68,6 +68,24 @@ class SectionAwareTextChunkerTests {
 	}
 
 	@Test
+	void keepsBlankLineSeparatedExperienceEntriesTogether() {
+		String resume = """
+			EXPERIENCE
+			Backend Engineer, Example Co. | 2024 - Present
+			- Built an event-driven service.
+
+			Software Engineer, Prior Co. | 2021 - 2024
+			- Improved database reliability.
+			""";
+
+		List<TextChunk> chunks = chunker.chunk(resume, 500, 50);
+
+		assertThat(chunks).hasSize(2);
+		assertThat(chunks.getFirst().content()).contains("Example Co.").doesNotContain("Prior Co.");
+		assertThat(chunks.get(1).content()).contains("Prior Co.").doesNotContain("Example Co.");
+	}
+
+	@Test
 	void rejectsInvalidChunkSettings() {
 		assertThatThrownBy(() -> chunker.chunk("text", 399, 10))
 			.isInstanceOf(IllegalArgumentException.class);

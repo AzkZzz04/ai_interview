@@ -35,7 +35,7 @@ class RagRetrievalServiceTests {
 		));
 		RagRetrievalService service = new RagRetrievalService(
 			provider,
-			new RagProperties(1_024, 8, "gemini-embedding-001", "section-context-v2"),
+			new RagProperties(1_024, 8, "gemini-embedding-001", "section-block-v3"),
 			new SimpleMeterRegistry()
 		);
 		UUID resumeIndex = UUID.randomUUID();
