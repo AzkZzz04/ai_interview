@@ -60,6 +60,7 @@ class RagIndexingServiceTests {
 			.containsEntry("claimVersion", 1L)
 			.containsEntry("contextId", "resume:experience:0");
 		assertThat(stored.getId()).isNotBlank();
+		assertThat(stored.getText()).isEqualTo("Section: Experience\nBuilt an API");
 	}
 
 	@Test
@@ -164,7 +165,7 @@ class RagIndexingServiceTests {
 			vectorStoreProvider,
 			repository,
 			retrievalService,
-			new RagProperties(1_024, 8, "gemini-embedding-001", "section-context-v2"),
+			new RagProperties(1_024, 8, "gemini-embedding-001", "section-block-v3"),
 			new SectionAwareTextChunker(),
 			new SimpleMeterRegistry(),
 			Clock.fixed(NOW, ZoneOffset.UTC)
@@ -187,7 +188,7 @@ class RagIndexingServiceTests {
 			"resume-hash",
 			"gemini-embedding-001",
 			1_024,
-			"section-context-v2"
+			"section-block-v3"
 		);
 	}
 

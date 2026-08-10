@@ -173,6 +173,17 @@ class RedisRequestGuardTests {
 	}
 
 	@Test
+	void namespacesRateLimitAndIdempotencyKeys() {
+		requestWithIdempotencyKey("retry-key");
+		guard.assertAiAllowed("assessment");
+		guard.withIdempotentRetryCache(
+			"assessment", List.of("resume"), CachedResponse.class, () -> new CachedResponse("saved")
+		);
+
+		assertThat(redis.keySet()).allMatch(key -> key.startsWith("ai-interview:v3:"));
+	}
+
+	@Test
 	void doesNotTrustClientSuppliedForwardedAddressForRateLimits() {
 		MockHttpServletRequest first = new MockHttpServletRequest();
 		first.setRemoteAddr("203.0.113.10");

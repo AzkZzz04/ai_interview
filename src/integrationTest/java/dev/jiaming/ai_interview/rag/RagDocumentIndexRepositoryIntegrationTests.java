@@ -285,7 +285,7 @@ class RagDocumentIndexRepositoryIntegrationTests {
 			UUID.randomUUID().toString().replace("-", ""),
 			"gemini-embedding-001",
 			1_024,
-			"section-context-v2"
+			"section-block-v3"
 		);
 	}
 }

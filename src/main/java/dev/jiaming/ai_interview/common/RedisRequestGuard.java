@@ -67,7 +67,7 @@ public class RedisRequestGuard {
 		}
 
 		String requestFingerprint = fingerprint(action, requestFingerprintSource);
-		String baseKey = "idem:%s:%s:%s".formatted(action, clientId(), sha256(idempotencyKey.get()));
+		String baseKey = key("idem:%s:%s:%s".formatted(action, clientId(), sha256(idempotencyKey.get())));
 		String fingerprintKey = baseKey + ":fingerprint";
 		String responseKey = baseKey + ":response";
 		Duration ttl = Duration.ofSeconds(properties.idempotency().ttlSeconds());
@@ -97,7 +97,7 @@ public class RedisRequestGuard {
 		}
 
 		long bucket = Instant.now().getEpochSecond() / properties.rateLimit().windowSeconds();
-		String key = "rate:%s:%s:%d".formatted(action, clientId(), bucket);
+		String key = key("rate:%s:%s:%d".formatted(action, clientId(), bucket));
 		try {
 			Long count = redisTemplate.opsForValue().increment(key);
 			if (count != null && count == 1) {
@@ -224,5 +224,9 @@ public class RedisRequestGuard {
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 is unavailable", exception);
 		}
+	}
+
+	private String key(String suffix) {
+		return properties.keyPrefix() + suffix;
 	}
 }
