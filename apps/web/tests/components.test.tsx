@@ -24,6 +24,37 @@ const questions: InterviewQuestion[] = [
 ];
 
 describe("pending workflow controls", () => {
+	  it("offers an Intern level with its interview calibration", () => {
+	    render(
+	      <ResumeInputPanel
+	        uploadedResume={null}
+	        extractionProgress={null}
+	        elapsedSeconds={0}
+	        targetRole="Software Engineer"
+	        seniority="Intern"
+	        resumeText="resume"
+	        jobDescription="job"
+	        analysisNotice={null}
+	        analysisStage={null}
+	        analysisElapsedSeconds={0}
+	        isAnalyzing={false}
+	        isUploadingResume={false}
+	        resumeTextareaRef={createRef<HTMLTextAreaElement>()}
+	        onResumeUpload={vi.fn()}
+	        onRecoverLatestResume={vi.fn()}
+	        onTargetRoleChange={vi.fn()}
+	        onSeniorityChange={vi.fn()}
+	        onResumeTextChange={vi.fn()}
+	        onJobDescriptionChange={vi.fn()}
+	        onRunAssessment={vi.fn()}
+	      />
+	    );
+
+	    expect(screen.getByLabelText("Seniority")).toHaveValue("Intern");
+	    expect(screen.getByRole("option", { name: "Intern" })).toBeInTheDocument();
+	    expect(screen.getByText(/Fundamentals, projects, coursework/)).toBeInTheDocument();
+	  });
+
   it("locks every analysis source control while analysis is running", () => {
     const { container } = render(
       <ResumeInputPanel
@@ -35,6 +66,8 @@ describe("pending workflow controls", () => {
         resumeText="resume"
         jobDescription="job"
         analysisNotice={null}
+        analysisStage={null}
+        analysisElapsedSeconds={0}
         isAnalyzing
         isUploadingResume={false}
         resumeTextareaRef={createRef<HTMLTextAreaElement>()}

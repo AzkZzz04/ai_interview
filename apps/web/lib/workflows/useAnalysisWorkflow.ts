@@ -27,7 +27,21 @@ export function useAnalysisWorkflow(options: Options) {
   const polling = useJobPolling<AnalysisJobResult, AiAnalysisPayload>("ai-interview:job:analysis");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [stage, setStage] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const hydratedGenerationRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (startedAt === null) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const update = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    update();
+    const intervalId = window.setInterval(update, 1_000);
+    return () => window.clearInterval(intervalId);
+  }, [startedAt]);
 
   useEffect(() => {
     const current = optionsRef.current;
@@ -56,10 +70,12 @@ export function useAnalysisWorkflow(options: Options) {
 
 	    if (polling.terminalError) {
 	      setIsAnalyzing(false);
+	      setStage(null);
+	      setStartedAt(null);
 	      if (resolvedSnapshot) {
 	        current.applyResult(
-	          createAssessment(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription),
-	          createQuestions(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription),
+	          createAssessment(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription, resolvedSnapshot.seniority),
+	          createQuestions(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription, resolvedSnapshot.seniority),
 	          resolvedSnapshot,
           polling.generation ?? polling.activeJobId ?? "local-analysis"
         );
@@ -79,19 +95,24 @@ export function useAnalysisWorkflow(options: Options) {
     const job = polling.job;
     if (!job || !isTerminalJob(job.status)) {
       setIsAnalyzing(true);
+      setStartedAt((value) => value ?? (job ? Date.parse(job.createdAt) : Date.now()));
+      setStage(job ? jobStageLabel(job.stage) : "Waiting for the analysis worker");
       setNotice(polling.connectionError
         ? "Connection interrupted. The analysis job is still running and polling will continue."
-        : job ? jobStageLabel(job.stage) : "Waiting for the analysis worker");
+        : null);
       return;
     }
 
     setIsAnalyzing(false);
+    setStage(null);
+    setStartedAt(null);
     const generation = polling.generation ?? job.jobId;
     const result = job.result;
     const aiQuestions = result?.questions?.questions ?? [];
 	    const fallbackQuestions = createQuestions(
 	      resolvedSnapshot?.resumeText ?? "",
-	      resolvedSnapshot?.jobDescription ?? ""
+	      resolvedSnapshot?.jobDescription ?? "",
+	      resolvedSnapshot?.seniority
 	    );
     if (job.status === "SUCCEEDED" && result?.assessment) {
       current.applyResult(
@@ -108,7 +129,7 @@ export function useAnalysisWorkflow(options: Options) {
     if (job.status === "PARTIAL") {
       const nextAssessment = result?.assessment ?? (
 	        resolvedSnapshot
-	          ? createAssessment(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription)
+	          ? createAssessment(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription, resolvedSnapshot.seniority)
 	          : null
       );
       current.applyResult(
@@ -126,8 +147,8 @@ export function useAnalysisWorkflow(options: Options) {
 
 	    if (resolvedSnapshot) {
 	      current.applyResult(
-	        createAssessment(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription),
-	        createQuestions(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription),
+	        createAssessment(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription, resolvedSnapshot.seniority),
+	        createQuestions(resolvedSnapshot.resumeText, resolvedSnapshot.jobDescription, resolvedSnapshot.seniority),
 	        resolvedSnapshot,
         generation
       );
@@ -145,7 +166,9 @@ export function useAnalysisWorkflow(options: Options) {
     isAnalyzing,
     setIsAnalyzing,
     notice,
-    setNotice
+    setNotice,
+    stage,
+    elapsedSeconds
   };
 }
 

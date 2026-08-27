@@ -318,9 +318,10 @@ public class CoachRagContextService {
 	private List<String> assessmentQueries(CoachAnalysisInput input) {
 		String role = fallback(input.targetRole(), "Software Engineer");
 		String seniority = fallback(input.seniority(), "Mid-level");
+		String seniorityTerms = SenioritySettings.forValue(input.seniority()).retrievalTerms();
 		String jobDescription = jobDescriptionQueryExcerpt(input.jobDescription());
 		return List.of(
-			"technical depth systems ownership architecture complexity " + role + " " + seniority,
+			"technical depth systems ownership architecture complexity " + role + " " + seniority + " " + seniorityTerms,
 			"measurable impact metrics scale latency reliability cost adoption outcomes",
 			"role alignment required skills must have requirements " + role + " " + jobDescription,
 			"resume gaps missing evidence weak bullets seniority signal " + role + " " + seniority
@@ -330,9 +331,10 @@ public class CoachRagContextService {
 	private List<String> questionQueries(CoachAnalysisInput input) {
 		String role = fallback(input.targetRole(), "Software Engineer");
 		String seniority = fallback(input.seniority(), "Mid-level");
+		String seniorityTerms = SenioritySettings.forValue(input.seniority()).retrievalTerms();
 		String jobDescription = jobDescriptionQueryExcerpt(input.jobDescription());
 		return List.of(
-			"strongest projects ownership technical complexity " + role + " " + seniority,
+			"strongest projects ownership technical complexity " + role + " " + seniority + " " + seniorityTerms,
 			"weakest resume areas missing detail interview probe " + role,
 			"system design architecture scaling data flow production tradeoffs",
 			"debugging incident response observability database cache production",
@@ -342,11 +344,12 @@ public class CoachRagContextService {
 	}
 
 	private List<String> feedbackQueries(CoachFeedbackInput input) {
+		String seniorityTerms = SenioritySettings.forValue(input.seniority()).retrievalTerms();
 		return List.of(
 			fallback(input.questionText(), ""),
 			String.join(" ", input.expectedSignals()),
 			fallback(input.category(), "") + " " + fallback(input.targetRole(), ""),
-			"source experience and project context expected evidence answer evaluation"
+			"source experience and project context expected evidence answer evaluation " + seniorityTerms
 		);
 	}
 

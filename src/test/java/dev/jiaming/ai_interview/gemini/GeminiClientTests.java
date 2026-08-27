@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.net.http.HttpRequest;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
@@ -12,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Flow;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +37,35 @@ class GeminiClientTests {
 		assertThat(client.generateJson("prompt")).isEqualTo("{\"ok\":true}");
 		assertThat(captured.get().headers().firstValue("x-goog-api-key")).contains(API_KEY);
 		assertThat(captured.get().uri().toString()).doesNotContain(API_KEY).doesNotContain("?key=");
+	}
+
+	@Test
+	void usesGeminiThreeThinkingLevelWithoutDeprecatedTemperature() {
+		AtomicReference<HttpRequest> captured = new AtomicReference<>();
+		GeminiClient client = new GeminiClient(
+			new ObjectMapper(),
+			request -> {
+				captured.set(request);
+				return new GeminiTransportResponse(200, response("STOP", "{\"ok\":true}"));
+			},
+			new SimpleMeterRegistry(),
+			"https://example.test/v1beta/models/",
+			API_KEY,
+			"gemini-3.6-flash",
+			0.2,
+			Duration.ofSeconds(5),
+			2_048,
+			0,
+			"medium"
+		);
+
+		client.generateJson("prompt");
+
+		assertThat(captured.get().uri().toString()).contains("gemini-3.6-flash");
+		assertThat(requestBody(captured.get()))
+			.contains("\"thinkingLevel\":\"medium\"")
+			.doesNotContain("temperature")
+			.doesNotContain("thinkingBudget");
 	}
 
 	@Test
@@ -210,6 +243,34 @@ class GeminiClientTests {
 
 	private GeminiClient client(GeminiTransport transport) {
 		return clientWithKey(API_KEY, transport);
+	}
+
+	private String requestBody(HttpRequest request) {
+		StringBuilder body = new StringBuilder();
+		CompletableFuture<Void> completed = new CompletableFuture<>();
+		request.bodyPublisher().orElseThrow().subscribe(new Flow.Subscriber<>() {
+			@Override
+			public void onSubscribe(Flow.Subscription subscription) {
+				subscription.request(Long.MAX_VALUE);
+			}
+
+			@Override
+			public void onNext(ByteBuffer item) {
+				body.append(StandardCharsets.UTF_8.decode(item));
+			}
+
+			@Override
+			public void onError(Throwable throwable) {
+				completed.completeExceptionally(throwable);
+			}
+
+			@Override
+			public void onComplete() {
+				completed.complete(null);
+			}
+		});
+		completed.join();
+		return body.toString();
 	}
 
 	private GeminiClient clientWithKey(String apiKey, GeminiTransport transport) {

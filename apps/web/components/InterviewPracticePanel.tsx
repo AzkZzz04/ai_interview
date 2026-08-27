@@ -12,6 +12,7 @@ export function InterviewPracticePanel({
   answer,
   answerFeedback,
   isSubmittingAnswer,
+  isAnalyzing = false,
   evidenceResumeText,
   evidenceJobDescription,
   evidenceResumeChunks,
@@ -24,6 +25,7 @@ export function InterviewPracticePanel({
   answer: string;
   answerFeedback: AnswerFeedback | null;
   isSubmittingAnswer: boolean;
+  isAnalyzing?: boolean;
   evidenceResumeText?: string;
   evidenceJobDescription?: string;
   evidenceResumeChunks?: EvidenceChunk[];
@@ -110,6 +112,12 @@ export function InterviewPracticePanel({
               />
             ) : null}
           </div>
+        </div>
+      ) : isAnalyzing ? (
+        <div className="skeleton" aria-hidden="true">
+          <div className="skeleton-row" style={{ width: "45%" }} />
+          <div className="skeleton-block" />
+          <div className="skeleton-row" style={{ width: "80%" }} />
         </div>
       ) : (
         <EmptyState

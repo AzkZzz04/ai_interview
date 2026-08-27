@@ -82,7 +82,9 @@ To enable Gemini locally, add the following to the untracked `.env` file:
 GEMINI_API_KEY=your-api-key
 AI_CHAT_MODEL=google-genai
 AI_EMBEDDING_MODEL=google-genai
-GEMINI_CHAT_MODEL=gemini-2.5-flash
+GEMINI_CHAT_MODEL=gemini-3.6-flash
+GEMINI_THINKING_LEVEL=medium
+GEMINI_MAX_OUTPUT_TOKENS=4096
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 RAG_EMBEDDING_DIMENSIONS=1024
 RAG_CHUNK_SCHEMA=section-block-v3
