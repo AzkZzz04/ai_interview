@@ -10,8 +10,8 @@ imagePullSecrets: []
 
 api:
   image:
-    repository: ai-interview-api
-    tag: local
+    repository: ghcr.io/azkzzz04/ai-interview-api
+    tag: a30033294c6114c5aea792a084772e598d19af57
     pullPolicy: IfNotPresent
   replicaCount: 1
   service:
@@ -21,16 +21,16 @@ api:
 worker:
   # Workers run the same backend image as the API but only consume durable jobs.
   image:
-    repository: ai-interview-api
-    tag: local
+    repository: ghcr.io/azkzzz04/ai-interview-api
+    tag: a30033294c6114c5aea792a084772e598d19af57
     pullPolicy: IfNotPresent
   replicaCount: 2
   resources: {}
 
 web:
   image:
-    repository: ai-interview-web
-    tag: local
+    repository: ghcr.io/azkzzz04/ai-interview-web
+    tag: a30033294c6114c5aea792a084772e598d19af57
     pullPolicy: IfNotPresent
   replicaCount: 1
   service:
