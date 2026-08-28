@@ -3,6 +3,11 @@
 nameOverride: ""
 fullnameOverride: ""
 
+# GitHub Actions replaces these local image references with immutable GHCR
+# commit-SHA tags after a successful build. Leave imagePullSecrets empty only
+# when the GHCR packages are public.
+imagePullSecrets: []
+
 api:
   image:
     repository: ai-interview-api

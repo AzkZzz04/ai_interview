@@ -248,6 +248,30 @@ kubectl -n argocd wait --for=jsonpath='{.status.health.status}'=Healthy \
 After that initial bootstrap, change `deploy/ai-interview` through Git commits
 and pushes. Do not run `helm upgrade` for this release: Argo CD is the owner.
 
+## GitHub Actions image publishing
+
+The `Build and publish images` workflow builds multi-architecture API and web
+images, pushes them to GitHub Container Registry, and commits the immutable
+source commit SHA to `deploy/ai-interview/values.yaml`. Argo CD then observes
+that values commit and rolls out the corresponding images.
+
+The workflow runs for pushes to `docker-kubernetes-gitops`; its values-only
+commit is ignored by the trigger, preventing a rebuild loop. It uses the
+repository's `GITHUB_TOKEN`, with package-write permission for publishing and
+contents-write permission only for the values update.
+
+For Minikube to pull the resulting GHCR images, make the two GHCR packages
+public in GitHub, or create a `ghcr-pull` image-pull Secret and add it to
+`imagePullSecrets` in `deploy/ai-interview/values.yaml`:
+
+```yaml
+imagePullSecrets:
+  - name: ghcr-pull
+```
+
+The initial `:local` image references remain in the values file until the first
+successful GitHub Actions run writes the real image SHAs.
+
 ## Runtime modes
 
 The same Spring Boot build supports API and worker deployment independently:
