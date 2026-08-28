@@ -250,10 +250,12 @@ and pushes. Do not run `helm upgrade` for this release: Argo CD is the owner.
 
 ## GitHub Actions image publishing
 
-The `Build and publish images` workflow builds multi-architecture API and web
-images, pushes them to GitHub Container Registry, and commits the immutable
-source commit SHA to `deploy/ai-interview/values.yaml`. Argo CD then observes
-that values commit and rolls out the corresponding images.
+The `Build and publish images` workflow first runs `./gradlew check`, then
+installs the frontend dependencies and runs its lint, TypeScript, Vitest, and
+production-build checks. Only when this test gate passes does it build
+multi-architecture API and web images, push them to GitHub Container Registry,
+and commit the immutable source commit SHA to `deploy/ai-interview/values.yaml`.
+Argo CD then observes that values commit and rolls out the corresponding images.
 
 The workflow runs for pushes to `docker-kubernetes-gitops`; its values-only
 commit is ignored by the trigger, preventing a rebuild loop. It uses the
