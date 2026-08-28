@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-interview.fullname" . }}-app
+  labels:
+    {{- include "ai-interview.labels" . | nindent 4 }}
+data:
+  DATABASE_URL: {{ printf "jdbc:postgresql://%s-postgres:%v/%s" (include "ai-interview.fullname" .) .Values.postgres.service.port .Values.postgres.auth.database | quote }}
+  DATABASE_USERNAME: {{ .Values.postgres.auth.username | quote }}
+  REDIS_HOST: {{ printf "%s-redis" (include "ai-interview.fullname" .) | quote }}
+  REDIS_PORT: {{ .Values.redis.service.port | quote }}
+  S3_ENDPOINT: {{ printf "http://%s-localstack:%v" (include "ai-interview.fullname" .) .Values.localstack.service.port | quote }}
+  SQS_ENDPOINT: {{ printf "http://%s-localstack:%v" (include "ai-interview.fullname" .) .Values.localstack.service.port | quote }}
+  S3_REGION: us-east-1
+  SQS_REGION: us-east-1
+  S3_BUCKET: {{ .Values.localstack.s3Bucket | quote }}
+  S3_ACCESS_KEY: test
+  S3_SECRET_KEY: test
+  SQS_ACCESS_KEY: test
+  SQS_SECRET_KEY: test
+  SQS_QUEUE_NAME: {{ .Values.localstack.queueName | quote }}
+  SQS_DLQ_NAME: {{ .Values.localstack.dlqName | quote }}
+  SQS_MAX_RECEIVE_COUNT: {{ .Values.localstack.maxReceiveCount | quote }}
+  JOB_VISIBILITY_TIMEOUT_SECONDS: {{ .Values.localstack.visibilityTimeoutSeconds | quote }}
+  JOB_LONG_POLL_SECONDS: {{ .Values.localstack.longPollSeconds | quote }}
+  JOB_WORKER_CONCURRENCY: {{ .Values.app.workerConcurrency | quote }}
+  JOB_HEARTBEAT_SECONDS: {{ .Values.app.jobHeartbeatSeconds | quote }}
+  JOB_MAX_ATTEMPTS: {{ .Values.app.jobMaxAttempts | quote }}
+  JOB_RETRY_BASE_SECONDS: {{ .Values.app.jobRetryBaseSeconds | quote }}
+  JOB_REUSE_WINDOW_SECONDS: {{ .Values.app.jobReuseWindowSeconds | quote }}
+  JOB_SHUTDOWN_GRACE_SECONDS: {{ .Values.app.shutdownGraceSeconds | quote }}
+  AI_CHAT_MODEL: google-genai
+  AI_EMBEDDING_MODEL: google-genai
+  GEMINI_CHAT_MODEL: {{ .Values.gemini.chatModel | quote }}
+  GEMINI_EMBEDDING_MODEL: {{ .Values.gemini.embeddingModel | quote }}
+  RAG_EMBEDDING_DIMENSIONS: {{ .Values.app.ragEmbeddingDimensions | quote }}
+  RAG_CHUNK_SCHEMA: {{ .Values.app.ragChunkSchema | quote }}

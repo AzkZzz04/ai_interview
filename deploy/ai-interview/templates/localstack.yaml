@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-interview.fullname" . }}-localstack-init
+  labels:
+    {{- include "ai-interview.labels" . | nindent 4 }}
+data:
+  init-resources.sh: |
+    #!/bin/sh
+    set -eu
+    BUCKET_NAME="${S3_BUCKET:-ai-interview}"
+    DLQ_NAME="${SQS_DLQ_NAME:-ai-interview-jobs-dlq}"
+    QUEUE_NAME="${SQS_QUEUE_NAME:-ai-interview-jobs}"
+    MAX_RECEIVE_COUNT="${SQS_MAX_RECEIVE_COUNT:-3}"
+    VISIBILITY_TIMEOUT="${JOB_VISIBILITY_TIMEOUT_SECONDS:-300}"
+    LONG_POLL_SECONDS="${JOB_LONG_POLL_SECONDS:-20}"
+
+    if ! awslocal s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+      awslocal s3api create-bucket --bucket "$BUCKET_NAME"
+    fi
+    if ! DLQ_URL="$(awslocal sqs get-queue-url --queue-name "$DLQ_NAME" --query QueueUrl --output text 2>/dev/null)"; then
+      DLQ_URL="$(awslocal sqs create-queue --queue-name "$DLQ_NAME" --query QueueUrl --output text)"
+    fi
+    DLQ_ARN="$(awslocal sqs get-queue-attributes --queue-url "$DLQ_URL" --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)"
+    QUEUE_ATTRIBUTES="{\"VisibilityTimeout\":\"$VISIBILITY_TIMEOUT\",\"ReceiveMessageWaitTimeSeconds\":\"$LONG_POLL_SECONDS\",\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"$DLQ_ARN\\\",\\\"maxReceiveCount\\\":\\\"$MAX_RECEIVE_COUNT\\\"}\"}"
+    if ! QUEUE_URL="$(awslocal sqs get-queue-url --queue-name "$QUEUE_NAME" --query QueueUrl --output text 2>/dev/null)"; then
+      QUEUE_URL="$(awslocal sqs create-queue --queue-name "$QUEUE_NAME" --query QueueUrl --output text)"
+    fi
+    awslocal sqs set-queue-attributes --queue-url "$QUEUE_URL" --attributes "$QUEUE_ATTRIBUTES"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-interview.fullname" . }}-localstack
+  labels:
+    {{- include "ai-interview.labels" . | nindent 4 }}
+    app.kubernetes.io/component: localstack
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ai-interview.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: localstack
+  ports:
+    - name: edge
+      port: {{ .Values.localstack.service.port }}
+      targetPort: edge
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-interview.fullname" . }}-localstack
+  labels:
+    {{- include "ai-interview.labels" . | nindent 4 }}
+    app.kubernetes.io/component: localstack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ai-interview.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: localstack
+  template:
+    metadata:
+      labels:
+        {{- include "ai-interview.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: localstack
+    spec:
+      containers:
+        - name: localstack
+          image: {{ .Values.localstack.image | quote }}
+          env:
+            - name: SERVICES
+              value: s3,sqs
+            - name: AWS_ACCESS_KEY_ID
+              value: test
+            - name: AWS_SECRET_ACCESS_KEY
+              value: test
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: S3_BUCKET
+              value: {{ .Values.localstack.s3Bucket | quote }}
+            - name: SQS_QUEUE_NAME
+              value: {{ .Values.localstack.queueName | quote }}
+            - name: SQS_DLQ_NAME
+              value: {{ .Values.localstack.dlqName | quote }}
+            - name: SQS_MAX_RECEIVE_COUNT
+              value: {{ .Values.localstack.maxReceiveCount | quote }}
+            - name: JOB_VISIBILITY_TIMEOUT_SECONDS
+              value: {{ .Values.localstack.visibilityTimeoutSeconds | quote }}
+            - name: JOB_LONG_POLL_SECONDS
+              value: {{ .Values.localstack.longPollSeconds | quote }}
+          ports:
+            - name: edge
+              containerPort: 4566
+          volumeMounts:
+            - name: init
+              mountPath: /etc/localstack/init/ready.d
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /_localstack/health
+              port: edge
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: init
+          configMap:
+            name: {{ include "ai-interview.fullname" . }}-localstack-init
+            defaultMode: 0755

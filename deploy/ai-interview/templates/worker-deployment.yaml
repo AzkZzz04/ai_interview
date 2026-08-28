@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-interview.fullname" . }}-worker
+  labels:
+    {{- include "ai-interview.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ai-interview.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      annotations:
+        checksum/app-config: {{ include (print $.Template.BasePath "/app-configmap.yaml") . | sha256sum }}
+        checksum/database-secret: {{ include (print $.Template.BasePath "/database-secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "ai-interview.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      initContainers:
+        - name: wait-for-dependencies
+          image: busybox:1.37
+          command:
+            - sh
+            - -ec
+            - |
+              until nc -z {{ include "ai-interview.fullname" . }}-postgres {{ .Values.postgres.service.port }}; do sleep 2; done
+              until nc -z {{ include "ai-interview.fullname" . }}-redis {{ .Values.redis.service.port }}; do sleep 2; done
+              until nc -z {{ include "ai-interview.fullname" . }}-localstack {{ .Values.localstack.service.port }}; do sleep 2; done
+      containers:
+        - name: worker
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "ai-interview.fullname" . }}-app
+            - secretRef:
+                name: {{ include "ai-interview.fullname" . }}-postgres
+          env:
+            - name: JOB_RUNTIME_MODE
+              value: worker
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "gemini.existingSecret is required" .Values.gemini.existingSecret }}
+                  key: {{ .Values.gemini.existingSecretKey }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
