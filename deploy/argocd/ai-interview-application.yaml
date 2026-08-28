@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/AzkZzz04/ai-interview.git
+    repoURL: https://github.com/AzkZzz04/ai_interview.git
     targetRevision: docker-kubernetes-gitops
     path: deploy/ai-interview
     helm:
