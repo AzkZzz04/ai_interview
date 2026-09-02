@@ -1,0 +1,11 @@
+.git
+.gradle
+.env
+.env.*
+build
+node_modules
+apps/web
+**/node_modules
+**/.next
+**/.next-build
+**/*.tsbuildinfo

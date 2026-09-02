@@ -1,0 +1,11 @@
+The AI Interview Coach is installed into {{ .Release.Namespace }}.
+
+The web image was built with NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8080.
+For local Minikube testing, port-forward both services in separate terminals:
+
+  kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "ai-interview.fullname" . }}-api 8080:{{ .Values.api.service.port }}
+  kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "ai-interview.fullname" . }}-web 3000:{{ .Values.web.service.port }}
+
+Then open http://127.0.0.1:3000.
+
+The worker deployment intentionally has {{ .Values.worker.replicaCount }} replicas and no Service.

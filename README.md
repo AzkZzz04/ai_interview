@@ -126,6 +126,154 @@ npm run dev
 
 Open `http://127.0.0.1:3000`. The backend status endpoint is `http://127.0.0.1:8080/api/status`.
 
+## Container images
+
+The backend image accepts the same environment variables as a local Spring Boot
+run. `JOB_RUNTIME_MODE=api` and `JOB_RUNTIME_MODE=worker` can therefore use the
+same image when the API and worker are deployed separately. Create `.env` from
+`.env.example` and configure `GEMINI_API_KEY` before starting the API container.
+
+Build both images from the repository root:
+
+```bash
+docker build -t ai-interview-api:local .
+docker build -t ai-interview-web:local apps/web
+```
+
+For a manual local container run, first start the managed dependencies:
+
+```bash
+docker compose --profile managed-postgres up -d
+```
+
+Then run the API. These `host.docker.internal` addresses let the API container
+reach the dependencies that Compose exposes on the host; they work with Docker
+Desktop on macOS and Windows.
+
+```bash
+docker run --rm --name ai-interview-api -p 8080:8080 --env-file .env \
+  -e JOB_RUNTIME_MODE=all \
+  -e DATABASE_URL=jdbc:postgresql://host.docker.internal:55432/ai_interview \
+  -e DATABASE_USERNAME=ai_interview \
+  -e DATABASE_PASSWORD=ai_interview \
+  -e REDIS_HOST=host.docker.internal \
+  -e REDIS_PORT=6380 \
+  -e S3_ENDPOINT=http://host.docker.internal:4566 \
+  -e SQS_ENDPOINT=http://host.docker.internal:4566 \
+  ai-interview-api:local
+```
+
+Build the web image with the browser-visible API address, then serve it:
+
+```bash
+docker build \
+  --build-arg NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8080 \
+  -t ai-interview-web:local apps/web
+docker run --rm --name ai-interview-web -p 3000:3000 ai-interview-web:local
+```
+
+Open `http://127.0.0.1:3000`, then verify the backend independently with
+`curl http://127.0.0.1:8080/api/status`. On Linux, replace
+`host.docker.internal` with a host gateway address or place the API and its
+dependencies on a shared Docker network.
+
+## Minikube and Helm
+
+The local Helm chart at `deploy/ai-interview` deploys the web app, one API pod,
+two worker pods, PostgreSQL with pgvector, Redis, and LocalStack. It is a
+development chart: the default PostgreSQL password is intentionally local-only,
+while the Gemini key must be supplied separately as a Kubernetes Secret.
+
+Load the Docker images into the running Minikube cluster, create the Secret,
+then install the chart:
+
+```bash
+minikube image load ai-interview-api:local
+minikube image load ai-interview-web:local
+
+kubectl create namespace ai-interview --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n ai-interview create secret generic ai-interview-gemini \
+  --from-literal=GEMINI_API_KEY='your-api-key'
+
+helm upgrade --install ai-interview ./deploy/ai-interview \
+  --namespace ai-interview
+```
+
+Check the release and wait for all pods to become ready:
+
+```bash
+helm -n ai-interview status ai-interview
+kubectl -n ai-interview get pods
+kubectl -n ai-interview rollout status deployment/ai-interview-api
+kubectl -n ai-interview rollout status deployment/ai-interview-worker
+kubectl -n ai-interview rollout status deployment/ai-interview-web
+```
+
+The frontend image uses `http://127.0.0.1:8080` as its browser-visible API
+address, so port-forward both services during this local phase:
+
+```bash
+kubectl -n ai-interview port-forward service/ai-interview-api 8080:8080
+kubectl -n ai-interview port-forward service/ai-interview-web 3000:3000
+```
+
+Open `http://127.0.0.1:3000`. An Ingress or same-origin web proxy is the next
+step before exposing this deployment beyond local Minikube.
+
+## Argo CD GitOps
+
+After Argo CD is installed, it can render and continuously reconcile the same
+Helm chart from Git. The Application manifest tracks the
+`docker-kubernetes-gitops` branch, deploys into `ai-interview`, and uses the
+same Helm release name. Its automated policy self-heals drift and prunes
+resources removed from the chart.
+
+The chart deliberately references an existing `ai-interview-gemini` Secret;
+do not commit the Gemini API key to Git. Create that Secret in Minikube before
+the first Argo CD sync, as shown in the Helm section above.
+
+First push this branch so Argo CD can fetch the chart, then bootstrap the
+Application:
+
+```bash
+git push -u origin docker-kubernetes-gitops
+kubectl apply -f deploy/argocd/ai-interview-application.yaml
+kubectl -n argocd get application ai-interview
+kubectl -n argocd wait --for=jsonpath='{.status.sync.status}'=Synced \
+  application/ai-interview --timeout=5m
+kubectl -n argocd wait --for=jsonpath='{.status.health.status}'=Healthy \
+  application/ai-interview --timeout=5m
+```
+
+After that initial bootstrap, change `deploy/ai-interview` through Git commits
+and pushes. Do not run `helm upgrade` for this release: Argo CD is the owner.
+
+## GitHub Actions image publishing
+
+The `Build and publish images` workflow first runs `./gradlew check`, then
+installs the frontend dependencies and runs its lint, TypeScript, Vitest, and
+production-build checks. Only when this test gate passes does it build
+multi-architecture API and web images, push them to GitHub Container Registry,
+and commit the immutable source commit SHA to `deploy/ai-interview/values.yaml`.
+Argo CD then observes that values commit and rolls out the corresponding images.
+
+The workflow runs for pushes to `docker-kubernetes-gitops`; its values-only
+commit is ignored by the trigger, preventing a rebuild loop. It uses the
+repository's `GITHUB_TOKEN`, with package-write permission for publishing and
+contents-write permission only for the values update.
+
+For Minikube to pull the resulting GHCR images, make the two GHCR packages
+public in GitHub, or create a `ghcr-pull` image-pull Secret and add it to
+`imagePullSecrets` in `deploy/ai-interview/values.yaml`:
+
+```yaml
+imagePullSecrets:
+  - name: ghcr-pull
+```
+
+The initial `:local` image references remain in the values file until the first
+successful GitHub Actions run writes the real image SHAs.
+
 ## Runtime modes
 
 The same Spring Boot build supports API and worker deployment independently:

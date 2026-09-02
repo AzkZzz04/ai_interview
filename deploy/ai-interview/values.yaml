@@ -1,0 +1,87 @@
+# This chart is intentionally configured for a local Minikube cluster. Load the
+# two :local images into Minikube before installing it.
+nameOverride: ""
+fullnameOverride: ""
+
+# GitHub Actions replaces these local image references with immutable GHCR
+# commit-SHA tags after a successful build. Leave imagePullSecrets empty only
+# when the GHCR packages are public.
+imagePullSecrets: []
+
+api:
+  image:
+    repository: ghcr.io/azkzzz04/ai-interview-api
+    tag: a30033294c6114c5aea792a084772e598d19af57
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 8080
+  resources: {}
+
+worker:
+  # Workers run the same backend image as the API but only consume durable jobs.
+  image:
+    repository: ghcr.io/azkzzz04/ai-interview-api
+    tag: a30033294c6114c5aea792a084772e598d19af57
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources: {}
+
+web:
+  image:
+    repository: ghcr.io/azkzzz04/ai-interview-web
+    tag: a30033294c6114c5aea792a084772e598d19af57
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    port: 3000
+  resources: {}
+
+# The Gemini key is never rendered by this chart. Create this Secret before
+# installation, with the key named GEMINI_API_KEY.
+gemini:
+  existingSecret: ai-interview-gemini
+  existingSecretKey: GEMINI_API_KEY
+  chatModel: gemini-3.6-flash
+  embeddingModel: gemini-embedding-001
+
+postgres:
+  image: pgvector/pgvector:pg16
+  auth:
+    database: ai_interview
+    username: ai_interview
+    # Development-only credential for the local Minikube database. Override it
+    # before using this chart outside a disposable local cluster.
+    password: ai_interview
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+
+redis:
+  image: redis:7.4-alpine
+  service:
+    port: 6379
+
+localstack:
+  image: localstack/localstack:3
+  service:
+    port: 4566
+  s3Bucket: ai-interview
+  queueName: ai-interview-jobs
+  dlqName: ai-interview-jobs-dlq
+  maxReceiveCount: 3
+  visibilityTimeoutSeconds: 300
+  longPollSeconds: 20
+
+app:
+  ragEmbeddingDimensions: 1024
+  ragChunkSchema: section-block-v3
+  workerConcurrency: 2
+  jobHeartbeatSeconds: 60
+  jobMaxAttempts: 3
+  jobRetryBaseSeconds: 15
+  jobReuseWindowSeconds: 300
+  shutdownGraceSeconds: 120

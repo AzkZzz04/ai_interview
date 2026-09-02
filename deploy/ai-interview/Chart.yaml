@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ai-interview
+description: Local Kubernetes deployment for the AI Interview Coach
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
