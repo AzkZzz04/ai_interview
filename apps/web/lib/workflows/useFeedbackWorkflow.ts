@@ -45,7 +45,7 @@ export function useFeedbackWorkflow(options: Options) {
     if (polling.terminalError) {
       setIsSubmittingAnswer(false);
       if (pending && contextMatches(current.questionSetIdRef.current, pending)) {
-        current.setFeedback(pending.questionId, scoreAnswer(pending.answer));
+        current.setFeedback(pending.questionId, scoreAnswer(pending.answer, pending.payload.seniority));
         current.setNotice(`Feedback job could not be recovered: ${friendlyError(polling.terminalError)} Local draft feedback is shown.`);
       }
       else {
@@ -79,7 +79,7 @@ export function useFeedbackWorkflow(options: Options) {
       polling.finish();
       return;
     }
-    current.setFeedback(pending.questionId, scoreAnswer(pending.answer));
+    current.setFeedback(pending.questionId, scoreAnswer(pending.answer, pending.payload.seniority));
     current.setNotice(`Gemini feedback unavailable: ${friendlyError(job.error)} Local draft feedback is shown.`);
     polling.finish();
   }, [optionsRef, polling.activeJobId, polling.connectionError, polling.context, polling.finish, polling.generation, polling.job, polling.restored, polling.terminalError]);

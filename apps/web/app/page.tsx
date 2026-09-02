@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Sparkles
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AssessmentPanel } from "@/components/AssessmentPanel";
 import { InterviewPracticePanel } from "@/components/InterviewPracticePanel";
 import { ResumeInputPanel } from "@/components/ResumeInputPanel";
@@ -22,6 +22,7 @@ import type { JobInputRefs } from "@/lib/api/jobs";
 import type { ResumeUploadResponse } from "@/lib/api/resumes";
 import { friendlyError } from "@/lib/errorMessages";
 import { createGenerationToken } from "@/lib/jobWorkflow";
+import { useScrollSpy } from "@/lib/useScrollSpy";
 import {
   AnswerFeedback,
   Assessment,
@@ -50,7 +51,10 @@ Java, Spring Boot, PostgreSQL, Redis, Next.js, TypeScript, observability
 EDUCATION
 B.S. Computer Science`;
 
+const navSections = ["resume", "assessment", "interview"];
+
 export default function Home() {
+  const activeSection = useScrollSpy(navSections, "resume");
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [resumeText, setResumeText] = useState(starterResume);
   const [resumeEvidenceSource, setResumeEvidenceSource] = useState<ResumeEvidenceSource | null>(null);
@@ -127,6 +131,26 @@ export default function Home() {
     analysisWorkflow.isAnalyzing ||
     feedbackWorkflow.isSubmittingAnswer
   );
+
+  // On narrow screens the results live far below the input panel, so a finished
+  // analysis would otherwise land entirely off-screen.
+  const hadAssessmentRef = useRef(false);
+  useEffect(() => {
+    const arrived = Boolean(assessment) && !hadAssessmentRef.current;
+    hadAssessmentRef.current = Boolean(assessment);
+    if (!arrived || typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+    if (!window.matchMedia("(max-width: 1180px)").matches) {
+      return;
+    }
+    const target = document.getElementById("assessment");
+    if (!target || typeof target.scrollIntoView !== "function") {
+      return;
+    }
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  }, [assessment]);
 
   const activeQuestion = useMemo(
     () => questions.find((question) => question.id === activeQuestionId) ?? questions[0],
@@ -243,7 +267,7 @@ export default function Home() {
       ) {
         return;
       }
-      setFeedbackForQuestion(pending.questionId, scoreAnswer(pending.answer));
+      setFeedbackForQuestion(pending.questionId, scoreAnswer(pending.answer, pending.payload.seniority));
       analysisWorkflow.setNotice(
         `Gemini feedback unavailable: ${friendlyError(error)} Local draft feedback is shown.`
       );
@@ -366,15 +390,27 @@ export default function Home() {
         </div>
 
         <nav className="nav-list" aria-label="Primary">
-          <a className="nav-item active" href="#resume">
+          <a
+            className={`nav-item ${activeSection === "resume" ? "active" : ""}`}
+            href="#resume"
+            aria-current={activeSection === "resume" ? "true" : undefined}
+          >
             <FileText size={18} aria-hidden="true" />
             Resume
           </a>
-          <a className="nav-item" href="#assessment">
+          <a
+            className={`nav-item ${activeSection === "assessment" ? "active" : ""}`}
+            href="#assessment"
+            aria-current={activeSection === "assessment" ? "true" : undefined}
+          >
             <Gauge size={18} aria-hidden="true" />
             Assessment
           </a>
-          <a className="nav-item" href="#interview">
+          <a
+            className={`nav-item ${activeSection === "interview" ? "active" : ""}`}
+            href="#interview"
+            aria-current={activeSection === "interview" ? "true" : undefined}
+          >
             <MessageSquareText size={18} aria-hidden="true" />
             Interview
           </a>
@@ -408,7 +444,7 @@ export default function Home() {
           </button>
         </header>
 
-        <section className="layout-grid" id="resume">
+        <section className="layout-grid">
           <ResumeInputPanel
             uploadedResume={uploadWorkflow.uploadedResume}
             extractionProgress={uploadWorkflow.extractionProgress}
@@ -418,6 +454,8 @@ export default function Home() {
             resumeText={resumeText}
             jobDescription={jobDescription}
             analysisNotice={analysisWorkflow.notice}
+            analysisStage={analysisWorkflow.stage}
+            analysisElapsedSeconds={analysisWorkflow.elapsedSeconds}
             isAnalyzing={analysisWorkflow.isAnalyzing}
             isUploadingResume={uploadWorkflow.isUploadingResume}
             resumeTextareaRef={resumeTextareaRef}
@@ -435,6 +473,7 @@ export default function Home() {
               targetRole={assessmentTargetRole}
               seniority={assessmentSeniority}
               assessment={assessment}
+              isAnalyzing={analysisWorkflow.isAnalyzing}
               evidenceResumeText={evidenceResumeText}
               evidenceJobDescription={evidenceJobDescription}
               evidenceResumeChunks={evidenceResumeChunks}
@@ -445,6 +484,7 @@ export default function Home() {
               answer={answer}
               answerFeedback={answerFeedback}
               isSubmittingAnswer={feedbackWorkflow.isSubmittingAnswer}
+              isAnalyzing={analysisWorkflow.isAnalyzing}
               evidenceResumeText={evidenceResumeText}
               evidenceJobDescription={evidenceJobDescription}
               evidenceResumeChunks={evidenceResumeChunks}

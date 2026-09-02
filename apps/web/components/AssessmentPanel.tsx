@@ -19,6 +19,7 @@ export function AssessmentPanel({
   targetRole,
   seniority,
   assessment,
+  isAnalyzing = false,
   evidenceResumeText,
   evidenceJobDescription,
   evidenceResumeChunks
@@ -26,6 +27,7 @@ export function AssessmentPanel({
   targetRole: string;
   seniority: string;
   assessment: Assessment | null;
+  isAnalyzing?: boolean;
   evidenceResumeText?: string;
   evidenceJobDescription?: string;
   evidenceResumeChunks?: EvidenceChunk[];
@@ -37,7 +39,10 @@ export function AssessmentPanel({
           <p className="eyebrow">{targetRole} · {seniority}</p>
           <h2>Assessment</h2>
         </div>
-        <div className="score-ring" aria-label={`Overall score ${assessment?.overallScore ?? 0}`}>
+        <div
+          className={`score-ring ${assessment ? "scored" : ""}`}
+          aria-label={`Overall score ${assessment?.overallScore ?? 0}`}
+        >
           {assessment?.overallScore ?? "--"}
         </div>
       </div>
@@ -82,6 +87,13 @@ export function AssessmentPanel({
             resumeChunks={evidenceResumeChunks}
           />
         </>
+      ) : isAnalyzing ? (
+        <div className="skeleton" aria-hidden="true">
+          <div className="skeleton-block" />
+          <div className="skeleton-row" style={{ width: "70%" }} />
+          <div className="skeleton-row" style={{ width: "85%" }} />
+          <div className="skeleton-row" style={{ width: "55%" }} />
+        </div>
       ) : (
         <EmptyState
           icon={<BarChart3 size={24} aria-hidden="true" />}

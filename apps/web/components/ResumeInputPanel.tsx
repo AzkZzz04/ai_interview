@@ -3,6 +3,9 @@
 import { ArrowRight, FileText, Loader2, Sparkles, Upload } from "lucide-react";
 import type { ChangeEvent, RefObject } from "react";
 
+import { JobProgress } from "@/components/JobProgress";
+import { SENIORITY_OPTIONS, seniorityFocus } from "@/lib/seniority";
+
 export type UploadedResume = {
   name: string;
   size: number;
@@ -25,6 +28,8 @@ type ResumeInputPanelProps = {
   resumeText: string;
   jobDescription: string;
   analysisNotice: string | null;
+  analysisStage: string | null;
+  analysisElapsedSeconds: number;
   isAnalyzing: boolean;
   isUploadingResume: boolean;
   resumeTextareaRef: RefObject<HTMLTextAreaElement>;
@@ -46,6 +51,8 @@ export function ResumeInputPanel({
   resumeText,
   jobDescription,
   analysisNotice,
+  analysisStage,
+  analysisElapsedSeconds,
   isAnalyzing,
   isUploadingResume,
   resumeTextareaRef,
@@ -58,16 +65,17 @@ export function ResumeInputPanel({
   onRunAssessment
 }: ResumeInputPanelProps) {
   return (
-    <div className="panel input-panel">
+    <div className="panel input-panel" id="resume">
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Resume input</p>
           <h2>Source material</h2>
         </div>
-        <label className="icon-button" title="Upload resume">
+        <label className="icon-button">
           <Upload size={18} aria-hidden="true" />
           <input
             type="file"
+            aria-label="Upload resume"
             accept=".pdf,.doc,.docx,.txt,.text,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
             onChange={onResumeUpload}
             disabled={isUploadingResume || isAnalyzing}
@@ -102,15 +110,11 @@ export function ResumeInputPanel({
       ) : null}
 
       {isUploadingResume && extractionProgress ? (
-        <div className="upload-progress" role="status" aria-live="polite">
-          <div className="upload-progress-header">
-            <strong>{extractionProgress.stage}</strong>
-            <span>{elapsedSeconds}s</span>
-          </div>
-          <div className="progress-track indeterminate" aria-label="Resume extraction is in progress">
-            <span />
-          </div>
-        </div>
+        <JobProgress
+          stage={extractionProgress.stage}
+          elapsedSeconds={elapsedSeconds}
+          label="Resume extraction is in progress"
+        />
       ) : null}
 
       <label className="field">
@@ -125,15 +129,16 @@ export function ResumeInputPanel({
       <label className="field">
         <span>Seniority</span>
         <select
+          aria-label="Seniority"
           value={seniority}
           onChange={(event) => onSeniorityChange(event.target.value)}
           disabled={isAnalyzing}
         >
-          <option>Entry-level</option>
-          <option>Mid-level</option>
-          <option>Senior</option>
-          <option>Staff+</option>
+          {SENIORITY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.value}</option>
+          ))}
         </select>
+        <span aria-live="polite">{seniorityFocus(seniority)}</span>
       </label>
 
       <label className="field">
@@ -162,6 +167,14 @@ export function ResumeInputPanel({
           disabled={isAnalyzing}
         />
       </label>
+
+      {isAnalyzing && analysisStage ? (
+        <JobProgress
+          stage={analysisStage}
+          elapsedSeconds={analysisElapsedSeconds}
+          label="Resume analysis is in progress"
+        />
+      ) : null}
 
       {analysisNotice ? (
         <div className="ai-notice" role="status">

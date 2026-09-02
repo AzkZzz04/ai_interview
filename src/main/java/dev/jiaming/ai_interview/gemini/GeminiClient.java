@@ -54,6 +54,8 @@ public class GeminiClient implements StructuredGenerationClient {
 
 	private final int thinkingBudget;
 
+	private final String thinkingLevel;
+
 	@Autowired
 	public GeminiClient(ObjectMapper objectMapper, Environment environment, MeterRegistry meterRegistry) {
 		this(
@@ -62,11 +64,12 @@ public class GeminiClient implements StructuredGenerationClient {
 			meterRegistry,
 			DEFAULT_BASE_URL,
 			environment.getProperty("spring.ai.google.genai.api-key", ""),
-			environment.getProperty("spring.ai.google.genai.chat.options.model", "gemini-2.5-flash"),
+			environment.getProperty("spring.ai.google.genai.chat.options.model", "gemini-3.6-flash"),
 			environment.getProperty("spring.ai.google.genai.chat.options.temperature", Double.class, 0.2),
 			Duration.ofSeconds(environment.getProperty("app.gemini.request-timeout-seconds", Long.class, 90L)),
-			environment.getProperty("app.gemini.max-output-tokens", Integer.class, 2_048),
-			environment.getProperty("app.gemini.thinking-budget", Integer.class, 0)
+			environment.getProperty("app.gemini.max-output-tokens", Integer.class, 4_096),
+			environment.getProperty("app.gemini.thinking-budget", Integer.class, 0),
+			environment.getProperty("app.gemini.thinking-level", "medium")
 		);
 	}
 
@@ -82,6 +85,34 @@ public class GeminiClient implements StructuredGenerationClient {
 		int maxOutputTokens,
 		int thinkingBudget
 	) {
+		this(
+			objectMapper,
+			transport,
+			meterRegistry,
+			baseUrl,
+			apiKey,
+			model,
+			temperature,
+			requestTimeout,
+			maxOutputTokens,
+			thinkingBudget,
+			"medium"
+		);
+	}
+
+	GeminiClient(
+		ObjectMapper objectMapper,
+		GeminiTransport transport,
+		MeterRegistry meterRegistry,
+		String baseUrl,
+		String apiKey,
+		String model,
+		double temperature,
+		Duration requestTimeout,
+		int maxOutputTokens,
+		int thinkingBudget,
+		String thinkingLevel
+	) {
 		this.objectMapper = objectMapper;
 		this.transport = transport;
 		this.meterRegistry = meterRegistry;
@@ -92,6 +123,7 @@ public class GeminiClient implements StructuredGenerationClient {
 		this.requestTimeout = requestTimeout;
 		this.maxOutputTokens = maxOutputTokens;
 		this.thinkingBudget = thinkingBudget;
+		this.thinkingLevel = thinkingLevel;
 	}
 
 	@Override
@@ -151,9 +183,14 @@ public class GeminiClient implements StructuredGenerationClient {
 
 	private Map<String, Object> generationConfig() {
 		Map<String, Object> generationConfig = new LinkedHashMap<>();
-		generationConfig.put("temperature", temperature);
 		generationConfig.put("responseMimeType", "application/json");
 		generationConfig.put("maxOutputTokens", maxOutputTokens);
+		if (model.startsWith("gemini-3.")) {
+			generationConfig.put("thinkingConfig", Map.of("thinkingLevel", thinkingLevel));
+		}
+		else {
+			generationConfig.put("temperature", temperature);
+		}
 		if (model.startsWith("gemini-2.5")) {
 			generationConfig.put("thinkingConfig", Map.of("thinkingBudget", thinkingBudget));
 		}

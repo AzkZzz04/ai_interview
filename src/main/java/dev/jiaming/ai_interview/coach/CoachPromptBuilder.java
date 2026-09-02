@@ -10,6 +10,7 @@ public class CoachPromptBuilder {
 	private static final int ANSWER_PROMPT_LIMIT = 4_000;
 
 	public String buildAssessmentPrompt(CoachAnalysisInput input, CoachRagContext context) {
+		SenioritySettings settings = SenioritySettings.forValue(input.seniority());
 		return """
 			You are a senior technical recruiter and engineering interviewer.
 			Assess this tech resume for the target role using only the retrieved context below.
@@ -38,17 +39,20 @@ public class CoachPromptBuilder {
 
 			Target role: %s
 			Seniority: %s
+			Seniority calibration: %s
 
 			Retrieved context:
 			%s
 			""".formatted(
 			fallback(input.targetRole(), "Software Engineer"),
 			fallback(input.seniority(), "Mid-level"),
+			settings.assessmentGuidance(),
 			context.context()
 		);
 	}
 
 	public String buildQuestionPrompt(CoachAnalysisInput input, CoachRagContext context) {
+		SenioritySettings settings = SenioritySettings.forValue(input.seniority());
 		return """
 			You are generating a technical interview set for a candidate.
 			Use only the retrieved resume and job-description context below.
@@ -73,17 +77,20 @@ public class CoachPromptBuilder {
 
 			Target role: %s
 			Seniority: %s
+			Seniority calibration: %s
 
 			Retrieved context:
 			%s
 			""".formatted(
 			fallback(input.targetRole(), "Software Engineer"),
 			fallback(input.seniority(), "Mid-level"),
+			settings.questionGuidance(),
 			context.context()
 		);
 	}
 
 	public String buildFeedbackPrompt(CoachFeedbackInput input, CoachRagContext context) {
+		SenioritySettings settings = SenioritySettings.forValue(input.seniority());
 		return """
 			You are coaching a candidate after one interview answer.
 			Score the answer against the question, expected signals, and retrieved context. Be specific and actionable.
@@ -105,6 +112,7 @@ public class CoachPromptBuilder {
 
 			Target role: %s
 			Seniority: %s
+			Seniority calibration: %s
 			Question category: %s
 			Question: %s
 			Expected signals: %s
@@ -117,6 +125,7 @@ public class CoachPromptBuilder {
 			""".formatted(
 			fallback(input.targetRole(), "Software Engineer"),
 			fallback(input.seniority(), "Mid-level"),
+			settings.feedbackGuidance(),
 			fallback(input.category(), "Interview"),
 			fallback(input.questionText(), ""),
 			String.join(", ", safeList(input.expectedSignals())),
