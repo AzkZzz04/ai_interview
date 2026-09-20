@@ -4,10 +4,6 @@ import java.util.Map;
 
 public interface ObjectStorageService {
 
-	default StoredObject put(String key, byte[] content, String contentType, Map<String, String> metadata) {
-		return put(key, content, contentType, metadata, Map.of());
-	}
-
 	StoredObject put(
 		String key,
 		byte[] content,
