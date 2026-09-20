@@ -17,31 +17,49 @@ Built as a reliable modular monolith: Spring Boot handles the API and asynchrono
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
   Candidate["Candidate"] --> Web["Next.js web app"]
-  Web --> API["Spring Boot API"]
+  Web --> API["Spring Boot API\napi or all mode"]
+  API --> Guard["Redis request guard\nrate limit + idempotency"]
 
-  API --> Postgres["PostgreSQL + pgvector\nresources · jobs · results · vectors"]
-  API --> S3["S3 / LocalStack\nuploaded resumes"]
-  API --> Queue["SQS / LocalStack\njobId wake-up"]
-  API --> Redis["Redis\nrate limits + idempotency"]
+  API -->|"upload original file"| S3["S3 / LocalStack"]
+  API -->|"resolve supplied IDs or text"| Refs["Document reference resolver\nready resources + content hashes"]
+  Refs --> Store[("PostgreSQL + pgvector\ndocuments · jobs · checkpoints · effects")]
+  API -->|"create or reuse job in one transaction"| Store
+  API -->|"after commit: jobId only"| Queue["SQS / LocalStack"]
 
-  Queue --> Worker["Spring Boot worker\ntyped job handlers"]
-  Worker --> Postgres
-  Worker --> S3
-  Worker --> RAG["RAG context builder\nsection chunks + RRF"]
-  RAG --> Postgres
-  RAG --> Gemini["Gemini 2.5 Flash\nstructured generation"]
-  Gemini --> Worker
+  Queue --> Worker["Spring Boot worker\nworker or all mode"]
+  Worker -->|"claim PostgreSQL lease"| Store
+  Worker --> Handler{"Typed job handler"}
+
+  Handler --> Extract["RESUME_EXTRACTION\nread · extract · normalize · chunk"]
+  Extract -->|"read pending file"| S3
+  Extract -->|"mark resume ready"| Store
+
+  Handler --> Analysis["ANALYSIS\nassessment + questions"]
+  Handler --> Feedback["ANSWER_FEEDBACK\nscore practice answer"]
+  Analysis -->|"strict document references"| Refs
+  Feedback -->|"strict document references"| Refs
+  Analysis --> RAG["RAG index + context builder\nsection-block-v3 · per-source RRF"]
+  Feedback --> RAG
+  RAG <-->|"embeddings and retrieval"| Store
+  RAG -->|"grounded context"| Gemini["Gemini 3.6 Flash\nstructured generation"]
+  Analysis -->|"assessment and questions"| Gemini
+  Feedback -->|"answer feedback"| Gemini
+  Gemini -->|"structured output"| Worker
+
+  Worker -->|"stages · checkpoints · results"| Store
+  Web -->|"poll job status"| API
+  API -->|"return result or error"| Store
 ```
 
 ### Request flow
 
-1. The API stores an uploaded resume, creates a durable PostgreSQL job, and sends only its `jobId` to SQS.
-2. A worker claims the job through a PostgreSQL lease, extracts text, creates section-aware chunks, and persists progress checkpoints.
-3. For long documents, RAG retrieves Resume and JD evidence independently, then merges candidates with deterministic Reciprocal Rank Fusion (RRF).
-4. Gemini receives selected, traceable evidence and returns structured assessment, interview questions, or answer feedback.
-5. The frontend polls job status until results are complete, partial, or failed.
+1. The API rate-limits and deduplicates requests, then resolves a ready resume and optional job description to validated, content-hashed document references.
+2. It atomically creates or reuses a durable job in PostgreSQL; only after that transaction commits does the dispatcher send its `jobId` to SQS.
+3. A worker claims the PostgreSQL lease and invokes the handler for extraction, analysis, or answer feedback. It records stages and reusable checkpoints as it runs.
+4. Analysis and feedback handlers reload their document references strictly, build or reuse RAG indexes, retrieve Resume and JD evidence independently, and merge candidates with deterministic Reciprocal Rank Fusion (RRF).
+5. Gemini receives selected, traceable evidence and returns structured output; the worker persists effects and results while the frontend polls job status until it is complete, partial, or failed.
 
 PostgreSQL is the source of truth for job state. SQS wakes workers; it does not carry document content or determine job completion.
 
@@ -59,7 +77,7 @@ PostgreSQL is the source of truth for job state. SQS wakes workers; it does not 
 | --- | --- |
 | Backend | Java, Spring Boot, Gradle, JdbcTemplate, Flyway |
 | Frontend | Next.js, TypeScript |
-| AI | Gemini 2.5 Flash, structured JSON generation |
+| AI | Gemini 3.6 Flash, structured JSON generation |
 | Retrieval | PostgreSQL, pgvector, Gemini embeddings |
 | Async workflow | AWS SQS + DLQ, PostgreSQL leases/checkpoints |
 | Storage | S3-compatible storage via LocalStack |
