@@ -25,15 +25,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       initContainers:
-        - name: wait-for-dependencies
-          image: busybox:1.37
-          command:
-            - sh
-            - -ec
-            - |
-              until nc -z {{ include "ai-interview.fullname" . }}-postgres {{ .Values.postgres.service.port }}; do sleep 2; done
-              until nc -z {{ include "ai-interview.fullname" . }}-redis {{ .Values.redis.service.port }}; do sleep 2; done
-              until nc -z {{ include "ai-interview.fullname" . }}-localstack {{ .Values.localstack.service.port }}; do sleep 2; done
+        {{- include "ai-interview.waitForDependencies" . | nindent 8 }}
       containers:
         - name: worker
           image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
