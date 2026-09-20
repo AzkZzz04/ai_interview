@@ -8,18 +8,6 @@ public class GeminiException extends RuntimeException {
 
 	private final boolean retryable;
 
-	public GeminiException(String message) {
-		this(GeminiErrorCode.UPSTREAM_ERROR, message, null, null, true);
-	}
-
-	public GeminiException(String message, Throwable cause) {
-		this(GeminiErrorCode.UPSTREAM_ERROR, message, cause, null, true);
-	}
-
-	public GeminiException(String message, int statusCode, boolean retryable) {
-		this(codeForStatus(statusCode), message, null, statusCode, retryable);
-	}
-
 	public GeminiException(String code, String message, boolean retryable) {
 		this(code, message, null, null, retryable);
 	}
@@ -49,9 +37,5 @@ public class GeminiException extends RuntimeException {
 
 	public boolean retryable() {
 		return retryable;
-	}
-
-	private static String codeForStatus(int statusCode) {
-		return statusCode == 429 ? GeminiErrorCode.RATE_LIMITED : GeminiErrorCode.UPSTREAM_ERROR;
 	}
 }
