@@ -14,14 +14,4 @@ public record CoachAnalysisInput(
 		jobDescription = jobDescription == null ? Optional.empty() : jobDescription;
 	}
 
-	public AiAnalysisRequest asRequest() {
-		return new AiAnalysisRequest(
-			resume.resourceId(),
-			resume.normalizedText(),
-			jobDescription.map(ResolvedDocument::resourceId).orElse(null),
-			jobDescription.map(ResolvedDocument::normalizedText).orElse(""),
-			targetRole,
-			seniority
-		);
-	}
 }

@@ -20,18 +20,4 @@ public record CoachFeedbackInput(
 		expectedSignals = expectedSignals == null ? List.of() : List.copyOf(expectedSignals);
 	}
 
-	public AnswerFeedbackRequest asRequest() {
-		return new AnswerFeedbackRequest(
-			resume.resourceId(),
-			resume.normalizedText(),
-			jobDescription.map(ResolvedDocument::resourceId).orElse(null),
-			jobDescription.map(ResolvedDocument::normalizedText).orElse(""),
-			targetRole,
-			seniority,
-			questionText,
-			category,
-			expectedSignals,
-			answerText
-		);
-	}
 }
