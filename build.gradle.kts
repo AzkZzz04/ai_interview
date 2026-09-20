@@ -43,7 +43,6 @@ dependencies {
 	implementation("org.apache.tika:tika-parsers-standard-package:3.2.3")
 	implementation("software.amazon.awssdk:s3")
 	implementation("software.amazon.awssdk:sqs")
-	implementation("software.amazon.awssdk:apache-client")
 	runtimeOnly("org.postgresql:postgresql")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
 	testImplementation(kotlin("test"))
