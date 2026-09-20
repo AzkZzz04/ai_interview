@@ -14,6 +14,18 @@ export type JobStage =
   | "SCORING_ANSWER"
   | "COMPLETED";
 
+const JOB_STAGE_LABELS: Record<JobStage, string> = {
+  QUEUED: "Queued for a worker",
+  READING_FILE: "Reading the resume from object storage",
+  EXTRACTING_TEXT: "Extracting document text",
+  NORMALIZING_TEXT: "Normalizing sections and whitespace",
+  CHUNKING_TEXT: "Building resume sections for retrieval",
+  ASSESSING_RESUME: "Scoring the resume with Gemini",
+  GENERATING_QUESTIONS: "Generating interview questions",
+  SCORING_ANSWER: "Evaluating the interview answer",
+  COMPLETED: "Completed"
+};
+
 export type JobAcceptedResponse = {
   jobId: string;
   jobType: JobType;
@@ -66,6 +78,10 @@ export class JobApiError extends Error {
 
 export function isTerminalJob(status: JobStatus) {
   return status === "SUCCEEDED" || status === "PARTIAL" || status === "FAILED";
+}
+
+export function jobStageLabel(stage: JobStage) {
+  return JOB_STAGE_LABELS[stage];
 }
 
 export async function getJob<TResult>(

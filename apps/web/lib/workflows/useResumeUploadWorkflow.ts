@@ -3,7 +3,7 @@
 import { ChangeEvent, MutableRefObject, RefObject, useEffect, useRef, useState } from "react";
 import type { ExtractionProgress, UploadedResume } from "@/components/ResumeInputPanel";
 import { friendlyError } from "@/lib/errorMessages";
-import { isTerminalJob, JobStage } from "@/lib/api/jobs";
+import { isTerminalJob, jobStageLabel } from "@/lib/api/jobs";
 import { getCurrentResume, ResumeUploadResponse, uploadResume } from "@/lib/api/resumes";
 import { useJobPolling } from "@/lib/useJobPolling";
 import type { ResumeJobContext } from "@/lib/workflows/types";
@@ -297,19 +297,4 @@ function readTextFile(file: File) {
 
 function extractionErrorMessage(error: unknown) {
   return friendlyError(error, "Could not extract text from this resume");
-}
-
-function jobStageLabel(stage: JobStage) {
-  const labels: Record<JobStage, string> = {
-    QUEUED: "Queued for a worker",
-    READING_FILE: "Reading the resume from object storage",
-    EXTRACTING_TEXT: "Extracting document text",
-    NORMALIZING_TEXT: "Normalizing sections and whitespace",
-    CHUNKING_TEXT: "Building resume sections for retrieval",
-    ASSESSING_RESUME: "Scoring the resume with Gemini",
-    GENERATING_QUESTIONS: "Generating interview questions",
-    SCORING_ANSWER: "Evaluating the interview answer",
-    COMPLETED: "Completed"
-  };
-  return labels[stage];
 }

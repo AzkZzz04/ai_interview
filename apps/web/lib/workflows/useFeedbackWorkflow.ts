@@ -2,7 +2,7 @@
 
 import { MutableRefObject, useEffect, useRef, useState } from "react";
 import { friendlyError } from "@/lib/errorMessages";
-import { isTerminalJob, JobStage } from "@/lib/api/jobs";
+import { isTerminalJob, jobStageLabel } from "@/lib/api/jobs";
 import { useJobPolling } from "@/lib/useJobPolling";
 import { AnswerFeedback, scoreAnswer } from "@/lib/mockAssessment";
 import type { PendingFeedbackInfo } from "@/lib/workflows/types";
@@ -93,19 +93,4 @@ export function useFeedbackWorkflow(options: Options) {
 
 function contextMatches(questionSetId: string | null, pending: PendingFeedbackInfo) {
   return questionSetId === pending.questionSetId;
-}
-
-function jobStageLabel(stage: JobStage) {
-  const labels: Record<JobStage, string> = {
-    QUEUED: "Queued for a worker",
-    READING_FILE: "Reading the resume from object storage",
-    EXTRACTING_TEXT: "Extracting document text",
-    NORMALIZING_TEXT: "Normalizing sections and whitespace",
-    CHUNKING_TEXT: "Building resume sections for retrieval",
-    ASSESSING_RESUME: "Scoring the resume with Gemini",
-    GENERATING_QUESTIONS: "Generating interview questions",
-    SCORING_ANSWER: "Evaluating the interview answer",
-    COMPLETED: "Completed"
-  };
-  return labels[stage];
 }
