@@ -3,6 +3,7 @@ HELP.md
 .env.*
 !.env.example
 .gradle
+.kotlin/
 build/
 node_modules/
 .next/

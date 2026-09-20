@@ -1,5 +1,7 @@
 plugins {
 	java
+	kotlin("jvm") version "2.4.20"
+	kotlin("plugin.spring") version "2.4.20"
 	id("org.springframework.boot") version "4.0.4"
 	id("io.spring.dependency-management") version "1.1.7"
 }
@@ -11,6 +13,10 @@ java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)
 	}
+}
+
+kotlin {
+	jvmToolchain(21)
 }
 
 configurations {
@@ -27,6 +33,7 @@ extra["springAiVersion"] = "2.0.0-M4"
 extra["awsSdkVersion"] = "2.29.52"
 
 dependencies {
+	implementation(kotlin("reflect"))
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -47,6 +54,7 @@ dependencies {
 	runtimeOnly("org.postgresql:postgresql")
 	annotationProcessor("org.projectlombok:lombok")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
+	testImplementation(kotlin("test"))
 	testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
@@ -74,6 +82,8 @@ val integrationTestSourceSet = sourceSets.create("integrationTest") {
 	compileClasspath += sourceSets.main.get().output
 	runtimeClasspath += output + compileClasspath
 }
+
+kotlin.sourceSets.maybeCreate("integrationTest").kotlin.srcDir("src/integrationTest/kotlin")
 
 configurations[integrationTestSourceSet.implementationConfigurationName]
 	.extendsFrom(configurations.testImplementation.get())
