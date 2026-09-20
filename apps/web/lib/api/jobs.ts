@@ -139,10 +139,6 @@ export function isRetryableJobApiError(error: unknown) {
   return error instanceof JobApiError ? error.retryable : true;
 }
 
-export async function responseMessage(response: Response) {
-  return (await responseError(response)).message;
-}
-
 export async function responseError(response: Response): Promise<{ code: string | null; message: string }> {
   const fallback = `Request failed with status ${response.status}`;
   const contentType = response.headers.get("content-type") ?? "";
