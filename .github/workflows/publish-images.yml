@@ -2,8 +2,6 @@ name: Build and publish images
 
 on:
   push:
-    branches:
-      - docker-kubernetes-gitops
     # The workflow's own commit changes only this file, so do not rebuild the
     # same source revision indefinitely.
     paths-ignore:
@@ -67,6 +65,7 @@ jobs:
 
   build-and-push:
     needs: test
+    if: github.ref == 'refs/heads/docker-kubernetes-gitops'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -120,6 +119,7 @@ jobs:
 
   update-helm-values:
     needs: build-and-push
+    if: github.ref == 'refs/heads/docker-kubernetes-gitops'
     runs-on: ubuntu-latest
     permissions:
       contents: write
