@@ -6,11 +6,8 @@ import org.springframework.boot.runApplication
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
-class AiInterviewApplication {
-    companion object {
-        @JvmStatic
-        fun main(args: Array<String>) {
-            runApplication<AiInterviewApplication>(*args)
-        }
-    }
+class AiInterviewApplication
+
+fun main(args: Array<String>) {
+    runApplication<AiInterviewApplication>(*args)
 }

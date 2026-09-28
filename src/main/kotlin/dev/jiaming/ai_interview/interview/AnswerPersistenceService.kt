@@ -3,7 +3,6 @@ package dev.jiaming.ai_interview.interview
 import dev.jiaming.ai_interview.coach.AnswerFeedbackResponse
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
-import java.util.Map
 import java.util.UUID
 
 @Service
@@ -23,7 +22,7 @@ class AnswerPersistenceService(
             questionId,
             input.answerText,
             response.score,
-            jsonSupport.json(Map.of<String, Any?>(
+            jsonSupport.json(java.util.Map.of<String, Any?>(
                 "summary", response.summary,
                 "nextStep", response.nextStep,
                 "strengths", response.strengths,

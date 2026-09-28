@@ -13,7 +13,7 @@ class ResumeFileValidator {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Resume file is required")
         }
         if (file.size > MAX_FILE_BYTES) {
-            throw ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Resume file must be 10 MB or smaller")
+            throw ResponseStatusException(HttpStatus.CONTENT_TOO_LARGE, "Resume file must be 10 MB or smaller")
         }
         if (extension(file.originalFilename) !in ALLOWED_EXTENSIONS) {
             throw ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Resume must be a PDF, DOC, DOCX, TXT, or Markdown file")

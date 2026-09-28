@@ -17,7 +17,7 @@ import org.springframework.web.server.ResponseStatusException
 @RestControllerAdvice
 class ApiExceptionHandler {
     @ExceptionHandler(ResumeExtractionException::class)
-    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_CONTENT)
     fun handleResumeExtractionException(exception: ResumeExtractionException) =
         ApiErrorResponse("RESUME_EXTRACTION_FAILED", exception.message)
 
@@ -46,7 +46,7 @@ class ApiExceptionHandler {
         ApiErrorResponse("INVALID_REQUEST", "The request payload is invalid")
 
     @ExceptionHandler(MaxUploadSizeExceededException::class)
-    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    @ResponseStatus(HttpStatus.CONTENT_TOO_LARGE)
     fun handleMaxUploadSize(@Suppress("UNUSED_PARAMETER") exception: MaxUploadSizeExceededException) =
         ApiErrorResponse("UPLOAD_TOO_LARGE", "The uploaded file exceeds the configured size limit")
 

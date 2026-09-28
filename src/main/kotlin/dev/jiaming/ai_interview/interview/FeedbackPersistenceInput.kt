@@ -16,7 +16,7 @@ class FeedbackPersistenceInput @JsonCreator constructor(
     @param:JsonProperty("seniority") @get:JsonProperty("seniority") val seniority: String?,
     @param:JsonProperty("questionText") @get:JsonProperty("questionText") val questionText: String?,
     @param:JsonProperty("category") @get:JsonProperty("category") val category: String?,
-    @param:JsonProperty("expectedSignals") expectedSignals: List<String>?,
+    @JsonProperty("expectedSignals") expectedSignals: List<String>?,
     @param:JsonProperty("answerText") @get:JsonProperty("answerText") val answerText: String?,
 ) {
     @get:JsonProperty("expectedSignals")

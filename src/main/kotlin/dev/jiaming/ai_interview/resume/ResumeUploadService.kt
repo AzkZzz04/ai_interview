@@ -70,7 +70,7 @@ class ResumeUploadService private constructor(
         val normalizedText = normalizer.normalize(rawText)
         val normalizeMillis = elapsedMillis(normalizeStartedAt)
         if (normalizedText.isBlank()) {
-            throw ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "No readable resume text was extracted")
+            throw ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "No readable resume text was extracted")
         }
         val chunkStartedAt = System.nanoTime()
         val chunks = chunksFor(normalizedText)
@@ -84,7 +84,7 @@ class ResumeUploadService private constructor(
             fileContent.detectedContentType, fileContent.sizeBytes, rawText.length, normalizedText.length,
             normalizedText, chunks, Instant.now()
         )
-        if (storageKey != null) storageService?.markReady(storageKey)
+        if (storageKey != null) storageService.markReady(storageKey)
         log.info("resume_upload_complete filename={} storageKey={} extractMs={} normalizeMs={} chunkMs={} totalMs={} chunks={} rawChars={} normalizedChars={}",
             fileContent.originalFilename, storageKey, extractMillis, normalizeMillis, chunkMillis,
             elapsedMillis(startedAt), chunks.size, rawText.length, normalizedText.length)

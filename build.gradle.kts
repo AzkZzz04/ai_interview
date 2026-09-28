@@ -29,6 +29,7 @@ extra["awsSdkVersion"] = "2.29.52"
 dependencies {
 	implementation(kotlin("reflect"))
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+	implementation("tools.jackson.module:jackson-module-kotlin")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
