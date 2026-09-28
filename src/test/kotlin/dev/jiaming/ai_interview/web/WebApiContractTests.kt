@@ -68,6 +68,18 @@ class WebApiContractTests {
 	}
 
 	@Test
+	fun interviewFeedbackRejectsNullExpectedSignal() {
+		// Enforced by jackson-module-kotlin 3.x StrictNullChecks (on by default): List<String> items are non-null.
+		val mockMvc = standaloneSetup(InterviewController(submissionService)).setControllerAdvice(ApiExceptionHandler()).build()
+		mockMvc.perform(post("/api/interview/feedback").contentType(MediaType.APPLICATION_JSON)
+			.content(FEEDBACK_BODY.replace("\"specific example\"", "null")))
+			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+
+		Mockito.verifyNoInteractions(submissionService)
+	}
+
+	@Test
 	fun documentReferencesBindForAnalysisAndFeedback() {
 		val resumeId = UUID.randomUUID()
 		val jobDescriptionId = UUID.randomUUID()
