@@ -8,8 +8,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.eq
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.Mockito
 import org.springframework.ai.document.Document
 import org.springframework.ai.vectorstore.VectorStore
@@ -46,7 +46,7 @@ class RagIndexingServiceTests {
         Mockito.verify(vectorStore).add(documents.capture())
         val stored = documents.value[0]
         assertThat(stored.metadata)
-            .containsEntry("indexId", result.get().indexId().toString())
+            .containsEntry("indexId", result.get().indexId.toString())
             .containsEntry("claimVersion", 1L)
             .containsEntry("contextId", "resume:experience:0")
         assertThat(stored.id).isNotBlank()
@@ -111,10 +111,10 @@ class RagIndexingServiceTests {
 
         val first = service.ensureIndexed(document()).orElseThrow()
         val ready = RagDocumentIndex(
-            first.indexId(),
+            first.indexId,
             identity(),
             RagDocumentIndexStatus.READY,
-            first.claimVersion(),
+            first.claimVersion,
             NOW,
             1,
             NOW,
@@ -124,7 +124,7 @@ class RagIndexingServiceTests {
 
         assertThat(service.ensureIndexed(document())).contains(first)
         Mockito.verify(vectorStore, Mockito.times(1)).add(any())
-        Mockito.verify(repository).touchReady(first.indexId(), first.claimVersion(), NOW)
+        Mockito.verify(repository).touchReady(first.indexId, first.claimVersion, NOW)
     }
 
     @Test

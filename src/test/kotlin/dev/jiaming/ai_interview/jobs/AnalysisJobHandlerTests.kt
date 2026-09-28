@@ -13,8 +13,8 @@ import dev.jiaming.ai_interview.document.ResolvedJobInputs
 import dev.jiaming.ai_interview.interview.AnalysisPersistenceInput
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.eq
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.Mockito
 import java.util.Optional
 import java.util.UUID
@@ -34,7 +34,7 @@ class AnalysisJobHandlerTests {
         val assessment = assessment()
         val questions = questions()
         Mockito.`when`(context.userId()).thenReturn(UUID.randomUUID())
-        Mockito.`when`(resolver.resolveStrict(context.userId(), payload.resumeId(), payload.jobDescriptionId()))
+        Mockito.`when`(resolver.resolveStrict(context.userId(), payload.resumeId, payload.jobDescriptionId))
             .thenReturn(documents)
         Mockito.`when`(coach.assess(input)).thenReturn(assessment)
         Mockito.`when`(coach.generateQuestions(input)).thenReturn(questions)
@@ -45,11 +45,11 @@ class AnalysisJobHandlerTests {
         order.verify(context).stage(JobStage.ASSESSING_RESUME)
         order.verify(coach).assess(input)
         order.verify(context).saveCheckpoint("assessment", assessment)
-        order.verify(context).materializeAssessment(any(AnalysisPersistenceInput::class.java), eq(assessment))
+        order.verify(context).materializeAssessment(any<AnalysisPersistenceInput>(), eq(assessment))
         order.verify(context).stage(JobStage.GENERATING_QUESTIONS)
         order.verify(coach).generateQuestions(input)
         order.verify(context).saveCheckpoint("questions", questions)
-        order.verify(context).materializeQuestions(any(AnalysisPersistenceInput::class.java), eq(questions))
+        order.verify(context).materializeQuestions(any<AnalysisPersistenceInput>(), eq(questions))
     }
 
     @Test
@@ -59,15 +59,15 @@ class AnalysisJobHandlerTests {
         val assessment = assessment()
         val questions = questions()
         Mockito.`when`(context.userId()).thenReturn(UUID.randomUUID())
-        Mockito.`when`(resolver.resolveStrict(context.userId(), payload.resumeId(), payload.jobDescriptionId()))
+        Mockito.`when`(resolver.resolveStrict(context.userId(), payload.resumeId, payload.jobDescriptionId))
             .thenReturn(documents)
         Mockito.`when`(context.checkpoint("assessment", AssessmentResponse::class.java)).thenReturn(assessment)
         Mockito.`when`(context.checkpoint("questions", InterviewQuestionsResponse::class.java)).thenReturn(questions)
 
         handler.handle(payload, context)
 
-        Mockito.verify(coach, Mockito.never()).assess(any(CoachAnalysisInput::class.java))
-        Mockito.verify(coach, Mockito.never()).generateQuestions(any(CoachAnalysisInput::class.java))
+        Mockito.verify(coach, Mockito.never()).assess(any<CoachAnalysisInput>())
+        Mockito.verify(coach, Mockito.never()).generateQuestions(any<CoachAnalysisInput>())
         Mockito.verify(context).materializeAssessment(any(), eq(assessment))
         Mockito.verify(context).materializeQuestions(any(), eq(questions))
     }
@@ -79,7 +79,7 @@ class AnalysisJobHandlerTests {
         val input = coachInput(documents, payload)
         val assessment = assessment()
         Mockito.`when`(context.userId()).thenReturn(UUID.randomUUID())
-        Mockito.`when`(resolver.resolveStrict(context.userId(), payload.resumeId(), payload.jobDescriptionId()))
+        Mockito.`when`(resolver.resolveStrict(context.userId(), payload.resumeId, payload.jobDescriptionId))
             .thenReturn(documents)
         Mockito.`when`(coach.assess(input)).thenReturn(assessment)
         Mockito.`when`(coach.generateQuestions(input)).thenThrow(RuntimeException("timeout"))
@@ -95,11 +95,11 @@ class AnalysisJobHandlerTests {
     private fun payload() = AnalysisJobPayload(UUID.randomUUID(), UUID.randomUUID(), "Backend", "Mid-level")
 
     private fun documents(payload: AnalysisJobPayload) = ResolvedJobInputs(
-        ResolvedDocument(DocumentSourceType.RESUME, payload.resumeId(), "resume-hash", "resume", emptyList()),
+        ResolvedDocument(DocumentSourceType.RESUME, payload.resumeId, "resume-hash", "resume", emptyList()),
         Optional.of(
             ResolvedDocument(
                 DocumentSourceType.JOB_DESCRIPTION,
-                payload.jobDescriptionId(),
+                requireNotNull(payload.jobDescriptionId),
                 "jd-hash",
                 "job",
                 emptyList()
@@ -108,7 +108,7 @@ class AnalysisJobHandlerTests {
     )
 
     private fun coachInput(documents: ResolvedJobInputs, payload: AnalysisJobPayload) = CoachAnalysisInput(
-        documents.resume(), documents.jobDescription(), payload.targetRole(), payload.seniority()
+        documents.resume(), documents.jobDescription(), payload.targetRole, payload.seniority
     )
 
     private fun assessment() = AssessmentResponse(

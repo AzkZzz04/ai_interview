@@ -14,8 +14,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.eq
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.Mockito
 import org.springframework.transaction.TransactionStatus
 import org.springframework.transaction.support.TransactionCallback
@@ -72,8 +72,8 @@ class JobSubmissionServiceTests {
             JobType.ANALYSIS, "resume", null, mapOf("resume" to "same"), "same"
         )
 
-        assertThat(response.reused()).isTrue()
-        assertThat(response.jobId()).isEqualTo(existing.id())
+        assertThat(response.reused).isTrue()
+        assertThat(response.jobId).isEqualTo(existing.id)
         Mockito.verifyNoInteractions(dispatcher)
     }
 
@@ -91,8 +91,8 @@ class JobSubmissionServiceTests {
             JobType.ANALYSIS, "resume", null, mapOf("resume" to "new"), "new"
         )
 
-        assertThat(response.reused()).isFalse()
-        Mockito.verify(dispatcher).dispatch(created.id())
+        assertThat(response.reused).isFalse()
+        Mockito.verify(dispatcher).dispatch(created.id)
         Mockito.verify(metrics).submitted(JobType.ANALYSIS)
     }
 
@@ -112,8 +112,8 @@ class JobSubmissionServiceTests {
             JobType.ANALYSIS, "resume", null, mapOf("resume" to "same"), "race"
         )
 
-        assertThat(response.reused()).isTrue()
-        assertThat(response.jobId()).isEqualTo(winner.id())
+        assertThat(response.reused).isTrue()
+        assertThat(response.jobId).isEqualTo(winner.id)
         Mockito.verifyNoInteractions(dispatcher)
     }
 

@@ -17,8 +17,8 @@ class ResumeStorageReconcilerTests {
 
 		reconciler.deleteFailedResumeObjects()
 
-		Mockito.verify(storageService).delete(failed.storageKey())
-		Mockito.verify(persistenceService).clearStorageKey(failed.resumeId(), failed.storageKey())
+		Mockito.verify(storageService).delete(failed.storageKey)
+		Mockito.verify(persistenceService).clearStorageKey(failed.resumeId, failed.storageKey)
 	}
 
 	@Test
@@ -26,11 +26,11 @@ class ResumeStorageReconcilerTests {
 		val failed = FailedResumeStorage(UUID.randomUUID(), "resumes/key")
 		Mockito.`when`(persistenceService.findUnappliedTerminalFailures(25)).thenReturn(emptyList())
 		Mockito.`when`(persistenceService.findFailedStorageObjects(25)).thenReturn(listOf(failed))
-		Mockito.doThrow(IllegalStateException("offline")).`when`(storageService).delete(failed.storageKey())
+		Mockito.doThrow(IllegalStateException("offline")).`when`(storageService).delete(failed.storageKey)
 
 		reconciler.deleteFailedResumeObjects()
 
-		Mockito.verify(persistenceService, Mockito.never()).clearStorageKey(failed.resumeId(), failed.storageKey())
+		Mockito.verify(persistenceService, Mockito.never()).clearStorageKey(failed.resumeId, failed.storageKey)
 	}
 
 	@Test
@@ -41,6 +41,6 @@ class ResumeStorageReconcilerTests {
 
 		reconciler.deleteFailedResumeObjects()
 
-		Mockito.verify(persistenceService).markFailed(failedJob.resumeId(), failedJob.errorCode(), failedJob.errorMessage())
+		Mockito.verify(persistenceService).markFailed(failedJob.resumeId, failedJob.errorCode, failedJob.errorMessage)
 	}
 }

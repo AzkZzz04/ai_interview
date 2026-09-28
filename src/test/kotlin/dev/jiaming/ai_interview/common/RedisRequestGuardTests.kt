@@ -10,7 +10,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.ArgumentMatchers.any
+import org.mockito.kotlin.any
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mock
 import org.mockito.Mockito
@@ -45,19 +45,19 @@ class RedisRequestGuardTests {
     fun setUp() {
         Mockito.`when`(redisTemplate.opsForValue()).thenReturn(valueOperations)
         Mockito.`when`(valueOperations.get(anyString())).thenAnswer { redis[it.getArgument(0)] }
-        Mockito.`when`(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration::class.java)))
+        Mockito.`when`(valueOperations.setIfAbsent(anyString(), anyString(), any<Duration>()))
             .thenAnswer { redis.putIfAbsent(it.getArgument(0), it.getArgument(1)) == null }
         Mockito.doAnswer {
             redis[it.getArgument(0)] = it.getArgument(1)
             null
-        }.`when`(valueOperations).set(anyString(), anyString(), any(Duration::class.java))
+        }.`when`(valueOperations).set(anyString(), anyString(), any<Duration>())
         Mockito.`when`(valueOperations.increment(anyString())).thenAnswer {
             val key = it.getArgument<String>(0)
             val nextValue = redis.getOrDefault(key, "0").toLong() + 1
             redis[key] = nextValue.toString()
             nextValue
         }
-        Mockito.`when`(redisTemplate.expire(anyString(), any(Duration::class.java))).thenReturn(true)
+        Mockito.`when`(redisTemplate.expire(anyString(), any<Duration>())).thenReturn(true)
         guard = RedisRequestGuard(
             redisTemplate,
             RedisUsageProperties(

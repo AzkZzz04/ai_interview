@@ -11,7 +11,6 @@ class RuntimeModeProperties(mode: String?) {
         }
     }
 
-    fun mode() = mode
     fun apiEnabled() = mode != "worker"
     fun workerEnabled() = mode != "api"
 }

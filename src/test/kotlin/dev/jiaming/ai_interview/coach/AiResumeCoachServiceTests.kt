@@ -25,8 +25,8 @@ class AiResumeCoachServiceTests {
 		Mockito.`when`(contextService.assessmentContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn("not-json").thenReturn(assessmentJson())
 		val response = service.assess(input)
-		assertThat(response.overallScore()).isEqualTo(80)
-		assertThat(response.sourceContextIds()).containsExactly("resume:experience:0")
+		assertThat(response.overallScore).isEqualTo(80)
+		assertThat(response.sourceContextIds).containsExactly("resume:experience:0")
 		Mockito.verify(client, Mockito.times(2)).generateJson(anyString())
 	}
 

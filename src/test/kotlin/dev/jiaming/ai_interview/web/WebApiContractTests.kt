@@ -1,5 +1,6 @@
 package dev.jiaming.ai_interview.web
 
+import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest
 import dev.jiaming.ai_interview.assessment.AssessmentController
 import dev.jiaming.ai_interview.common.ApiExceptionHandler
 import dev.jiaming.ai_interview.common.ApiStatusController
@@ -16,7 +17,7 @@ import dev.jiaming.ai_interview.jobs.JobType
 import java.util.Optional
 import java.util.UUID
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.any
+import org.mockito.kotlin.any
 import org.mockito.Mockito
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.info.BuildProperties
@@ -50,6 +51,19 @@ class WebApiContractTests {
 		mockMvc.perform(post("/api/interview/questions").contentType(MediaType.APPLICATION_JSON).content(ANALYSIS_BODY))
 			.andExpect(status().isAccepted)
 			.andExpect(jsonPath("$.jobType").value("ANALYSIS"))
+	}
+
+	@Test
+	fun interviewFeedbackBindsExpectedSignalsAndReturnsAcceptedJob() {
+		Mockito.`when`(submissionService.submitFeedback(any())).thenReturn(accepted(JobType.ANSWER_FEEDBACK, null))
+		val mockMvc = standaloneSetup(InterviewController(submissionService)).build()
+		mockMvc.perform(post("/api/interview/feedback").contentType(MediaType.APPLICATION_JSON).content(FEEDBACK_BODY))
+			.andExpect(status().isAccepted)
+			.andExpect(jsonPath("$.jobType").value("ANSWER_FEEDBACK"))
+
+		Mockito.verify(submissionService).submitFeedback(
+			AnswerFeedbackRequest(null, "Java", null, "Spring", "Backend Engineer", "Mid-level", "How did you improve reliability?", "ownership", listOf("clear reasoning", "specific example"), "I added retries.")
+		)
 	}
 
 	@Test
@@ -89,5 +103,6 @@ class WebApiContractTests {
 
 	private companion object {
 		val ANALYSIS_BODY = """{"resumeId":null,"resumeText":"Java","jobDescription":"Spring","targetRole":"Backend Engineer","seniority":"Mid-level"}"""
+		val FEEDBACK_BODY = """{"resumeText":"Java","jobDescription":"Spring","targetRole":"Backend Engineer","seniority":"Mid-level","questionText":"How did you improve reliability?","category":"ownership","expectedSignals":["clear reasoning","specific example"],"answerText":"I added retries."}"""
 	}
 }

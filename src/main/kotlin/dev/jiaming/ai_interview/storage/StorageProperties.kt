@@ -11,11 +11,5 @@ class StorageProperties(
     val secretKey: String?,
     pendingRetentionHours: Int
 ) {
-    fun endpoint() = endpoint
-    fun region() = region
-    fun bucket() = bucket
-    fun accessKey() = accessKey
-    fun secretKey() = secretKey
     val pendingRetentionHours = if (pendingRetentionHours <= 0) 24 else pendingRetentionHours
-    fun pendingRetentionHours() = pendingRetentionHours
 }

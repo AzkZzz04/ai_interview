@@ -21,10 +21,9 @@ class S3StorageConfig {
                 )
             )
             .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
-        if (!blank(properties.endpoint)) builder.endpointOverride(URI.create(properties.endpoint!!))
+        properties.endpoint?.takeIf(String::isNotBlank)?.let { builder.endpointOverride(URI.create(it)) }
         return builder.build()
     }
 
-    private fun nonBlank(value: String?, fallback: String) = if (blank(value)) fallback else value!!
-    private fun blank(value: String?) = value == null || value.isBlank()
+    private fun nonBlank(value: String?, fallback: String) = value?.takeIf(String::isNotBlank) ?: fallback
 }

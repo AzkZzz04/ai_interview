@@ -5,8 +5,8 @@ import dev.jiaming.ai_interview.storage.StoredObject
 import java.nio.charset.StandardCharsets
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.eq
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.Mockito
 import org.springframework.beans.factory.ObjectProvider
 

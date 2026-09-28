@@ -30,12 +30,12 @@ class JobQueueServiceLocalStackTests {
         queueService.send(normalJobId)
         val firstDelivery = receiveMain()
 
-        assertThat(queueService.parse(firstDelivery).jobId()).isEqualTo(normalJobId)
+        assertThat(queueService.parse(firstDelivery).jobId).isEqualTo(normalJobId)
         assertThat(queueService.receiveCount(firstDelivery)).isEqualTo(1)
 
         queueService.changeVisibility(firstDelivery, 0)
         val secondDelivery = receiveMain()
-        assertThat(queueService.parse(secondDelivery).jobId()).isEqualTo(normalJobId)
+        assertThat(queueService.parse(secondDelivery).jobId).isEqualTo(normalJobId)
         assertThat(queueService.receiveCount(secondDelivery)).isGreaterThanOrEqualTo(2)
         queueService.delete(secondDelivery)
 
@@ -43,7 +43,7 @@ class JobQueueServiceLocalStackTests {
         queueService.send(poisonJobId)
         repeat(2) {
             val poison = receiveMain()
-            assertThat(queueService.parse(poison).jobId()).isEqualTo(poisonJobId)
+            assertThat(queueService.parse(poison).jobId).isEqualTo(poisonJobId)
             queueService.changeVisibility(poison, 0)
         }
 

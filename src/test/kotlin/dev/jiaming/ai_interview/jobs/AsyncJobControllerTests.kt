@@ -7,7 +7,7 @@ import java.time.Instant
 import java.util.Optional
 import java.util.UUID
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.any
+import org.mockito.kotlin.any
 import org.mockito.Mockito
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup
@@ -49,12 +49,12 @@ class AsyncJobControllerTests {
 		val localUserService = Mockito.mock(LocalUserService::class.java)
 		val job = completedJob(userId)
 		Mockito.`when`(localUserService.localUserId()).thenReturn(userId)
-		Mockito.`when`(store.findForUser(job.id(), userId)).thenReturn(Optional.of(job))
+		Mockito.`when`(store.findForUser(job.id, userId)).thenReturn(Optional.of(job))
 		val mockMvc = standaloneSetup(JobController(store, localUserService)).build()
 
-		mockMvc.perform(get("/api/jobs/{jobId}", job.id()))
+		mockMvc.perform(get("/api/jobs/{jobId}", job.id))
 			.andExpect(status().isOk)
-			.andExpect(jsonPath("$.jobId").value(job.id().toString()))
+			.andExpect(jsonPath("$.jobId").value(job.id.toString()))
 			.andExpect(jsonPath("$.status").value("SUCCEEDED"))
 			.andExpect(jsonPath("$.result.overallScore").value(84))
 			.andExpect(jsonPath("$.completedAt").exists())

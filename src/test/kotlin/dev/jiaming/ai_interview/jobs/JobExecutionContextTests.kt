@@ -7,8 +7,8 @@ import java.util.UUID
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.any
-import org.mockito.ArgumentMatchers.eq
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.Mockito
 
 class JobExecutionContextTests {
@@ -24,7 +24,7 @@ class JobExecutionContextTests {
 		context.saveCheckpoint("questions", objectMapper.createArrayNode().add("question"))
 
 		val checkpoints = ArgumentCaptor.forClass(JsonNode::class.java)
-		Mockito.verify(store, Mockito.times(2)).checkpointResult(eq(job.id()), eq(leaseToken), checkpoints.capture())
+		Mockito.verify(store, Mockito.times(2)).checkpointResult(eq(job.id), eq(leaseToken), checkpoints.capture())
 		val latest = checkpoints.allValues.last()
 		assertThat(latest.hasNonNull("assessment")).isTrue()
 		assertThat(latest.hasNonNull("questions")).isTrue()
@@ -43,8 +43,8 @@ class JobExecutionContextTests {
 		context.stage(JobStage.GENERATING_QUESTIONS)
 		context.finish()
 
-		Mockito.verify(store).updateStage(job.id(), leaseToken, JobStage.ASSESSING_RESUME)
-		Mockito.verify(store).updateStage(job.id(), leaseToken, JobStage.GENERATING_QUESTIONS)
+		Mockito.verify(store).updateStage(job.id, leaseToken, JobStage.ASSESSING_RESUME)
+		Mockito.verify(store).updateStage(job.id, leaseToken, JobStage.GENERATING_QUESTIONS)
 		Mockito.verify(metrics).stageDuration(eq(JobType.ANALYSIS), eq(JobStage.ASSESSING_RESUME), any())
 		Mockito.verify(metrics).stageDuration(eq(JobType.ANALYSIS), eq(JobStage.GENERATING_QUESTIONS), any())
 	}

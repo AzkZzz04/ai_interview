@@ -11,9 +11,9 @@ import dev.jiaming.ai_interview.resume.SectionAwareTextChunker
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.any
+import org.mockito.kotlin.any
 import org.mockito.ArgumentMatchers.anyString
-import org.mockito.ArgumentMatchers.eq
+import org.mockito.kotlin.eq
 import org.mockito.Mockito
 import java.util.Optional
 import java.util.UUID
@@ -36,9 +36,9 @@ class CoachRagContextServiceTests {
 
         val context = service.assessmentContext(CoachAnalysisInput(resume, Optional.of(jobDescription), "Backend Engineer", "Mid-level"))
 
-        assertThat(context.vectorBacked()).isFalse()
-        assertThat(context.context()).contains("Built an API", "Built an AI coach", "Java required")
-        assertThat(context.sourceContextIds()).containsExactly(
+        assertThat(context.vectorBacked).isFalse()
+        assertThat(context.context).contains("Built an API", "Built an AI coach", "Java required")
+        assertThat(context.sourceContextIds).containsExactly(
             "resume:experience:0", "resume:projects:1", "job_description:requirements:0"
         )
         Mockito.verifyNoInteractions(indexingService, retrievalService)
@@ -58,7 +58,7 @@ class CoachRagContextServiceTests {
         val handle = RagDocumentIndexHandle(UUID.randomUUID(), 1L)
         Mockito.`when`(indexingService.ensureIndexed(resume)).thenReturn(Optional.of(handle))
         Mockito.`when`(indexingService.ensureIndexed(jobDescription)).thenReturn(Optional.empty())
-        Mockito.`when`(retrievalService.retrieve(anyString(), any(RagDocumentIndexHandle::class.java), eq(6))).thenReturn(
+        Mockito.`when`(retrievalService.retrieve(anyString(), any<RagDocumentIndexHandle>(), eq(6))).thenReturn(
             (0 until 14).map { index -> RagContextSnippet(
                 "resume-vector-$index", "Resume vector context $index",
                 mapOf("contextId" to "resume:experience:$index", "sourceType" to "resume", "section" to "Experience"), 0.9
@@ -67,9 +67,9 @@ class CoachRagContextServiceTests {
 
         val context = service.assessmentContext(CoachAnalysisInput(resume, Optional.of(jobDescription), "Backend Engineer", "Mid-level"))
 
-        assertThat(context.vectorBacked()).isTrue()
-        assertThat(context.context()).contains("Java and distributed systems are required")
-        assertThat(context.sourceContextIds()).contains("job_description:requirements:0")
+        assertThat(context.vectorBacked).isTrue()
+        assertThat(context.context).contains("Java and distributed systems are required")
+        assertThat(context.sourceContextIds).contains("job_description:requirements:0")
     }
 
     @Test
@@ -82,14 +82,14 @@ class CoachRagContextServiceTests {
         ))
         val handle = RagDocumentIndexHandle(UUID.randomUUID(), 1L)
         Mockito.`when`(indexingService.ensureIndexed(resume)).thenReturn(Optional.of(handle))
-        Mockito.`when`(retrievalService.retrieve(anyString(), any(RagDocumentIndexHandle::class.java), eq(6)))
+        Mockito.`when`(retrievalService.retrieve(anyString(), any<RagDocumentIndexHandle>(), eq(6)))
             .thenThrow(IllegalStateException("vector store unavailable"))
 
         val context = service.assessmentContext(CoachAnalysisInput(resume, Optional.empty(), "Backend Engineer", "Mid-level"))
 
-        assertThat(context.vectorBacked()).isFalse()
-        assertThat(context.context()).contains("Resume experience")
-        assertThat(context.sourceContextIds()).containsExactly("resume:experience:0")
+        assertThat(context.vectorBacked).isFalse()
+        assertThat(context.context).contains("Resume experience")
+        assertThat(context.sourceContextIds).containsExactly("resume:experience:0")
     }
 
     @Test
@@ -112,10 +112,10 @@ class CoachRagContextServiceTests {
 
         val context = service.assessmentContext(CoachAnalysisInput(resume, Optional.of(jobDescription), "Backend Engineer", "Mid-level"))
 
-        assertThat(context.sourceContextIds()).contains(
+        assertThat(context.sourceContextIds).contains(
             "job_description:requirements:0", "job_description:requirements:1", "job_description:requirements:2"
         )
-        assertThat(context.context()).contains("Original JD requirement 0").doesNotContain("Section: Requirements")
+        assertThat(context.context).contains("Original JD requirement 0").doesNotContain("Section: Requirements")
         Mockito.verify(retrievalService, Mockito.times(4)).retrieve(anyString(), eq(resumeIndex), eq(6))
         Mockito.verify(retrievalService, Mockito.times(4)).retrieve(anyString(), eq(jobIndex), eq(4))
     }
@@ -141,7 +141,7 @@ class CoachRagContextServiceTests {
 
         val context = service.assessmentContext(CoachAnalysisInput(resume, Optional.empty(), "Backend Engineer", "Mid-level"))
 
-        assertThat(context.sourceContextIds()).startsWith("resume:experience:0", "resume:experience:1")
+        assertThat(context.sourceContextIds).startsWith("resume:experience:0", "resume:experience:1")
     }
 
     private fun service(indexingService: RagIndexingService, retrievalService: RagRetrievalService) = CoachRagContextService(
