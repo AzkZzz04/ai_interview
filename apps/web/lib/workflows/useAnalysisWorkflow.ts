@@ -25,6 +25,7 @@ type Options = {
 export function useAnalysisWorkflow(options: Options) {
   const optionsRef = useLatest(options);
   const polling = useJobPolling<AnalysisJobResult, AiAnalysisPayload>("ai-interview:job:analysis");
+  const finishPolling = polling.finish;
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [stage, setStage] = useState<string | null>(null);
@@ -85,7 +86,7 @@ export function useAnalysisWorkflow(options: Options) {
         current.invalidateResults();
         setNotice(`Analysis job could not be recovered: ${friendlyError(polling.terminalError)} Run the analysis again.`);
       }
-      polling.finish();
+      finishPolling();
       return;
     }
 
@@ -122,7 +123,7 @@ export function useAnalysisWorkflow(options: Options) {
         generation
       );
       setNotice(aiQuestions.length > 0 ? null : "Gemini returned no usable questions; local draft questions are shown.");
-      polling.finish();
+      finishPolling();
       return;
     }
 
@@ -141,7 +142,7 @@ export function useAnalysisWorkflow(options: Options) {
       const assessmentMissing = !result?.assessment;
       const questionsMissing = aiQuestions.length === 0;
 	      setNotice(partialNotice(assessmentMissing, questionsMissing, Boolean(resolvedSnapshot)));
-      polling.finish();
+      finishPolling();
       return;
     }
 
@@ -158,8 +159,8 @@ export function useAnalysisWorkflow(options: Options) {
       current.invalidateResults();
       setNotice(`Gemini analysis unavailable: ${friendlyError(job.error)} The original input snapshot is unavailable; run the analysis again.`);
     }
-    polling.finish();
-  }, [optionsRef, polling.activeJobId, polling.connectionError, polling.context, polling.finish, polling.generation, polling.job, polling.restored, polling.terminalError]);
+    finishPolling();
+  }, [optionsRef, polling.activeJobId, polling.connectionError, polling.context, finishPolling, polling.generation, polling.job, polling.restored, polling.terminalError]);
 
   return {
     ...polling,

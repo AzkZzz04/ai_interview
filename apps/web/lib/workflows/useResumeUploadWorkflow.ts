@@ -23,6 +23,7 @@ type Options = {
 export function useResumeUploadWorkflow(options: Options) {
   const optionsRef = useLatest(options);
   const polling = useJobPolling<ResumeUploadResponse, ResumeJobContext>("ai-interview:job:resume");
+  const finishPolling = polling.finish;
   const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState<ExtractionProgress | null>(null);
@@ -103,7 +104,7 @@ export function useResumeUploadWorkflow(options: Options) {
           message: extractionErrorMessage(polling.terminalError)
         }));
       }
-      polling.finish();
+      finishPolling();
       return;
     }
 
@@ -149,7 +150,7 @@ export function useResumeUploadWorkflow(options: Options) {
       ));
       pendingTextFallbackRef.current = null;
       window.requestAnimationFrame(() => current.resumeTextareaRef.current?.focus());
-      polling.finish();
+      finishPolling();
       return;
     }
 
@@ -163,7 +164,7 @@ export function useResumeUploadWorkflow(options: Options) {
         message: "Backend extraction failed; text loaded in the browser"
       } : value);
       pendingTextFallbackRef.current = null;
-      polling.finish();
+      finishPolling();
       return;
     }
     setUploadedResume((value) => value ? {
@@ -171,8 +172,8 @@ export function useResumeUploadWorkflow(options: Options) {
       status: "error",
       message: extractionErrorMessage(job.error)
     } : value);
-    polling.finish();
-  }, [optionsRef, polling.activeJobId, polling.connectionError, polling.context, polling.finish, polling.job, polling.terminalError]);
+    finishPolling();
+  }, [optionsRef, polling.activeJobId, polling.connectionError, polling.context, finishPolling, polling.job, polling.terminalError]);
 
   async function handleResumeUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

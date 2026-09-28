@@ -31,7 +31,6 @@ function renderInputPanel(overrides: Record<string, unknown> = {}) {
     onRunAssessment: vi.fn(),
     ...overrides
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return render(<ResumeInputPanel {...(props as any)} />);
 }
 
