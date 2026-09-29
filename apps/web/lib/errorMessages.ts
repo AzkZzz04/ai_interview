@@ -1,25 +1,24 @@
-import { JobApiError, JobError } from "@/lib/api/jobs";
+import { ApiError } from "@/lib/api/client";
+import type { JobError } from "@/lib/api/types";
+
+const NETWORK_MESSAGE = "The server is not reachable. Check your connection and try again.";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  GEMINI_NOT_CONFIGURED: "Gemini key is not configured.",
-  GEMINI_RATE_LIMITED: "Gemini quota is exhausted for the configured key and model.",
+  GEMINI_NOT_CONFIGURED: "The AI service is not configured.",
+  GEMINI_RATE_LIMITED: "The AI service is at its usage limit. Try again later.",
   GEMINI_TIMEOUT: "The AI request timed out.",
-  GEMINI_UPSTREAM_ERROR: "Gemini is temporarily unavailable.",
-  GEMINI_SAFETY: "Gemini could not complete this request because of its safety policy.",
-  GEMINI_RECITATION: "Gemini stopped the response because it detected recited content.",
-  GEMINI_MAX_TOKENS: "Gemini reached its response limit before completing the result.",
-  GEMINI_EMPTY_RESPONSE: "Gemini returned an empty response.",
-  GEMINI_INVALID_RESPONSE: "Gemini returned a response that could not be validated.",
-  REFERENCE_MISMATCH: "The selected document no longer matches the edited text. Submit the edited text again.",
-  RESUME_NOT_FOUND: "The selected resume is no longer available.",
+  GEMINI_UPSTREAM_ERROR: "The AI service is temporarily unavailable.",
+  GEMINI_SAFETY: "The AI could not complete this request because of its content policy. Edit the text and try again.",
+  GEMINI_RECITATION: "The AI stopped because the response repeated source text. Try again.",
+  GEMINI_MAX_TOKENS: "The AI response was too long to complete. Try shorter input.",
+  GEMINI_EMPTY_RESPONSE: "The AI returned an empty response. Try again.",
+  GEMINI_INVALID_RESPONSE: "The AI returned a result that could not be read. Try again.",
+  RESUME_NOT_FOUND: "This resume was deleted.",
   RESUME_NOT_READY: "The selected resume has not finished processing.",
-  RESUME_REFERENCE_REQUIRED: "The background job does not contain a resume reference.",
-  RESUME_TEXT_REQUIRED: "Paste resume text or upload a resume before continuing.",
   RESUME_EXTRACTION_FAILED: "The resume text could not be extracted.",
   RESUME_PARSER_BUSY: "The resume parser is busy. Try the upload again shortly.",
-  JOB_DESCRIPTION_NOT_FOUND: "The selected job description is no longer available.",
   JOB_NOT_FOUND: "The background job is no longer available.",
-  REQUEST_TIMEOUT: "The backend request timed out.",
+  REQUEST_TIMEOUT: "The request timed out.",
   INVALID_REQUEST: "The request is invalid.",
   UPLOAD_TOO_LARGE: "The uploaded resume exceeds the configured size limit.",
   RATE_LIMITED: "Too many requests were submitted. Try again shortly.",
@@ -29,11 +28,25 @@ const ERROR_MESSAGES: Record<string, string> = {
   UNPROCESSABLE_CONTENT: "The submitted content could not be processed.",
   PROCESSING_ERROR: "The background job could not be processed.",
   INTERNAL_ERROR: "The backend could not complete the request.",
-  REQUEST_FAILED: "The request failed."
+  REQUEST_FAILED: "The request failed.",
+  TARGET_JOB_NOT_FOUND: "This target job was deleted.",
+  EXPERIENCE_NOT_FOUND: "This experience was deleted.",
+  PRACTICE_SET_NOT_FOUND: "This practice set was deleted.",
+  QUESTION_NOT_FOUND: "This question is no longer available.",
+  ATTEMPT_NOT_FOUND: "This answer is no longer available.",
+  NO_EXPERIENCE_SOURCES: "Add another resume or an experience to get suggestions.",
+  PRACTICE_SET_NOT_READY: "Questions are still being generated. Try again in a moment.",
+  PRACTICE_SET_NOT_FAILED: "This practice set is not in a failed state.",
+  QUESTION_LIMIT_REACHED: "You can add up to 10 of your own questions per practice set.",
+  ANSWER_EMPTY: "Write an answer before submitting.",
+  ANSWER_TOO_LONG: "Answers can be at most 4,000 characters.",
+  ANSWER_UNCHANGED: "This answer is the same as your last attempt. Change it before submitting.",
+  ATTEMPT_NOT_FAILED: "This answer is not in a failed state.",
+  UNSUPPORTED_FILE_TYPE: "Upload a PDF, DOC, DOCX, TXT or Markdown file."
 };
 
 export function errorCode(error: unknown): string | null {
-  if (error instanceof JobApiError) {
+  if (error instanceof ApiError) {
     return error.code;
   }
   if (isJobError(error)) {
@@ -47,9 +60,9 @@ export function friendlyError(error: unknown, fallback = "The request failed.") 
   if (code && ERROR_MESSAGES[code]) {
     return ERROR_MESSAGES[code];
   }
-  if (error instanceof JobApiError) {
+  if (error instanceof ApiError) {
     if (error.kind === "NETWORK") {
-      return "Spring Boot API is not reachable.";
+      return NETWORK_MESSAGE;
     }
     if (error.kind === "TIMEOUT") {
       return ERROR_MESSAGES.REQUEST_TIMEOUT;

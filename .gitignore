@@ -7,7 +7,6 @@ HELP.md
 build/
 node_modules/
 .next/
-.next-build/
 .playwright-cli/
 *.tsbuildinfo
 !gradle/wrapper/gradle-wrapper.jar
