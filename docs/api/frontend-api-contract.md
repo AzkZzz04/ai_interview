@@ -608,7 +608,7 @@ Keeps today's `JobStatusResponse` shape and adds `maxAttempts` and the changed `
 | `EXPERIENCE_SPLIT` | new | 5.2 | `SPLITTING_EXPERIENCE` | `ExperienceSplitResult` |
 | `ANSWER_FEEDBACK` | changed (attempt-based input) | 7.5, 7.6 | `SCORING_ANSWER` (existing stage) | `AnswerFeedbackResult` |
 
-Every job ends at stage `COMPLETED`. `ANALYSIS` and stage `ASSESSING_RESUME` are no longer used by the UI.
+A `SUCCEEDED` job ends at stage `COMPLETED`; a `FAILED` job keeps the stage it failed in. `ANALYSIS` and stage `ASSESSING_RESUME` are no longer used by the UI.
 
 ### 8.2 Result shapes
 
