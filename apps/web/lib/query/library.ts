@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { apiRequest } from "@/lib/api/client";
 import type {
   DeleteImpact,
+  History,
   Experience,
   ExperienceBatchResult,
   ExperienceCreated,
@@ -178,5 +179,12 @@ export function useDelete(kind: LibraryKind) {
   return useMutation({
     mutationFn: (id: string) => apiRequest<void>(`/api/${kind}/${id}`, { method: "DELETE" }),
     onSuccess: () => invalidateLibrary(client)
+  });
+}
+
+export function useHistory() {
+  return useQuery({
+    queryKey: keys.history,
+    queryFn: ({ signal }) => apiRequest<History>("/api/history", { signal })
   });
 }

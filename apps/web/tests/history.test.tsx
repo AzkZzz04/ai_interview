@@ -1,0 +1,41 @@
+import { screen } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
+import { describe, expect, it } from "vitest";
+import HistoryPage from "@/app/history/page";
+import type { History } from "@/lib/api/types";
+import { renderWithClient, setupMockBackend } from "./render";
+
+const { server } = setupMockBackend();
+const at = "2026-09-28T12:00:00Z";
+const serve = (history: History) => server.use(http.get("*/api/history", () => HttpResponse.json(history)));
+
+describe("history", () => {
+  it("shows a first-run state linking to the flow when empty", async () => {
+    renderWithClient(<HistoryPage />);
+    expect(await screen.findByText("Nothing here yet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Start" })).toHaveAttribute("href", "/flow");
+  });
+
+  it("shows a single score without a sparkline", async () => {
+    serve({ resumes: [{ id: "r1", name: "Backend", scores: [{ overall: 64, scoredAt: at }] }], targetJobs: [], practiceSets: [] });
+    renderWithClient(<HistoryPage />);
+    const row = await screen.findByRole("link", { name: /backend/i });
+    expect(row).toHaveTextContent("64");
+    expect(row.querySelector("svg")).toBeNull();
+  });
+
+  it("shows a practice trend with its text alternative and latest change, linking to the set", async () => {
+    serve({
+      resumes: [],
+      targetJobs: [],
+      practiceSets: [{
+        id: "p1", resumeId: "r1", resumeName: "Backend", targetJobId: "j1", targetJobName: "Acme", updatedAt: at,
+        questions: [{ id: "q1", text: "Tell me about a latency fix.", scores: [62, 70, 74] }]
+      }]
+    });
+    renderWithClient(<HistoryPage />);
+    expect(await screen.findByRole("img", { name: "Score rose from 62 to 74 over 3 attempts" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Change from previous: +4")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /acme/i })).toHaveAttribute("href", "/practice/p1");
+  });
+});
