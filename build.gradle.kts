@@ -29,6 +29,8 @@ extra["awsSdkVersion"] = "2.29.52"
 dependencies {
 	implementation(kotlin("reflect"))
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+	implementation("io.github.jan-tennert.supabase:postgrest-kt:3.8.0")
+	implementation("io.ktor:ktor-client-cio-jvm:3.5.1")
 	implementation("tools.jackson.module:jackson-module-kotlin")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.flywaydb:flyway-database-postgresql")
@@ -48,6 +50,7 @@ dependencies {
 	runtimeOnly("org.postgresql:postgresql")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
 	testImplementation(kotlin("test"))
+	testImplementation("io.ktor:ktor-client-mock-jvm:3.5.1")
 	testImplementation("org.mockito.kotlin:mockito-kotlin:6.3.0")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
@@ -63,6 +66,7 @@ dependencyManagement {
 	imports {
 		mavenBom("org.springframework.ai:spring-ai-bom:${property("springAiVersion")}")
 		mavenBom("software.amazon.awssdk:bom:${property("awsSdkVersion")}")
+		mavenBom("org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.11.0")
 	}
 }
 
