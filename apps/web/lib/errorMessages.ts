@@ -14,7 +14,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   GEMINI_EMPTY_RESPONSE: "The AI returned an empty response. Try again.",
   GEMINI_INVALID_RESPONSE: "The AI returned a result that could not be read. Try again.",
   REFERENCE_MISMATCH: "The selected document no longer matches the edited text. Submit the edited text again.",
-  RESUME_NOT_FOUND: "The selected resume is no longer available.",
+  RESUME_NOT_FOUND: "This resume was deleted.",
   RESUME_NOT_READY: "The selected resume has not finished processing.",
   RESUME_REFERENCE_REQUIRED: "The background job does not contain a resume reference.",
   RESUME_TEXT_REQUIRED: "Paste resume text or upload a resume before continuing.",
@@ -32,7 +32,21 @@ const ERROR_MESSAGES: Record<string, string> = {
   UNPROCESSABLE_CONTENT: "The submitted content could not be processed.",
   PROCESSING_ERROR: "The background job could not be processed.",
   INTERNAL_ERROR: "The backend could not complete the request.",
-  REQUEST_FAILED: "The request failed."
+  REQUEST_FAILED: "The request failed.",
+  TARGET_JOB_NOT_FOUND: "This target job was deleted.",
+  EXPERIENCE_NOT_FOUND: "This experience was deleted.",
+  PRACTICE_SET_NOT_FOUND: "This practice set was deleted.",
+  QUESTION_NOT_FOUND: "This question is no longer available.",
+  ATTEMPT_NOT_FOUND: "This answer is no longer available.",
+  NO_EXPERIENCE_SOURCES: "Add another resume or an experience to get suggestions.",
+  PRACTICE_SET_NOT_READY: "Questions are still being generated. Try again in a moment.",
+  PRACTICE_SET_NOT_FAILED: "This practice set is not in a failed state.",
+  QUESTION_LIMIT_REACHED: "You can add up to 10 of your own questions per practice set.",
+  ANSWER_EMPTY: "Write an answer before submitting.",
+  ANSWER_TOO_LONG: "Answers can be at most 4,000 characters.",
+  ANSWER_UNCHANGED: "This answer is the same as your last attempt. Change it before submitting.",
+  ATTEMPT_NOT_FAILED: "This answer is not in a failed state.",
+  UNSUPPORTED_FILE_TYPE: "Upload a PDF, DOC, DOCX, TXT or Markdown file."
 };
 
 export function errorCode(error: unknown): string | null {

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { AppShell } from "@/components/shell/AppShell";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -12,7 +14,10 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          <AppShell>{children}</AppShell>
+          <Toaster position="bottom-right" />
+        </Providers>
       </body>
     </html>
   );
