@@ -1,9 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api/client";
-import { isTerminal, type JobStatusResponse } from "@/lib/api/types";
+import { isTerminal, type ActiveJob, type JobStatusResponse } from "@/lib/api/types";
 
 const POLL_INTERVAL_MS = 1_500;
 const POLL_CEILING_MS = 10 * 60_000;
@@ -52,4 +52,25 @@ export function useJob<TResult = unknown>(
       void query.refetch();
     }
   };
+}
+
+/**
+ * Follows a resource's `activeJob`: polls while it runs and refreshes the resource's queries when it ends.
+ * Returns the freshest view of the job (the poll result while running, otherwise the resource's copy).
+ */
+export function useFollowJob(activeJob: ActiveJob | null | undefined, queryKeys: QueryKey[]) {
+  const client = useQueryClient();
+  const running = Boolean(activeJob) && !isTerminal(activeJob!.status);
+  const poll = useJob(running ? activeJob!.jobId : null);
+  const polledStatus = poll.job?.status;
+
+  useEffect(() => {
+    if (!running || !isTerminal(polledStatus)) return;
+    for (const queryKey of queryKeys) void client.invalidateQueries({ queryKey });
+    // queryKeys is recreated each render; the status transition is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, polledStatus, client]);
+
+  const job = running && poll.job ? { ...activeJob!, ...poll.job } : activeJob ?? null;
+  return { job, timedOut: poll.timedOut, checkAgain: poll.checkAgain };
 }
