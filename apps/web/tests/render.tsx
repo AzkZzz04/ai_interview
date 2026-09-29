@@ -5,9 +5,9 @@ import { afterAll, afterEach, beforeAll } from "vitest";
 import { makeQueryClient } from "@/lib/query/queryClient";
 import { createMockServer } from "@/mocks/server";
 
-/** Starts a mock backend for this test file. Jobs finish within a few milliseconds of real time. */
-export function setupMockBackend() {
-  const backend = createMockServer({ queuedMs: 0, stageMs: 5 });
+/** Starts a mock backend for this test file. By default jobs finish within a few milliseconds of real time. */
+export function setupMockBackend({ stageMs = 5 } = {}) {
+  const backend = createMockServer({ queuedMs: 0, stageMs });
   beforeAll(() => backend.server.listen({ onUnhandledFrame: "error" }));
   afterEach(() => {
     backend.server.resetHandlers();
