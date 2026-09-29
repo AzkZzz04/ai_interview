@@ -1,6 +1,6 @@
 spring:
   config:
-    import: optional:file:.env[.properties]
+    import: optional:file:.env[.properties],optional:file:.env.supabase[.properties]
   application:
     name: ai_interview
   datasource:
@@ -61,6 +61,10 @@ management:
         enabled: true
 
 app:
+  supabase:
+    enabled: ${SUPABASE_SDK_ENABLED:false}
+    url: ${SUPABASE_URL:}
+    secret-key: ${SUPABASE_SECRET_KEY:}
   runtime:
     mode: ${JOB_RUNTIME_MODE:all}
   gemini:

@@ -297,6 +297,20 @@ imagePullSecrets:
 The initial `:local` image references remain in the values file until the first
 successful GitHub Actions run writes the real image SHAs.
 
+## Optional Supabase SDK
+
+The backend includes a PostgREST-only Supabase client. To enable it, put
+`SUPABASE_SDK_ENABLED=true`, `SUPABASE_URL`, and `SUPABASE_SECRET_KEY` in the
+ignored `.env.supabase` file or process environment. File entries use unquoted
+Java properties values. Use a server `sb_secret_…` key; never put it in frontend
+variables or source control.
+
+The client is disabled by default and in worker-only mode. It uses a five-second
+request timeout, no automatic retries or redirects, and closes at application
+shutdown. Enabling it does not require the `supabase` Spring profile, change the
+JDBC database, migrate schemas, or route existing endpoints through Supabase.
+The database migration and job-status integration are deferred.
+
 ## Runtime modes
 
 The same Spring Boot build supports API and worker deployment independently:
