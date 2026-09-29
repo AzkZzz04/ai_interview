@@ -1,5 +1,7 @@
 "use client";
 
+// Old UI styles, removed with this page in U7.
+import "./legacy.css";
 import {
   FileText,
   Gauge,

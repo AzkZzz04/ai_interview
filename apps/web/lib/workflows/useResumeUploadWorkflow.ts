@@ -10,7 +10,7 @@ import type { ResumeJobContext } from "@/lib/workflows/types";
 import { useLatest } from "@/lib/workflows/useLatest";
 
 type Options = {
-  resumeTextareaRef: RefObject<HTMLTextAreaElement>;
+  resumeTextareaRef: RefObject<HTMLTextAreaElement | null>;
   sourceRevisionRef: MutableRefObject<number>;
   sourceWorkflowActiveRef: MutableRefObject<boolean>;
   invalidateAnalysis: () => void;

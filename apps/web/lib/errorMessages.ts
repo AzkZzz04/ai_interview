@@ -1,15 +1,18 @@
+import { ApiError } from "@/lib/api/client";
 import { JobApiError, JobError } from "@/lib/api/jobs";
 
+const NETWORK_MESSAGE = "The server is not reachable. Check your connection and try again.";
+
 const ERROR_MESSAGES: Record<string, string> = {
-  GEMINI_NOT_CONFIGURED: "Gemini key is not configured.",
-  GEMINI_RATE_LIMITED: "Gemini quota is exhausted for the configured key and model.",
+  GEMINI_NOT_CONFIGURED: "The AI service is not configured.",
+  GEMINI_RATE_LIMITED: "The AI service is at its usage limit. Try again later.",
   GEMINI_TIMEOUT: "The AI request timed out.",
-  GEMINI_UPSTREAM_ERROR: "Gemini is temporarily unavailable.",
-  GEMINI_SAFETY: "Gemini could not complete this request because of its safety policy.",
-  GEMINI_RECITATION: "Gemini stopped the response because it detected recited content.",
-  GEMINI_MAX_TOKENS: "Gemini reached its response limit before completing the result.",
-  GEMINI_EMPTY_RESPONSE: "Gemini returned an empty response.",
-  GEMINI_INVALID_RESPONSE: "Gemini returned a response that could not be validated.",
+  GEMINI_UPSTREAM_ERROR: "The AI service is temporarily unavailable.",
+  GEMINI_SAFETY: "The AI could not complete this request because of its content policy. Edit the text and try again.",
+  GEMINI_RECITATION: "The AI stopped because the response repeated source text. Try again.",
+  GEMINI_MAX_TOKENS: "The AI response was too long to complete. Try shorter input.",
+  GEMINI_EMPTY_RESPONSE: "The AI returned an empty response. Try again.",
+  GEMINI_INVALID_RESPONSE: "The AI returned a result that could not be read. Try again.",
   REFERENCE_MISMATCH: "The selected document no longer matches the edited text. Submit the edited text again.",
   RESUME_NOT_FOUND: "The selected resume is no longer available.",
   RESUME_NOT_READY: "The selected resume has not finished processing.",
@@ -19,7 +22,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RESUME_PARSER_BUSY: "The resume parser is busy. Try the upload again shortly.",
   JOB_DESCRIPTION_NOT_FOUND: "The selected job description is no longer available.",
   JOB_NOT_FOUND: "The background job is no longer available.",
-  REQUEST_TIMEOUT: "The backend request timed out.",
+  REQUEST_TIMEOUT: "The request timed out.",
   INVALID_REQUEST: "The request is invalid.",
   UPLOAD_TOO_LARGE: "The uploaded resume exceeds the configured size limit.",
   RATE_LIMITED: "Too many requests were submitted. Try again shortly.",
@@ -33,7 +36,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function errorCode(error: unknown): string | null {
-  if (error instanceof JobApiError) {
+  if (error instanceof JobApiError || error instanceof ApiError) {
     return error.code;
   }
   if (isJobError(error)) {
@@ -47,9 +50,9 @@ export function friendlyError(error: unknown, fallback = "The request failed.") 
   if (code && ERROR_MESSAGES[code]) {
     return ERROR_MESSAGES[code];
   }
-  if (error instanceof JobApiError) {
+  if (error instanceof JobApiError || error instanceof ApiError) {
     if (error.kind === "NETWORK") {
-      return "Spring Boot API is not reachable.";
+      return NETWORK_MESSAGE;
     }
     if (error.kind === "TIMEOUT") {
       return ERROR_MESSAGES.REQUEST_TIMEOUT;

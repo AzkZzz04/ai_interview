@@ -20,8 +20,8 @@ RUN addgroup --system --gid 10001 nextjs \
   && adduser --system --uid 10001 --ingroup nextjs nextjs
 
 WORKDIR /app
-COPY --from=build --chown=nextjs:nextjs /app/.next-build/standalone ./
-COPY --from=build --chown=nextjs:nextjs /app/.next-build/static ./.next-build/static
+COPY --from=build --chown=nextjs:nextjs /app/.next/standalone ./
+COPY --from=build --chown=nextjs:nextjs /app/.next/static ./.next/static
 
 USER nextjs
 

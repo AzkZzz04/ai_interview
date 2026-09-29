@@ -32,7 +32,7 @@ type ResumeInputPanelProps = {
   analysisElapsedSeconds: number;
   isAnalyzing: boolean;
   isUploadingResume: boolean;
-  resumeTextareaRef: RefObject<HTMLTextAreaElement>;
+  resumeTextareaRef: RefObject<HTMLTextAreaElement | null>;
   onResumeUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onRecoverLatestResume: () => void;
   onTargetRoleChange: (value: string) => void;
