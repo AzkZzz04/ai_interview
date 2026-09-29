@@ -35,7 +35,7 @@ class ResumeFileValidatorTests {
 			override fun getSize() = MAX_BYTES + 1
 		}
 		assertThatThrownBy { validator.validate(oversized) }.isInstanceOfSatisfying(ResponseStatusException::class.java) { exception ->
-			assertThat(exception.statusCode).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE)
+			assertThat(exception.statusCode).isEqualTo(HttpStatus.CONTENT_TOO_LARGE)
 		}
 	}
 

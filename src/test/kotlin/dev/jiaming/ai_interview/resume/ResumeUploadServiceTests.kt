@@ -26,10 +26,10 @@ class ResumeUploadServiceTests {
 			Built resume parsing APIs.
 		""".trimIndent().toByteArray(StandardCharsets.UTF_8))
 		val response = service.process(file)
-		assertThat(response.originalFilename()).isEqualTo("resume.txt")
-		assertThat(response.detectedContentType()).startsWith("text/plain")
-		assertThat(response.normalizedText()).contains("Java, Spring Boot, PostgreSQL")
-		assertThat(response.chunks().map { it.section() }).contains("Skills", "Experience")
+		assertThat(response.originalFilename).isEqualTo("resume.txt")
+		assertThat(response.detectedContentType).startsWith("text/plain")
+		assertThat(response.normalizedText).contains("Java, Spring Boot, PostgreSQL")
+		assertThat(response.chunks.map { it.section }).contains("Skills", "Experience")
 		assertThat(service.current()).isEmpty()
 	}
 
@@ -37,10 +37,10 @@ class ResumeUploadServiceTests {
 	fun extractsTextFromPdfResume() {
 		val file = MockMultipartFile("file", "resume.pdf", "application/pdf", createPdf("Jane Doe Java Spring PostgreSQL"))
 		val response = service.process(file)
-		assertThat(response.originalFilename()).isEqualTo("resume.pdf")
-		assertThat(response.detectedContentType()).isEqualTo("application/pdf")
-		assertThat(response.normalizedText()).contains("Jane Doe Java Spring PostgreSQL")
-		assertThat(response.chunks()).isNotEmpty()
+		assertThat(response.originalFilename).isEqualTo("resume.pdf")
+		assertThat(response.detectedContentType).isEqualTo("application/pdf")
+		assertThat(response.normalizedText).contains("Jane Doe Java Spring PostgreSQL")
+		assertThat(response.chunks).isNotEmpty()
 	}
 
 	@Test

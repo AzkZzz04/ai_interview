@@ -44,7 +44,7 @@ describe("job API", () => {
   });
 
   it("aborts a hanging status request after the configured timeout", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     vi.stubGlobal("fetch", vi.fn((_url, init) => new Promise((_resolve, reject) => {
       (init?.signal as AbortSignal).addEventListener("abort", () => {
         reject(new DOMException("Aborted", "AbortError"));

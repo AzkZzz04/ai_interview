@@ -3,7 +3,7 @@ package dev.jiaming.ai_interview.rag
 import dev.jiaming.ai_interview.common.RuntimeModeProperties
 import java.time.Duration
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.any
+import org.mockito.kotlin.any
 import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mockito
 

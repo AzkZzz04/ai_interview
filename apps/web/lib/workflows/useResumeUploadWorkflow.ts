@@ -3,7 +3,7 @@
 import { ChangeEvent, MutableRefObject, RefObject, useEffect, useRef, useState } from "react";
 import type { ExtractionProgress, UploadedResume } from "@/components/ResumeInputPanel";
 import { friendlyError } from "@/lib/errorMessages";
-import { isTerminalJob, JobStage } from "@/lib/api/jobs";
+import { isTerminalJob, jobStageLabel } from "@/lib/api/jobs";
 import { getCurrentResume, ResumeUploadResponse, uploadResume } from "@/lib/api/resumes";
 import { useJobPolling } from "@/lib/useJobPolling";
 import type { ResumeJobContext } from "@/lib/workflows/types";
@@ -23,6 +23,7 @@ type Options = {
 export function useResumeUploadWorkflow(options: Options) {
   const optionsRef = useLatest(options);
   const polling = useJobPolling<ResumeUploadResponse, ResumeJobContext>("ai-interview:job:resume");
+  const finishPolling = polling.finish;
   const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState<ExtractionProgress | null>(null);
@@ -103,7 +104,7 @@ export function useResumeUploadWorkflow(options: Options) {
           message: extractionErrorMessage(polling.terminalError)
         }));
       }
-      polling.finish();
+      finishPolling();
       return;
     }
 
@@ -149,7 +150,7 @@ export function useResumeUploadWorkflow(options: Options) {
       ));
       pendingTextFallbackRef.current = null;
       window.requestAnimationFrame(() => current.resumeTextareaRef.current?.focus());
-      polling.finish();
+      finishPolling();
       return;
     }
 
@@ -163,7 +164,7 @@ export function useResumeUploadWorkflow(options: Options) {
         message: "Backend extraction failed; text loaded in the browser"
       } : value);
       pendingTextFallbackRef.current = null;
-      polling.finish();
+      finishPolling();
       return;
     }
     setUploadedResume((value) => value ? {
@@ -171,8 +172,8 @@ export function useResumeUploadWorkflow(options: Options) {
       status: "error",
       message: extractionErrorMessage(job.error)
     } : value);
-    polling.finish();
-  }, [optionsRef, polling.activeJobId, polling.connectionError, polling.context, polling.finish, polling.job, polling.terminalError]);
+    finishPolling();
+  }, [optionsRef, polling.activeJobId, polling.connectionError, polling.context, finishPolling, polling.job, polling.terminalError]);
 
   async function handleResumeUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -297,19 +298,4 @@ function readTextFile(file: File) {
 
 function extractionErrorMessage(error: unknown) {
   return friendlyError(error, "Could not extract text from this resume");
-}
-
-function jobStageLabel(stage: JobStage) {
-  const labels: Record<JobStage, string> = {
-    QUEUED: "Queued for a worker",
-    READING_FILE: "Reading the resume from object storage",
-    EXTRACTING_TEXT: "Extracting document text",
-    NORMALIZING_TEXT: "Normalizing sections and whitespace",
-    CHUNKING_TEXT: "Building resume sections for retrieval",
-    ASSESSING_RESUME: "Scoring the resume with Gemini",
-    GENERATING_QUESTIONS: "Generating interview questions",
-    SCORING_ANSWER: "Evaluating the interview answer",
-    COMPLETED: "Completed"
-  };
-  return labels[stage];
 }

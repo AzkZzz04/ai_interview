@@ -49,9 +49,8 @@ describe("AI API document references", () => {
       answerText: "I separated the workflow."
     });
 
-    expect(request.resumeId).toBe("resume-id");
+    expect(request).toMatchObject({ resumeId: "resume-id", jobDescription: "private job description" });
     expect(request).not.toHaveProperty("resumeText");
-    expect(request.jobDescription).toBe("private job description");
   });
 
   it("preserves structured HTTP error codes", async () => {

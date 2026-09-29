@@ -2,7 +2,7 @@
 
 import { MutableRefObject, useEffect, useRef, useState } from "react";
 import { friendlyError } from "@/lib/errorMessages";
-import { isTerminalJob, JobStage } from "@/lib/api/jobs";
+import { isTerminalJob, jobStageLabel } from "@/lib/api/jobs";
 import { useJobPolling } from "@/lib/useJobPolling";
 import { AnswerFeedback, scoreAnswer } from "@/lib/mockAssessment";
 import type { PendingFeedbackInfo } from "@/lib/workflows/types";
@@ -20,6 +20,7 @@ type Options = {
 export function useFeedbackWorkflow(options: Options) {
   const optionsRef = useLatest(options);
   const polling = useJobPolling<AnswerFeedback, PendingFeedbackInfo>("ai-interview:job:feedback");
+  const finishPolling = polling.finish;
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
   const hydratedGenerationRef = useRef<string | null>(null);
 
@@ -51,7 +52,7 @@ export function useFeedbackWorkflow(options: Options) {
       else {
         current.setNotice("Feedback job could not be recovered because its submitted question context is unavailable.");
       }
-      polling.finish();
+      finishPolling();
       return;
     }
 
@@ -70,19 +71,19 @@ export function useFeedbackWorkflow(options: Options) {
     setIsSubmittingAnswer(false);
     if (!pending || !contextMatches(current.questionSetIdRef.current, pending)) {
       current.setNotice("Feedback completed for an earlier question set and was ignored.");
-      polling.finish();
+      finishPolling();
       return;
     }
     if ((job.status === "SUCCEEDED" || job.status === "PARTIAL") && job.result) {
       current.setFeedback(pending.questionId, job.result);
       current.setNotice(job.status === "PARTIAL" ? "Gemini returned partial feedback." : null);
-      polling.finish();
+      finishPolling();
       return;
     }
     current.setFeedback(pending.questionId, scoreAnswer(pending.answer, pending.payload.seniority));
     current.setNotice(`Gemini feedback unavailable: ${friendlyError(job.error)} Local draft feedback is shown.`);
-    polling.finish();
-  }, [optionsRef, polling.activeJobId, polling.connectionError, polling.context, polling.finish, polling.generation, polling.job, polling.restored, polling.terminalError]);
+    finishPolling();
+  }, [optionsRef, polling.activeJobId, polling.connectionError, polling.context, finishPolling, polling.generation, polling.job, polling.restored, polling.terminalError]);
 
   return {
     ...polling,
@@ -93,19 +94,4 @@ export function useFeedbackWorkflow(options: Options) {
 
 function contextMatches(questionSetId: string | null, pending: PendingFeedbackInfo) {
   return questionSetId === pending.questionSetId;
-}
-
-function jobStageLabel(stage: JobStage) {
-  const labels: Record<JobStage, string> = {
-    QUEUED: "Queued for a worker",
-    READING_FILE: "Reading the resume from object storage",
-    EXTRACTING_TEXT: "Extracting document text",
-    NORMALIZING_TEXT: "Normalizing sections and whitespace",
-    CHUNKING_TEXT: "Building resume sections for retrieval",
-    ASSESSING_RESUME: "Scoring the resume with Gemini",
-    GENERATING_QUESTIONS: "Generating interview questions",
-    SCORING_ANSWER: "Evaluating the interview answer",
-    COMPLETED: "Completed"
-  };
-  return labels[stage];
 }

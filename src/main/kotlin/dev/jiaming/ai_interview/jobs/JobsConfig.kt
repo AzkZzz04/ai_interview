@@ -1,0 +1,27 @@
+package dev.jiaming.ai_interview.jobs
+
+import java.net.URI
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.scheduling.annotation.EnableScheduling
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.sqs.SqsClient
+
+@Configuration
+@EnableScheduling
+class JobsConfig {
+    @Bean
+    fun sqsClient(properties: JobProperties): SqsClient {
+        val builder = SqsClient.builder().region(Region.of(properties.region()))
+        if (properties.accessKey.isNullOrBlank() || properties.secretKey.isNullOrBlank()) {
+            builder.credentialsProvider(DefaultCredentialsProvider.create())
+        } else {
+            builder.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(properties.accessKey, properties.secretKey)))
+        }
+        if (!properties.endpoint.isNullOrBlank()) builder.endpointOverride(URI.create(properties.endpoint))
+        return builder.build()
+    }
+}

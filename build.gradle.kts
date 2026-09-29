@@ -19,12 +19,6 @@ kotlin {
 	jvmToolchain(21)
 }
 
-configurations {
-	compileOnly {
-		extendsFrom(configurations.annotationProcessor.get())
-	}
-}
-
 repositories {
 	mavenCentral()
 }
@@ -34,6 +28,8 @@ extra["awsSdkVersion"] = "2.29.52"
 
 dependencies {
 	implementation(kotlin("reflect"))
+	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+	implementation("tools.jackson.module:jackson-module-kotlin")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -44,17 +40,15 @@ dependencies {
 	implementation("org.springframework.ai:spring-ai-google-genai-embedding")
 	implementation("org.springframework.ai:spring-ai-starter-model-google-genai")
 	implementation("org.springframework.ai:spring-ai-starter-vector-store-pgvector")
-	implementation("org.apache.pdfbox:pdfbox:3.0.5")
-	implementation("org.apache.tika:tika-core:3.2.3")
-	implementation("org.apache.tika:tika-parsers-standard-package:3.2.3")
+	implementation("org.apache.pdfbox:pdfbox:3.0.8")
+	implementation("org.apache.tika:tika-core:3.3.2")
+	implementation("org.apache.tika:tika-parsers-standard-package:3.3.2")
 	implementation("software.amazon.awssdk:s3")
 	implementation("software.amazon.awssdk:sqs")
-	implementation("software.amazon.awssdk:apache-client")
-	compileOnly("org.projectlombok:lombok")
 	runtimeOnly("org.postgresql:postgresql")
-	annotationProcessor("org.projectlombok:lombok")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
 	testImplementation(kotlin("test"))
+	testImplementation("org.mockito.kotlin:mockito-kotlin:6.3.0")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")

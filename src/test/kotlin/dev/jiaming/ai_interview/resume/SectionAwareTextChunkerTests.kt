@@ -20,8 +20,8 @@ class SectionAwareTextChunkerTests {
 			Java, Spring Boot, PostgreSQL, Redis
 		""".trimIndent()
 		val chunks = chunker.chunk(resume, 500, 50)
-		assertThat(chunks.map { it.section() }).containsExactly("Summary", "Experience", "Skills")
-		assertThat(chunks.map { it.index() }).containsExactly(0, 1, 2)
+		assertThat(chunks.map { it.section }).containsExactly("Summary", "Experience", "Skills")
+		assertThat(chunks.map { it.index }).containsExactly(0, 1, 2)
 	}
 
 	@Test
@@ -39,7 +39,7 @@ class SectionAwareTextChunkerTests {
 			RELEVANT COURSEWORK
 			Databases and software construction
 		""".trimIndent()
-		assertThat(chunker.chunk(resume, 500, 50).map { it.section() })
+		assertThat(chunker.chunk(resume, 500, 50).map { it.section })
 			.containsExactly("Research Experience", "Projects", "Skills", "Coursework")
 	}
 
@@ -48,8 +48,8 @@ class SectionAwareTextChunkerTests {
 		val chunks = chunker.chunk("EXPERIENCE\n" + "Built production backend services. ".repeat(80), 500, 80)
 		assertThat(chunks).hasSizeGreaterThan(1)
 		chunks.forEach {
-			assertThat(it.section()).isEqualTo("Experience")
-			assertThat(it.content()).isNotBlank()
+			assertThat(it.section).isEqualTo("Experience")
+			assertThat(it.content).isNotBlank()
 		}
 	}
 
@@ -65,8 +65,8 @@ class SectionAwareTextChunkerTests {
 		""".trimIndent()
 		val chunks = chunker.chunk(resume, 500, 50)
 		assertThat(chunks).hasSize(2)
-		assertThat(chunks.first().content()).contains("Example Co.").doesNotContain("Prior Co.")
-		assertThat(chunks[1].content()).contains("Prior Co.").doesNotContain("Example Co.")
+		assertThat(chunks.first().content).contains("Example Co.").doesNotContain("Prior Co.")
+		assertThat(chunks[1].content).contains("Prior Co.").doesNotContain("Example Co.")
 	}
 
 	@Test

@@ -73,14 +73,14 @@ class ApiExceptionHandlerContractTests {
     @Test
     fun resumeExtractionFailureIsUnprocessable() {
         perform("extraction")
-            .andExpect(status().isUnprocessableEntity)
+            .andExpect(status().isUnprocessableContent)
             .andExpect(jsonPath("$.code").value("RESUME_EXTRACTION_FAILED"))
     }
 
     @Test
     fun oversizedUploadIsPayloadTooLarge() {
         perform("too-large")
-            .andExpect(status().isPayloadTooLarge)
+            .andExpect(status().isContentTooLarge)
             .andExpect(jsonPath("$.code").value("UPLOAD_TOO_LARGE"))
     }
 

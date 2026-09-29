@@ -4,7 +4,7 @@ WORKDIR /workspace
 
 COPY --chown=gradle:gradle gradle gradle
 COPY --chown=gradle:gradle gradlew build.gradle.kts settings.gradle.kts ./
-RUN chmod +x gradlew && ./gradlew --no-daemon dependencies
+RUN ./gradlew --no-daemon dependencies
 
 COPY --chown=gradle:gradle src src
 RUN ./gradlew --no-daemon bootJar

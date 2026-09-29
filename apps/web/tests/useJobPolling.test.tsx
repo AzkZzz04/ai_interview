@@ -72,7 +72,7 @@ describe("useJobPolling", () => {
   });
 
   it("retries a transient provider or network error", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     vi.mocked(getJob)
       .mockRejectedValueOnce(new JobApiError("Service unavailable", 503, true, "HTTP"))
       .mockResolvedValueOnce(status("job-a", { value: "recovered" }));

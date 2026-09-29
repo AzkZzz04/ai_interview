@@ -16,39 +16,39 @@ class JobFailureClassifierTests {
 	@Test
 	fun retriesGeminiRateLimitsAndServerErrors() {
 		val rateLimit = classifier.classify(GeminiException("quota", 429, true))
-		assertThat(rateLimit.code()).isEqualTo(GeminiErrorCode.RATE_LIMITED)
-		assertThat(rateLimit.retryable()).isTrue()
-		assertThat(classifier.classify(ResponseStatusException(HttpStatus.BAD_GATEWAY)).retryable()).isTrue()
+		assertThat(rateLimit.code).isEqualTo(GeminiErrorCode.RATE_LIMITED)
+		assertThat(rateLimit.retryable).isTrue()
+		assertThat(classifier.classify(ResponseStatusException(HttpStatus.BAD_GATEWAY)).retryable).isTrue()
 	}
 
 	@Test
 	fun preservesGeminiRetryMetadataForEmptyAndTerminalFinishReasons() {
 		val empty = classifier.classify(GeminiException(GeminiErrorCode.EMPTY_RESPONSE, "empty", true))
 		val maxTokens = classifier.classify(GeminiException(GeminiErrorCode.MAX_TOKENS, "truncated", false))
-		assertThat(empty.code()).isEqualTo(GeminiErrorCode.EMPTY_RESPONSE)
-		assertThat(empty.retryable()).isTrue()
-		assertThat(maxTokens.code()).isEqualTo(GeminiErrorCode.MAX_TOKENS)
-		assertThat(maxTokens.retryable()).isFalse()
+		assertThat(empty.code).isEqualTo(GeminiErrorCode.EMPTY_RESPONSE)
+		assertThat(empty.retryable).isTrue()
+		assertThat(maxTokens.code).isEqualTo(GeminiErrorCode.MAX_TOKENS)
+		assertThat(maxTokens.retryable).isFalse()
 	}
 
 	@Test
 	fun preservesPermanentApiReferenceFailureCode() {
 		val failure = classifier.classify(ApiRequestException(HttpStatus.CONFLICT, "REFERENCE_MISMATCH", "Document reference does not match"))
-		assertThat(failure.code()).isEqualTo("REFERENCE_MISMATCH")
-		assertThat(failure.retryable()).isFalse()
+		assertThat(failure.code).isEqualTo("REFERENCE_MISMATCH")
+		assertThat(failure.retryable).isFalse()
 	}
 
 	@Test
 	fun retriesTemporaryParserSaturation() {
 		val failure = classifier.classify(ResumeParserBusyException())
-		assertThat(failure.code()).isEqualTo("RESUME_PARSER_BUSY")
-		assertThat(failure.retryable()).isTrue()
+		assertThat(failure.code).isEqualTo("RESUME_PARSER_BUSY")
+		assertThat(failure.retryable).isTrue()
 	}
 
 	@Test
 	fun doesNotRetryInvalidDocumentsOrClientErrors() {
-		assertThat(classifier.classify(ResumeExtractionException("Encrypted PDF")).retryable()).isFalse()
-		assertThat(classifier.classify(ResponseStatusException(HttpStatus.BAD_REQUEST)).retryable()).isFalse()
-		assertThat(classifier.classify(IllegalArgumentException("bad payload")).retryable()).isFalse()
+		assertThat(classifier.classify(ResumeExtractionException("Encrypted PDF")).retryable).isFalse()
+		assertThat(classifier.classify(ResponseStatusException(HttpStatus.BAD_REQUEST)).retryable).isFalse()
+		assertThat(classifier.classify(IllegalArgumentException("bad payload")).retryable).isFalse()
 	}
 }

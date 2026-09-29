@@ -8,6 +8,7 @@ import java.util.UUID
 import java.util.function.Supplier
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.eq
 import org.mockito.Mockito
 
 class ResumeExtractionJobHandlerTests {
@@ -25,8 +26,8 @@ class ResumeExtractionJobHandlerTests {
 		val expectedJson = ObjectMapper().createObjectNode().put("resumeId", resumeId.toString())
 		Mockito.`when`(storage.read(payload)).thenReturn(content)
 		Mockito.`when`(extractor.extract(content)).thenReturn("SKILLS\nJava")
-		Mockito.`when`(persistence.completeExtraction(org.mockito.ArgumentMatchers.eq(resumeId), org.mockito.ArgumentMatchers.eq("SKILLS\nJava"), org.mockito.ArgumentMatchers.eq("SKILLS\nJava"), org.mockito.ArgumentMatchers.anyList())).thenReturn(expected)
-		Mockito.`when`(context.withOwnedLease<ResumeUploadResponse>(org.mockito.ArgumentMatchers.any())).thenAnswer { invocation -> invocation.getArgument<Supplier<ResumeUploadResponse>>(0).get() }
+		Mockito.`when`(persistence.completeExtraction(eq(resumeId), eq("SKILLS\nJava"), eq("SKILLS\nJava"), org.mockito.ArgumentMatchers.anyList())).thenReturn(expected)
+		Mockito.`when`(context.withOwnedLease<ResumeUploadResponse>(org.mockito.kotlin.any<Supplier<ResumeUploadResponse>>())).thenAnswer { invocation -> invocation.getArgument<Supplier<ResumeUploadResponse>>(0).get() }
 		Mockito.`when`(context.toJson(expected)).thenReturn(expectedJson)
 
 		val result = handler.handle(payload, context)

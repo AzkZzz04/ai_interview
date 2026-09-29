@@ -5,7 +5,7 @@ import java.util.UUID
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.any
+import org.mockito.kotlin.any
 import org.mockito.Mockito
 import org.springframework.ai.document.Document
 import org.springframework.ai.vectorstore.SearchRequest
@@ -19,7 +19,7 @@ class RagRetrievalServiceTests {
 		val vectorStore = Mockito.mock(VectorStore::class.java)
 		val provider = Mockito.mock(ObjectProvider::class.java) as ObjectProvider<VectorStore>
 		Mockito.`when`(provider.ifAvailable).thenReturn(vectorStore)
-		Mockito.`when`(vectorStore.similaritySearch(any(SearchRequest::class.java))).thenReturn(listOf(Document("doc", "context", mapOf<String, Any>("contextId" to "resume:experience:0", "indexId" to "current", "claimVersion" to 4L))))
+		Mockito.`when`(vectorStore.similaritySearch(any<SearchRequest>())).thenReturn(listOf(Document("doc", "context", mapOf<String, Any>("contextId" to "resume:experience:0", "indexId" to "current", "claimVersion" to 4L))))
 		val service = RagRetrievalService(provider, RagProperties(1_024, 8, "gemini-embedding-001", "section-block-v3"), SimpleMeterRegistry())
 		val resumeIndex = UUID.randomUUID()
 		val jobIndex = UUID.randomUUID()

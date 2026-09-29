@@ -20,21 +20,23 @@ class ResumeTerminalFailureHandlerTests {
 	@Test
 	fun marksResumeFailedDeletesObjectAndClearsStorageKey() {
 		val job = job()
-		Mockito.`when`(persistenceService.markFailed(job.resourceId(), "RESUME_EXTRACTION_FAILED", "Encrypted PDF")).thenReturn(Optional.of("resumes/key"))
+		val resumeId = requireNotNull(job.resourceId)
+		Mockito.`when`(persistenceService.markFailed(resumeId, "RESUME_EXTRACTION_FAILED", "Encrypted PDF")).thenReturn(Optional.of("resumes/key"))
 		handler.handle(job, "RESUME_EXTRACTION_FAILED", "Encrypted PDF")
 		Mockito.verify(storageService).delete("resumes/key")
-		Mockito.verify(persistenceService).clearStorageKey(job.resourceId(), "resumes/key")
+		Mockito.verify(persistenceService).clearStorageKey(resumeId, "resumes/key")
 	}
 
 	@Test
 	fun retainsStorageKeyWhenDeletionFailsForScheduledReconciliation() {
 		val job = job()
-		Mockito.`when`(persistenceService.markFailed(job.resourceId(), "RESUME_EXTRACTION_FAILED", "Malformed PDF")).thenReturn(Optional.of("resumes/key"))
+		val resumeId = requireNotNull(job.resourceId)
+		Mockito.`when`(persistenceService.markFailed(resumeId, "RESUME_EXTRACTION_FAILED", "Malformed PDF")).thenReturn(Optional.of("resumes/key"))
 		Mockito.doThrow(IllegalStateException("S3 unavailable")).`when`(storageService).delete("resumes/key")
 		assertThatThrownBy { handler.handle(job, "RESUME_EXTRACTION_FAILED", "Malformed PDF") }
 			.isInstanceOf(IllegalStateException::class.java)
 			.hasMessageContaining("S3 unavailable")
-		Mockito.verify(persistenceService, Mockito.never()).clearStorageKey(job.resourceId(), "resumes/key")
+		Mockito.verify(persistenceService, Mockito.never()).clearStorageKey(resumeId, "resumes/key")
 	}
 
 	private fun job(): BackgroundJob {

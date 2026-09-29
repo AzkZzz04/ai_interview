@@ -21,15 +21,16 @@ class CoachResponseMapperTests {
 	fun normalizesAUsableQuestion() {
 		val response = InterviewQuestionsResponse(listOf(InterviewQuestionResponse(null, "System Design", "deep", "How would you make this workflow idempotent?", listOf("Unique operation keys"), emptyList())), "Gemini")
 		val normalized = mapper.normalizeQuestions(response, listOf("resume:experience:0"))
-		assertThat(normalized.questions()).hasSize(1)
-		assertThat(normalized.questions().first().difficulty()).isEqualTo("Deep Dive")
-		assertThat(normalized.questions().first().sourceContextIds()).containsExactly("resume:experience:0")
+		val questions = requireNotNull(normalized.questions)
+		assertThat(questions).hasSize(1)
+		assertThat(questions.first().difficulty).isEqualTo("Deep Dive")
+		assertThat(questions.first().sourceContextIds).containsExactly("resume:experience:0")
 	}
 
 	@Test
 	fun rejectsSourceContextIdsThatWereNotRetrieved() {
 		val response = InterviewQuestionsResponse(listOf(InterviewQuestionResponse("question-id", "Projects", "Core", "How did you design this project?", listOf("Architecture decisions"), listOf("resume:4", "invented:source:9"))), "gemini")
 		val normalized = mapper.normalizeQuestions(response, listOf("resume:projects:4", "resume:skills:5"))
-		assertThat(normalized.questions().first().sourceContextIds()).containsExactly("resume:projects:4", "resume:skills:5")
+		assertThat(requireNotNull(normalized.questions).first().sourceContextIds).containsExactly("resume:projects:4", "resume:skills:5")
 	}
 }
