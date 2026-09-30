@@ -831,7 +831,7 @@ The new UI stops calling these. The backend plan may remove them together with j
 
 ## 13. Mock mode notes
 
-`NEXT_PUBLIC_API_MOCKS` selects the mock mode:
+`VITE_API_MOCKS` selects the mock mode:
 
 - `all`: every endpoint is mocked. This is the default in development.
 - `new-only`: endpoints marked `new` or `changed` are mocked, and `existing` ones go to the backend. For

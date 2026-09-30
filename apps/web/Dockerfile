@@ -6,25 +6,13 @@ RUN npm ci
 
 COPY . .
 
-ARG NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8080
-ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+ARG VITE_API_BASE_URL=http://127.0.0.1:8080
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
-FROM node:22-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:alpine AS runtime
 
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
-
-RUN addgroup --system --gid 10001 nextjs \
-  && adduser --system --uid 10001 --ingroup nextjs nextjs
-
-WORKDIR /app
-COPY --from=build --chown=nextjs:nextjs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nextjs /app/.next/static ./.next/static
-
-USER nextjs
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 3000
-
-CMD ["node", "server.js"]

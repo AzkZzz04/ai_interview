@@ -2,7 +2,7 @@
 
 An AI-powered interview coach for technical candidates. Upload a resume, add an optional job description, and receive evidence-grounded resume assessment, tailored interview questions, and feedback on practice answers.
 
-Built as a reliable modular monolith: Spring Boot handles the API and asynchronous jobs, while Next.js provides the candidate workflow.
+Built as a reliable modular monolith: Spring Boot handles the API and asynchronous jobs, while a React single-page app (Vite, TanStack Router) provides the candidate workflow.
 
 ## What it does
 
@@ -18,7 +18,7 @@ Built as a reliable modular monolith: Spring Boot handles the API and asynchrono
 
 ```mermaid
 flowchart TB
-  Candidate["Candidate"] --> Web["Next.js web app"]
+  Candidate["Candidate"] --> Web["React web app"]
   Web --> API["Spring Boot API\napi or all mode"]
   API --> Guard["Redis request guard\nrate limit + idempotency"]
 
@@ -76,7 +76,7 @@ PostgreSQL is the source of truth for job state. SQS wakes workers; it does not 
 | Layer | Technology |
 | --- | --- |
 | Backend | Java, Spring Boot, Gradle, JdbcTemplate, Flyway |
-| Frontend | Next.js, TypeScript |
+| Frontend | React, Vite, TanStack Router and Query, TypeScript |
 | AI | Gemini 3.6 Flash, structured JSON generation |
 | Retrieval | PostgreSQL, pgvector, Gemini embeddings |
 | Async workflow | AWS SQS + DLQ, PostgreSQL leases/checkpoints |
@@ -185,7 +185,7 @@ Build the web image with the browser-visible API address, then serve it:
 
 ```bash
 docker build \
-  --build-arg NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8080 \
+  --build-arg VITE_API_BASE_URL=http://127.0.0.1:8080 \
   -t ai-interview-web:local apps/web
 docker run --rm --name ai-interview-web -p 3000:3000 ai-interview-web:local
 ```

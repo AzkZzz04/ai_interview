@@ -107,7 +107,7 @@ jobs:
           context: ./apps/web
           file: ./apps/web/Dockerfile
           build-args: |
-            NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8080
+            VITE_API_BASE_URL=http://127.0.0.1:8080
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.WEB_IMAGE }}:${{ github.sha }}
