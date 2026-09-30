@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.interview.InterviewController
 import java.time.Instant
-import java.util.Optional
 import java.util.UUID
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -45,12 +44,12 @@ class AsyncJobControllerTests {
 	@Test
 	fun jobStatusReturnsResultAndTimestamps() {
 		val userId = UUID.randomUUID()
-		val store = Mockito.mock(BackgroundJobStore::class.java)
+		val reader = Mockito.mock(JobStatusReader::class.java)
 		val localUserService = Mockito.mock(LocalUserService::class.java)
 		val job = completedJob(userId)
 		Mockito.`when`(localUserService.localUserId()).thenReturn(userId)
-		Mockito.`when`(store.findForUser(job.id, userId)).thenReturn(Optional.of(job))
-		val mockMvc = standaloneSetup(JobController(store, localUserService)).build()
+		Mockito.`when`(reader.findForUser(job.id, userId)).thenReturn(JobStatusResponse.from(job))
+		val mockMvc = standaloneSetup(JobController(reader, localUserService)).build()
 
 		mockMvc.perform(get("/api/jobs/{jobId}", job.id))
 			.andExpect(status().isOk)
@@ -58,6 +57,7 @@ class AsyncJobControllerTests {
 			.andExpect(jsonPath("$.status").value("SUCCEEDED"))
 			.andExpect(jsonPath("$.result.overallScore").value(84))
 			.andExpect(jsonPath("$.completedAt").exists())
+		Mockito.verify(reader).findForUser(job.id, userId)
 	}
 
 	private fun accepted(type: JobType): JobAcceptedResponse {

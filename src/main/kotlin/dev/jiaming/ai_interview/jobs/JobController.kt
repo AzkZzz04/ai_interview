@@ -13,9 +13,9 @@ import dev.jiaming.ai_interview.common.LocalUserService
 @RestController
 @RequestMapping("/api/jobs")
 @CrossOrigin(origins = ["http://localhost:3000", "http://127.0.0.1:3000"])
-class JobController(private val jobStore: BackgroundJobStore, private val localUserService: LocalUserService) {
+class JobController(private val jobStatusReader: JobStatusReader, private val localUserService: LocalUserService) {
     @GetMapping("/{jobId}")
-    fun status(@PathVariable jobId: UUID): JobStatusResponse = jobStore.findForUser(jobId, localUserService.localUserId())
-        .map(JobStatusResponse::from)
-        .orElseThrow { ApiRequestException(HttpStatus.NOT_FOUND, "JOB_NOT_FOUND", "Background job was not found") }
+    fun status(@PathVariable jobId: UUID): JobStatusResponse = jobStatusReader
+        .findForUser(jobId, localUserService.localUserId())
+        ?: throw ApiRequestException(HttpStatus.NOT_FOUND, "JOB_NOT_FOUND", "Background job was not found")
 }

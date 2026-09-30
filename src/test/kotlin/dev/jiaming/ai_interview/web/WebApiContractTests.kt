@@ -4,24 +4,25 @@ import dev.jiaming.ai_interview.coach.AiAnalysisRequest
 import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest
 import dev.jiaming.ai_interview.assessment.AssessmentController
 import dev.jiaming.ai_interview.common.ApiExceptionHandler
+import dev.jiaming.ai_interview.common.ApiRequestException
 import dev.jiaming.ai_interview.common.ApiStatusController
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.interview.InterviewController
-import dev.jiaming.ai_interview.jobs.BackgroundJobStore
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
 import dev.jiaming.ai_interview.jobs.JobController
 import dev.jiaming.ai_interview.jobs.JobInputRefs
 import dev.jiaming.ai_interview.jobs.JobStage
+import dev.jiaming.ai_interview.jobs.JobStatusReader
 import dev.jiaming.ai_interview.jobs.JobStatus
 import dev.jiaming.ai_interview.jobs.JobSubmissionService
 import dev.jiaming.ai_interview.jobs.JobType
-import java.util.Optional
 import java.util.UUID
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.Mockito
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.info.BuildProperties
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.mock.env.MockEnvironment
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -106,15 +107,32 @@ class WebApiContractTests {
 	fun unknownJobReturnsNotFoundContract() {
 		val userId = UUID.randomUUID()
 		val jobId = UUID.randomUUID()
-		val store = Mockito.mock(BackgroundJobStore::class.java)
+		val reader = Mockito.mock(JobStatusReader::class.java)
 		val localUserService = Mockito.mock(LocalUserService::class.java)
 		Mockito.`when`(localUserService.localUserId()).thenReturn(userId)
-		Mockito.`when`(store.findForUser(jobId, userId)).thenReturn(Optional.empty())
-		val mockMvc = standaloneSetup(JobController(store, localUserService)).setControllerAdvice(ApiExceptionHandler()).build()
+		Mockito.`when`(reader.findForUser(jobId, userId)).thenReturn(null)
+		val mockMvc = standaloneSetup(JobController(reader, localUserService)).setControllerAdvice(ApiExceptionHandler()).build()
 		mockMvc.perform(get("/api/jobs/{jobId}", jobId))
 			.andExpect(status().isNotFound)
 			.andExpect(jsonPath("$.code").value("JOB_NOT_FOUND"))
 			.andExpect(jsonPath("$.message").exists())
+	}
+
+	@Test
+	fun statusReaderFailureUsesServiceUnavailableContract() {
+		val userId = UUID.randomUUID()
+		val jobId = UUID.randomUUID()
+		val reader = Mockito.mock(JobStatusReader::class.java)
+		val localUserService = Mockito.mock(LocalUserService::class.java)
+		Mockito.`when`(localUserService.localUserId()).thenReturn(userId)
+		Mockito.`when`(reader.findForUser(jobId, userId)).thenThrow(
+			ApiRequestException(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE", "Job status is temporarily unavailable")
+		)
+		val mockMvc = standaloneSetup(JobController(reader, localUserService)).setControllerAdvice(ApiExceptionHandler()).build()
+		mockMvc.perform(get("/api/jobs/{jobId}", jobId))
+			.andExpect(status().isServiceUnavailable)
+			.andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
+			.andExpect(jsonPath("$.message").value("Job status is temporarily unavailable"))
 	}
 
 	@Test

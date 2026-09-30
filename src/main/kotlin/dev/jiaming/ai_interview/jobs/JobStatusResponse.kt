@@ -18,7 +18,7 @@ data class JobStatusResponse(
                 job.createdAt, job.startedAt, job.completedAt, JobInputRefs.from(job))
         }
 
-        private fun jsonValue(node: JsonNode?): Any? {
+        internal fun jsonValue(node: JsonNode?): Any? {
             if (node == null || node.isNull || node.isMissingNode) return null
             if (node.isObject) return LinkedHashMap<String, Any?>().also { value ->
                 node.properties().forEach { entry -> value[entry.key] = jsonValue(entry.value) }

@@ -6,11 +6,12 @@ import java.util.UUID
 @JvmRecord
 data class JobInputRefs(val resumeId: UUID?, val jobDescriptionId: UUID?) {
     companion object {
-        @JvmStatic fun from(job: BackgroundJob): JobInputRefs {
-            val payload = job.requestPayload
+        @JvmStatic fun from(job: BackgroundJob): JobInputRefs = from(job.requestPayload, job.resourceId)
+
+        internal fun from(payload: JsonNode?, resourceId: UUID?): JobInputRefs {
             var resumeId = uuid(payload, "resumeId")
             val jobDescriptionId = uuid(payload, "jobDescriptionId")
-            if (resumeId == null) resumeId = job.resourceId
+            if (resumeId == null) resumeId = resourceId
             return JobInputRefs(resumeId, jobDescriptionId)
         }
 
