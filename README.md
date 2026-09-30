@@ -190,6 +190,9 @@ docker build \
 docker run --rm --name ai-interview-web -p 3000:3000 ai-interview-web:local
 ```
 
+Add `--build-arg VITE_API_MOCKS=all` to build a demo image that runs entirely on
+mock data, without the backend.
+
 Open `http://127.0.0.1:3000`, then verify the backend independently with
 `curl http://127.0.0.1:8080/api/status`. On Linux, replace
 `host.docker.internal` with a host gateway address or place the API and its
