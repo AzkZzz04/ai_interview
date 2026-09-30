@@ -91,6 +91,13 @@ class SupabaseMigrationIntegrationTests {
             val password = "runtime' test password"
             runner.bootstrapRuntime(password)
             assertRuntimePrivileges(database, password, jobId)
+            dataSource.connection.use { connection ->
+                connection.createStatement().use { it.execute("ALTER ROLE ai_interview_runtime BYPASSRLS") }
+            }
+            assertThatThrownBy { runner.bootstrapRuntime(password) }.hasMessageContaining("privileged attributes")
+            dataSource.connection.use { connection ->
+                connection.createStatement().use { it.execute("ALTER ROLE ai_interview_runtime NOBYPASSRLS") }
+            }
             runner.migrate()
             assertHistory(dataSource, baseline = true)
         } finally {
@@ -203,6 +210,12 @@ class SupabaseMigrationIntegrationTests {
 
     private fun assertRuntimePrivileges(database: String, password: String, jobId: UUID) {
         dataSource(database, "ai_interview_runtime", password).connection.use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls OR rolinherit FROM pg_roles WHERE rolname = current_user").use { result ->
+                    assertThat(result.next()).isTrue()
+                    assertThat(result.getBoolean(1)).isFalse()
+                }
+            }
             connection.prepareStatement("UPDATE ai_interview_app.background_jobs SET stage = 'PROCESSING' WHERE id = ?").use { statement ->
                 statement.setObject(1, jobId)
                 assertThat(statement.executeUpdate()).isEqualTo(1)

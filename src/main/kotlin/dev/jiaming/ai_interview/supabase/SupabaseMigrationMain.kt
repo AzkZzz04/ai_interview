@@ -84,6 +84,9 @@ class SupabaseMigrationRunner(private val dataSource: DataSource) {
             connection.autoCommit = false
             try {
                 if (roleExists(connection, RUNTIME_ROLE)) {
+                    check(!roleHasPrivilegedAttributes(connection, RUNTIME_ROLE)) {
+                        "$RUNTIME_ROLE has privileged attributes; use a restricted runtime role"
+                    }
                     check(!roleOwnsApplicationObjects(connection, RUNTIME_ROLE)) {
                         "$RUNTIME_ROLE owns application objects; transfer ownership before granting runtime access"
                     }
@@ -94,7 +97,7 @@ class SupabaseMigrationRunner(private val dataSource: DataSource) {
                     connection.createStatement().use { it.execute("CREATE ROLE $RUNTIME_ROLE LOGIN") }
                 }
                 connection.createStatement().use {
-                    it.execute("ALTER ROLE $RUNTIME_ROLE WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT")
+                    it.execute("ALTER ROLE $RUNTIME_ROLE WITH LOGIN NOCREATEDB NOCREATEROLE NOINHERIT")
                 }
                 val passwordSql = connection.prepareStatement("SELECT format('ALTER ROLE %I WITH PASSWORD %L', ?, ?)").use { statement ->
                     statement.setString(1, RUNTIME_ROLE)
@@ -152,7 +155,7 @@ class SupabaseMigrationRunner(private val dataSource: DataSource) {
                FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
                JOIN pg_depend d ON d.classid = 'pg_type'::regclass AND d.objid = t.oid AND d.deptype = 'e'
                JOIN pg_extension e ON e.oid = d.refobjid
-               WHERE e.extname IN ('vector', 'pgcrypto', 'hstore', 'uuid-ossp')"""
+               WHERE e.extname IN ('vector', 'pgcrypto', 'hstore', 'uuid-ossp') AND t.typelem = 0"""
         ).use { query ->
             query.executeQuery().use { types ->
                 while (types.next()) connection.createStatement().use {
@@ -264,6 +267,13 @@ class SupabaseMigrationRunner(private val dataSource: DataSource) {
         statement.executeQuery().use { result -> result.next(); result.getBoolean(1) }
     }
 
+    private fun roleHasPrivilegedAttributes(connection: Connection, role: String): Boolean = connection.prepareStatement(
+        "SELECT rolsuper OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname = ?"
+    ).use { statement ->
+        statement.setString(1, role)
+        statement.executeQuery().use { result -> result.next() && result.getBoolean(1) }
+    }
+
     private fun roleHasMembership(connection: Connection, role: String): Boolean = connection.prepareStatement(
         "SELECT EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member WHERE r.rolname = ?)"
     ).use { statement ->
@@ -285,11 +295,8 @@ private data class Settings(
     private val password: String,
     private val rootCert: Path
 ) {
-    fun dataSource(): DriverManagerDataSource = DriverManagerDataSource().apply {
+    fun dataSource(): DriverManagerDataSource = DriverManagerDataSource(url, username, password).apply {
         setDriverClassName("org.postgresql.Driver")
-        setUrl(url)
-        setUsername(username)
-        setPassword(password)
         setConnectionProperties(Properties().apply {
             setProperty("sslmode", "verify-full")
             setProperty("sslrootcert", rootCert.toString())
