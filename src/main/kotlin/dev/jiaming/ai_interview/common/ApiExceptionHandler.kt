@@ -62,6 +62,7 @@ class ApiExceptionHandler {
         404 -> "NOT_FOUND"
         409 -> "CONFLICT"
         413 -> "UPLOAD_TOO_LARGE"
+        415 -> "UNSUPPORTED_FILE_TYPE"
         422 -> "UNPROCESSABLE_CONTENT"
         429 -> "RATE_LIMITED"
         503 -> "SERVICE_UNAVAILABLE"

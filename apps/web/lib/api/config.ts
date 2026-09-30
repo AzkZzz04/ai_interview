@@ -1,4 +1,5 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
+/** Empty by default: the browser calls /api on its own origin (the Vite proxy in dev, nginx in the container). */
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 export const REQUEST_TIMEOUT_MS = 15_000;
 
 export type MockMode = "all" | "new-only" | "off";

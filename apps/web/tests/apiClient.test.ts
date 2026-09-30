@@ -8,12 +8,12 @@ function jsonResponse(status: number, body: unknown) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("apiRequest", () => {
-  it("returns parsed JSON and sends no-store", async () => {
+  it("calls /api on the page origin, returns parsed JSON and sends no-store", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { items: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(apiRequest("/api/resumes")).resolves.toEqual({ items: [] });
-    expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:8080/api/resumes");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/resumes");
     expect(fetchMock.mock.calls[0][1].cache).toBe("no-store");
   });
 

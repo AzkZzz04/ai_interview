@@ -13,7 +13,8 @@ server {
     proxy_pass $api_upstream;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    # Overwrite, never append: the API trusts this header for rate limits, so a client must not choose its own value.
+    proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
     # Matches the backend's multipart limit (spring.servlet.multipart.max-request-size).
     client_max_body_size 12m;
