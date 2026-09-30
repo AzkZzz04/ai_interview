@@ -26,6 +26,10 @@ repositories {
 extra["springAiVersion"] = "2.0.0-M4"
 extra["awsSdkVersion"] = "2.29.52"
 
+springBoot {
+	mainClass.set("dev.jiaming.ai_interview.AiInterviewApplicationKt")
+}
+
 dependencies {
 	implementation(kotlin("reflect"))
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
@@ -72,6 +76,14 @@ dependencyManagement {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+tasks.register<JavaExec>("supabaseMigrate") {
+	description = "Runs the standalone Supabase Flyway migration or runtime-role bootstrap."
+	group = "database"
+	dependsOn(tasks.named("classes"))
+	classpath = sourceSets.main.get().runtimeClasspath
+	mainClass.set("dev.jiaming.ai_interview.supabase.SupabaseMigrationMain")
 }
 
 val integrationTestSourceSet = sourceSets.create("integrationTest") {

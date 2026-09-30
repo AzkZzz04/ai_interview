@@ -12,6 +12,7 @@ spring:
 
 app:
   supabase:
+    enabled: true
     url: ${SUPABASE_URL:}
     secret-key: ${SUPABASE_SECRET_KEY:}
     ssl-root-cert: ${SUPABASE_SSL_ROOT_CERT}
