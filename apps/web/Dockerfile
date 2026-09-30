@@ -6,7 +6,8 @@ RUN npm ci
 
 COPY . .
 
-ARG VITE_API_BASE_URL=http://127.0.0.1:8080
+# Empty means same origin: the browser calls /api on this server and nginx forwards it.
+ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 # "all" builds a demo image that runs on mock data; production keeps mocks off.
 ARG VITE_API_MOCKS=off
@@ -15,7 +16,12 @@ RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:alpine AS runtime
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Where nginx forwards /api. Override per environment, e.g. a Kubernetes service FQDN.
+ENV API_UPSTREAM=http://api:8080
+# Lets the entrypoint fill NGINX_LOCAL_RESOLVERS from /etc/resolv.conf for the template's resolver line.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 3000

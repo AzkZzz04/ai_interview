@@ -25,6 +25,10 @@ spec:
         - name: web
           image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
           imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          env:
+            # nginx forwards /api here; its resolver ignores search domains, so use the full service name.
+            - name: API_UPSTREAM
+              value: "http://{{ include "ai-interview.fullname" . }}-api.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.api.service.port }}"
           ports:
             - name: http
               containerPort: 3000

@@ -1,9 +1,8 @@
 The AI Interview Coach is installed into {{ .Release.Namespace }}.
 
-The web image was built with VITE_API_BASE_URL=http://127.0.0.1:8080.
-For local Minikube testing, port-forward both services in separate terminals:
+The web service serves the app and forwards /api to the API service, so one
+port-forward is enough for local Minikube testing:
 
-  kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "ai-interview.fullname" . }}-api 8080:{{ .Values.api.service.port }}
   kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "ai-interview.fullname" . }}-web 3000:{{ .Values.web.service.port }}
 
 Then open http://127.0.0.1:3000.

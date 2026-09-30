@@ -183,11 +183,14 @@ docker run --rm --name ai-interview-api -p 8080:8080 --env-file .env \
 
 Build the web image with the browser-visible API address, then serve it:
 
+The web image serves the app and forwards `/api` to `API_UPSTREAM`
+(default `http://api:8080`), so the browser only ever talks to one origin:
+
 ```bash
-docker build \
-  --build-arg VITE_API_BASE_URL=http://127.0.0.1:8080 \
-  -t ai-interview-web:local apps/web
-docker run --rm --name ai-interview-web -p 3000:3000 ai-interview-web:local
+docker build -t ai-interview-web:local apps/web
+docker run --rm --name ai-interview-web -p 3000:3000 \
+  -e API_UPSTREAM=http://host.docker.internal:8080 \
+  ai-interview-web:local
 ```
 
 Add `--build-arg VITE_API_MOCKS=all` to build a demo image that runs entirely on
@@ -230,16 +233,15 @@ kubectl -n ai-interview rollout status deployment/ai-interview-worker
 kubectl -n ai-interview rollout status deployment/ai-interview-web
 ```
 
-The frontend image uses `http://127.0.0.1:8080` as its browser-visible API
-address, so port-forward both services during this local phase:
+The web service forwards `/api` to the API service, so one port-forward is
+enough during this local phase:
 
 ```bash
-kubectl -n ai-interview port-forward service/ai-interview-api 8080:8080
 kubectl -n ai-interview port-forward service/ai-interview-web 3000:3000
 ```
 
-Open `http://127.0.0.1:3000`. An Ingress or same-origin web proxy is the next
-step before exposing this deployment beyond local Minikube.
+Open `http://127.0.0.1:3000`. TLS in front of the web service is the next step
+before exposing this deployment publicly.
 
 ## Argo CD GitOps
 
