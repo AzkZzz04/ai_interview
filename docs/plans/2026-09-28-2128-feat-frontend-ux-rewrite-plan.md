@@ -242,6 +242,8 @@ U1 remains the API authority. U2 replaces the runtime and route shell, U3 moves 
 
 ### U2. React, Vite and TanStack Router platform migration
 
+Executed by `docs/plans/2026-09-29-2243-refactor-vite-tanstack-migration-plan.md`.
+
 - **Goal:** Replace the current Next.js runtime with a React 19 Vite SPA while preserving the shared client, types, visual system and public URLs.
 - **Requirements:** R20–R22; KTD1–KTD3, KTD6–KTD9.
 - **Dependencies:** none.
