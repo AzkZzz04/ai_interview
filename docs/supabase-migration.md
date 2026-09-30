@@ -84,7 +84,7 @@ Watch readiness, SDK 503 rates, job failures/retries, queue age, JDBC pool exhau
 
 Verified on the selected live project: certificate-verified session-pooler connection; Flyway baseline 0 and V1–V8; vector(1024); HNSW vector_cosine_ops index; security_invoker view; restricted runtime role; runtime JDBC reads; application-table DDL rejection (42501). Effective database grants deny anon/authenticated view reads and allow service_role reads.
 
-Local backend check and packaged build passed: 184 unit and 38 integration tests. Frontend polling passed 8 tests; typecheck and lint passed. Bootstrap corrections and table-list simplification passed focused integration checks. Helm lint/render and the runnable chart contract check passed for local/Supabase resources, secret isolation, CA mounts, PVC retention, namespace isolation, and five invalid configurations. The chart check uses js-yaml already installed by npm ci in apps/web.
+Local backend check and packaged build passed: 184 unit and 38 integration tests. Frontend polling passed 8 tests; typecheck and lint passed. Bootstrap corrections and table-list simplification passed focused integration checks. Helm lint/render and the runnable chart contract check passed for local/Supabase resources, secret isolation, CA mounts, PVC retention, namespace isolation, and five invalid configurations. The chart check requires Helm, Node.js and Ruby with its standard YAML/JSON libraries; it does not depend on frontend packages.
 
 The Data API now exposes only ai_interview_api: backend reads return HTTP 200, while public, ai_interview_app and graphql_public requests return HTTP 406/PGRST106. The opt-in live SDK smoke passed JDBC-written status transitions, nested result JSON, nullable/error mapping, input-reference fallback, wrong-owner filtering and missing jobs. Its random terminal-job/user fixtures were deleted afterward. The configured backend secret key works.
 
@@ -95,3 +95,5 @@ SUPABASE_LIVE_SMOKE=true ./gradlew integrationTest --tests '*SupabaseLiveSmokeTe
 ~~~
 
 Full workflow operation, deployment capacity and rollback rehearsal remain unverified. Anonymous/authenticated effective database grants were checked; direct authenticated Data API smoke remains pending. The migration is not cutover-complete until the remaining live checks pass.
+
+After rebasing onto master (3970d80), backend check/bootJar passed again. The new Vite frontend passed typecheck, lint, all 57 tests and production build using Node 24.19.0. Helm contracts passed after removing the check script dependency on the former frontend YAML package.

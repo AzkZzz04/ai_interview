@@ -1,14 +1,14 @@
-const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');
 const assert = require('node:assert/strict');
-const yaml = require('../apps/web/node_modules/js-yaml');
 
 process.chdir(path.resolve(__dirname, '..'));
 const render = (extra = []) => cp.spawnSync('helm', ['template', 'interview', 'deploy/ai-interview', ...extra], { encoding: 'utf8' });
 const parse = result => {
   assert.equal(result.status, 0, result.stderr);
-  return yaml.loadAll(result.stdout).filter(Boolean);
+  const parsed = cp.spawnSync('ruby', ['-ryaml', '-rjson', '-e', 'puts JSON.generate(YAML.load_stream(STDIN.read))'], { input: result.stdout, encoding: 'utf8' });
+  assert.equal(parsed.status, 0, parsed.stderr);
+  return JSON.parse(parsed.stdout).filter(Boolean);
 };
 const example = ['-f', 'deploy/ai-interview/values-supabase.example.yaml'];
 const local = parse(render()), remote = parse(render(example));
