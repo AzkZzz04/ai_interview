@@ -41,6 +41,9 @@ class SupabaseDatabaseConfiguration {
             require(!uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) {
                 "DATABASE_URL must contain a host and must not embed credentials"
             }
+            require(uri.host.endsWith(".pooler.supabase.com") && uri.port == 5432 && uri.path == "/postgres") {
+                "DATABASE_URL must use the Supabase session pooler on port 5432 with database postgres"
+            }
             val pairs = try {
                 uri.rawQuery.orEmpty().split('&').filter { it.isNotEmpty() }.map { part ->
                     val entry = part.split('=', limit = 2)

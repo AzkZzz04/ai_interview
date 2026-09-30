@@ -31,6 +31,9 @@ class SupabaseDatabaseConfigurationTests {
         assertFailsWith<IllegalArgumentException> { config.dataSource(environment(certificate).withProperty("spring.datasource.username", "postgres")) }
         assertFailsWith<IllegalArgumentException> { config.dataSource(environment(directory.resolve("missing.crt").toString())) }
         for (url in listOf(
+            URL.replace(":5432/", ":6543/"),
+            URL.replace("aws-0-us-east-1.pooler.supabase.com", "db.projectref.supabase.co"),
+            URL.replace("/postgres?", "/other?"),
             URL.replace("verify-full", "require"),
             URL.replace("public,extensions", "public"),
             "$URL&sslmode=disable",
@@ -50,6 +53,6 @@ class SupabaseDatabaseConfigurationTests {
         .withProperty("app.supabase.ssl-root-cert", certificate)
 
     companion object {
-        private const val URL = "jdbc:postgresql://localhost:5432/postgres?sslmode=verify-full&currentSchema=public,extensions"
+        private const val URL = "jdbc:postgresql://aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&currentSchema=public,extensions"
     }
 }
