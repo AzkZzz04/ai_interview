@@ -33,9 +33,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "ai-interview.fullname" . }}-app
+            {{- if .Values.postgres.enabled }}
             - secretRef:
                 name: {{ include "ai-interview.fullname" . }}-postgres
+            {{- end }}
           env:
+            {{- include "ai-interview.externalDatabaseEnv" . | nindent 12 }}
             - name: JOB_RUNTIME_MODE
               value: worker
             - name: GEMINI_API_KEY
@@ -47,5 +50,7 @@ spec:
             preStop:
               exec:
                 command: ["sh", "-c", "sleep 5"]
+          {{- include "ai-interview.caMount" . | nindent 10 }}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
+      {{- include "ai-interview.caVolume" . | nindent 6 }}

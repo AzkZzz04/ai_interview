@@ -366,3 +366,5 @@ The script refuses non-local hosts, databases other than `interview_guide`, and 
 ## Further documentation
 
 See [project design](docs/project-design.md) for the architecture, domain model, API surface, and implementation details.
+
+For the opt-in Supabase profile, schema bootstrap, deployment secrets, and rollback, see [Supabase migration](docs/supabase-migration.md).

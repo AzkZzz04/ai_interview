@@ -1,0 +1,26 @@
+# Create referenced secrets first; no credentials belong in Helm values.
+# Replace this tag with a built/published commit from the migration branch.
+api:
+  image:
+    tag: supabase-migration
+worker:
+  image:
+    tag: supabase-migration
+postgres:
+  enabled: false
+  persistence:
+    enabled: true
+externalDatabase:
+  existingSecret: ai-interview-supabase-runtime
+supabase:
+  enabled: true
+  url: https://mjzycnjhtwyqcblwbjvy.supabase.co
+  sdkExistingSecret: ai-interview-supabase-sdk
+  caExistingSecret: ai-interview-supabase-ca
+  maximumPoolSize: 4
+app:
+  redisKeyPrefix: "ai-interview:supabase-mjzycnjhtwyqcblwbjvy:"
+localstack:
+  s3Bucket: ai-interview-supabase-mjzycnjhtwyqcblwbjvy
+  queueName: ai-interview-supabase-mjzycnjhtwyqcblwbjvy-jobs
+  dlqName: ai-interview-supabase-mjzycnjhtwyqcblwbjvy-jobs-dlq
