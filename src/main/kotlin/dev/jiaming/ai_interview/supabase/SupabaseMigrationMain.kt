@@ -191,16 +191,11 @@ class SupabaseMigrationRunner(private val dataSource: DataSource) {
     }
 
     private fun hasApplicationObjects(connection: Connection): Boolean {
-        val knownPublicTables = listOf(
-            "app_users", "resumes", "job_descriptions", "resume_assessments", "interview_sessions",
-            "interview_questions", "interview_answers", "resume_chunks", "job_description_chunks",
-            "question_embeddings", "answer_embeddings", "vector_store", "background_jobs"
-        ).joinToString(",") { "'${it}'" }
         return connection.createStatement().use { statement ->
             statement.executeQuery(
                 """SELECT EXISTS (
                     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE n.nspname = 'public' AND c.relname IN ($knownPublicTables)
+                    WHERE n.nspname = 'public' AND c.relname IN ($APPLICATION_TABLE_SQL)
                       AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
                     UNION ALL
                     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -247,11 +242,7 @@ class SupabaseMigrationRunner(private val dataSource: DataSource) {
                 JOIN pg_roles r ON r.oid = c.relowner
             WHERE r.rolname = ? AND (
                 n.nspname IN ('ai_interview_app', 'ai_interview_api') OR
-                (n.nspname = 'public' AND c.relname IN (
-                    'app_users', 'resumes', 'job_descriptions', 'resume_assessments', 'interview_sessions',
-                    'interview_questions', 'interview_answers', 'resume_chunks', 'job_description_chunks',
-                    'question_embeddings', 'answer_embeddings', 'vector_store', 'background_jobs'
-                ))
+                (n.nspname = 'public' AND c.relname IN ($APPLICATION_TABLE_SQL))
             )
         )"""
     ).use { statement ->
@@ -285,6 +276,11 @@ class SupabaseMigrationRunner(private val dataSource: DataSource) {
 
     private companion object {
         const val RUNTIME_ROLE = "ai_interview_runtime"
+        val APPLICATION_TABLE_SQL = listOf(
+            "app_users", "resumes", "job_descriptions", "resume_assessments", "interview_sessions",
+            "interview_questions", "interview_answers", "resume_chunks", "job_description_chunks",
+            "question_embeddings", "answer_embeddings", "vector_store", "background_jobs"
+        ).joinToString(",") { "'${it}'" }
     }
 }
 
