@@ -1,17 +1,7 @@
-import { createRootRoute, createRoute, createRouter, Outlet, type RouterHistory } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, type RouterHistory } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { DeletedState } from "@/components/library/DeletedState";
 import { Toaster } from "@/components/ui/sonner";
-import ExperiencesPage from "@/pages/ExperiencesPage";
-import FitPage from "@/pages/FitPage";
-import HistoryPage from "@/pages/HistoryPage";
-import HomePage from "@/pages/HomePage";
-import PracticePage from "@/pages/PracticePage";
-import ResumePickerPage from "@/pages/ResumePickerPage";
-import ResumesPage from "@/pages/ResumesPage";
-import ScorePage from "@/pages/ScorePage";
-import TargetJobPickerPage from "@/pages/TargetJobPickerPage";
-import TargetJobsPage from "@/pages/TargetJobsPage";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -25,20 +15,21 @@ const rootRoute = createRootRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/flow", component: ResumePickerPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/flow/$resumeId", component: ScorePage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/flow/$resumeId/jobs", component: TargetJobPickerPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/flow/$resumeId/jobs/$jobId", component: FitPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/practice/$setId", component: PracticePage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/resumes", component: ResumesPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/jobs", component: TargetJobsPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/experiences", component: ExperiencesPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/history", component: HistoryPage })
+  createRoute({ getParentRoute: () => rootRoute, path: "/", component: lazyRouteComponent(() => import("@/pages/HomePage")) }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/flow", component: lazyRouteComponent(() => import("@/pages/ResumePickerPage")) }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/flow/$resumeId", component: lazyRouteComponent(() => import("@/pages/ScorePage")) }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/flow/$resumeId/jobs", component: lazyRouteComponent(() => import("@/pages/TargetJobPickerPage")) }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/flow/$resumeId/jobs/$jobId", component: lazyRouteComponent(() => import("@/pages/FitPage")) }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/practice/$setId", component: lazyRouteComponent(() => import("@/pages/PracticePage")) }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/resumes", component: lazyRouteComponent(() => import("@/pages/ResumesPage")) }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/jobs", component: lazyRouteComponent(() => import("@/pages/TargetJobsPage")) }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/experiences", component: lazyRouteComponent(() => import("@/pages/ExperiencesPage")) }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/history", component: lazyRouteComponent(() => import("@/pages/HistoryPage")) })
 ]);
 
 export function makeRouter(history?: RouterHistory) {
-  return createRouter({ routeTree, history, scrollRestoration: true });
+  // Each page is its own chunk; hovering or focusing a link starts loading it before the click.
+  return createRouter({ routeTree, history, scrollRestoration: true, defaultPreload: "intent" });
 }
 
 export const router = makeRouter();
