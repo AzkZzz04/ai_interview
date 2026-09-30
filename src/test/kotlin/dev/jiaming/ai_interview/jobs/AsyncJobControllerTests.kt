@@ -1,6 +1,7 @@
 package dev.jiaming.ai_interview.jobs
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import dev.jiaming.ai_interview.common.ApiExceptionHandler
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.interview.InterviewController
 import java.time.Instant
@@ -58,6 +59,24 @@ class AsyncJobControllerTests {
 			.andExpect(jsonPath("$.status").value("SUCCEEDED"))
 			.andExpect(jsonPath("$.result.overallScore").value(84))
 			.andExpect(jsonPath("$.completedAt").exists())
+			.andExpect(jsonPath("$.maxAttempts").value(3))
+			.andExpect(jsonPath("$.inputRefs.resumeId").value(REFS[0].toString()))
+			.andExpect(jsonPath("$.inputRefs.targetJobId").value(REFS[1].toString()))
+			.andExpect(jsonPath("$.inputRefs.practiceSetId").value(REFS[2].toString()))
+			.andExpect(jsonPath("$.inputRefs.attemptId").value(REFS[3].toString()))
+	}
+
+	@Test
+	fun jobStatusReturnsJobNotFoundForAMissingJob() {
+		val userId = UUID.randomUUID()
+		val store = Mockito.mock(BackgroundJobStore::class.java)
+		val localUserService = Mockito.mock(LocalUserService::class.java)
+		Mockito.`when`(localUserService.localUserId()).thenReturn(userId)
+		val mockMvc = standaloneSetup(JobController(store, localUserService)).setControllerAdvice(ApiExceptionHandler()).build()
+
+		mockMvc.perform(get("/api/jobs/{jobId}", UUID.randomUUID()))
+			.andExpect(status().isNotFound)
+			.andExpect(jsonPath("$.code").value("JOB_NOT_FOUND"))
 	}
 
 	private fun accepted(type: JobType): JobAcceptedResponse {
@@ -67,6 +86,8 @@ class AsyncJobControllerTests {
 
 	private fun completedJob(userId: UUID): BackgroundJob {
 		val now = Instant.now()
-		return BackgroundJob(UUID.randomUUID(), userId, JobType.ANALYSIS, "resume", null, JobStatus.SUCCEEDED, JobStage.COMPLETED, ObjectMapper().createObjectNode(), ObjectMapper().createObjectNode().put("overallScore", 84), "fingerprint", 1, 3, null, null, false, now, now, now, now, now, now, null, null)
+		return BackgroundJob(UUID.randomUUID(), userId, JobType.ANALYSIS, "resume", null, JobStatus.SUCCEEDED, JobStage.COMPLETED, ObjectMapper().createObjectNode().put("resumeId", REFS[0].toString()).put("targetJobId", REFS[1].toString()).put("practiceSetId", REFS[2].toString()).put("attemptId", REFS[3].toString()), ObjectMapper().createObjectNode().put("overallScore", 84), "fingerprint", 1, 3, null, null, false, now, now, now, now, now, now, null, null)
 	}
+
+	private companion object { val REFS = List(4) { UUID.randomUUID() } }
 }

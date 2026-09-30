@@ -83,5 +83,4 @@ app:
   jobHeartbeatSeconds: 60
   jobMaxAttempts: 3
   jobRetryBaseSeconds: 15
-  jobReuseWindowSeconds: 300
   shutdownGraceSeconds: 120

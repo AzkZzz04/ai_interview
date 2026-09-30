@@ -8,7 +8,7 @@ data class JobProperties(
     val enabled: Boolean, val endpoint: String?, var region: String?, val accessKey: String?, val secretKey: String?,
     var queueName: String?, var dlqName: String?, var maxReceiveCount: Int, var workerConcurrency: Int,
     var longPollSeconds: Int, var visibilityTimeoutSeconds: Int, var heartbeatSeconds: Int, var maxAttempts: Int,
-    var retryBaseSeconds: Int, var reuseWindowSeconds: Int, var dispatchIntervalMs: Long,
+    var retryBaseSeconds: Int, var dispatchIntervalMs: Long,
     var leaseReaperIntervalMs: Long, var cleanupIntervalMs: Long, var shutdownGraceSeconds: Int, var retentionDays: Int
 ) {
     init {
@@ -23,7 +23,6 @@ data class JobProperties(
         heartbeatSeconds = requestedHeartbeat.coerceIn(1, visibilityTimeoutSeconds / 2)
         maxAttempts = if (maxAttempts <= 0) 3 else maxAttempts
         retryBaseSeconds = if (retryBaseSeconds <= 0) 15 else retryBaseSeconds
-        reuseWindowSeconds = if (reuseWindowSeconds <= 0) 300 else reuseWindowSeconds
         dispatchIntervalMs = if (dispatchIntervalMs <= 0) 5_000 else dispatchIntervalMs
         leaseReaperIntervalMs = if (leaseReaperIntervalMs <= 0) 30_000 else leaseReaperIntervalMs
         cleanupIntervalMs = if (cleanupIntervalMs <= 0) 3_600_000 else cleanupIntervalMs
@@ -34,6 +33,5 @@ data class JobProperties(
     fun queueName(): String = queueName!!
     fun dlqName(): String = dlqName!!
     fun visibilityTimeout() = Duration.ofSeconds(visibilityTimeoutSeconds.toLong())
-    fun reuseWindow() = Duration.ofSeconds(reuseWindowSeconds.toLong())
     private fun nonBlank(value: String?, fallback: String) = value?.takeIf { it.isNotBlank() }?.trim() ?: fallback
 }

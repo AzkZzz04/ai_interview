@@ -35,10 +35,15 @@ class JobSubmissionService @Autowired constructor(
         this(jobStore, dispatcher, fingerprintService, localUserService, requestGuard, documentResolver, properties, runtimeMode,
             metrics, objectMapper, TransactionOperations.withoutTransaction())
 
+    fun submit(type: JobType, resourceType: String?, resourceId: UUID?, payload: Any): JobAcceptedResponse {
+        assertApiAvailable()
+        if (type != JobType.RESUME_EXTRACTION) requestGuard.assertAiAllowed(AI_JOB_ACTION)
+        return createOrReuse(type, resourceType, resourceId, payload, resourceId?.let { fingerprint(type.name, it) })
+    }
     fun submitAnalysis(request: AiAnalysisRequest): JobAcceptedResponse {
         assertApiAvailable()
         return submitWithHttpProtection("analysis", request) {
-            requestGuard.assertAiAllowed("analysis")
+            requestGuard.assertAiAllowed(AI_JOB_ACTION)
             inTransaction { submitAnalysisTransaction(request) }
         }
     }
@@ -54,7 +59,7 @@ class JobSubmissionService @Autowired constructor(
         val answerText = request.answerText?.takeIf { it.isNotBlank() }
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer text is required")
         return submitWithHttpProtection("answer-feedback", request) {
-            requestGuard.assertAiAllowed("answer-feedback")
+            requestGuard.assertAiAllowed(AI_JOB_ACTION)
             inTransaction { submitFeedbackTransaction(request, answerText.trim()) }
         }
     }
@@ -73,8 +78,9 @@ class JobSubmissionService @Autowired constructor(
         if (!properties.enabled || !runtimeMode.apiEnabled()) throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
             "This process is running in worker-only mode and does not accept background jobs")
     }
-    fun findReusable(type: JobType, fingerprint: String): Optional<JobAcceptedResponse> = jobStore.findReusable(localUserService.localUserId(), type, fingerprint, properties.reuseWindow()).map { JobAcceptedResponse.from(it, true) }
-    fun createOrReuse(type: JobType, resourceType: String, resourceId: UUID?, requestPayload: Any, fingerprint: String): JobAcceptedResponse {
+    fun findReusable(type: JobType, fingerprint: String?): Optional<JobAcceptedResponse> = if (fingerprint == null) Optional.empty()
+        else jobStore.findReusable(localUserService.localUserId(), type, fingerprint).map { JobAcceptedResponse.from(it, true) }
+    fun createOrReuse(type: JobType, resourceType: String?, resourceId: UUID?, requestPayload: Any, fingerprint: String?): JobAcceptedResponse {
         val existing = findReusable(type, fingerprint)
         if (existing.isPresent) return existing.get()
         val created = jobStore.createIfAbsent(localUserService.localUserId(), type, resourceType, resourceId,
@@ -104,5 +110,8 @@ class JobSubmissionService @Autowired constructor(
     private data class AnalysisFingerprint(val resumeHash: String, val jobDescriptionHash: String, val targetRole: String, val seniority: String)
     private data class FeedbackFingerprint(val resumeHash: String, val jobDescriptionHash: String, val targetRole: String,
         val seniority: String, val question: String, val category: String, val expectedSignals: List<String>, val answer: String)
-    companion object { private val log = LoggerFactory.getLogger(JobSubmissionService::class.java) }
+    companion object {
+        const val AI_JOB_ACTION = "ai-job"
+        private val log = LoggerFactory.getLogger(JobSubmissionService::class.java)
+    }
 }

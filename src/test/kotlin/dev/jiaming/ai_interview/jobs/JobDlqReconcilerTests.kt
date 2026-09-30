@@ -57,7 +57,7 @@ class JobDlqReconcilerTests {
 		Mockito.verify(jobStore, Mockito.never()).markExhaustedFromDlq(jobId)
 	}
 
-	private fun properties() = JobProperties(true, "http://localhost:4566", "us-east-1", "test", "test", "jobs", "jobs-dlq", 3, 2, 20, 300, 60, 5, 15, 300, 5_000, 30_000, 3_600_000, 120, 7)
+	private fun properties() = JobProperties(true, "http://localhost:4566", "us-east-1", "test", "test", "jobs", "jobs-dlq", 3, 2, 20, 300, 60, 5, 15, 5_000, 30_000, 3_600_000, 120, 7)
 	private fun message() = Message.builder().messageId(UUID.randomUUID().toString()).receiptHandle("receipt").body("{}").build()
 	private fun job(id: UUID, status: JobStatus, attempts: Int, maxAttempts: Int): BackgroundJob {
 		val now = Instant.now()

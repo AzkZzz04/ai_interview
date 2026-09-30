@@ -2,7 +2,6 @@ package dev.jiaming.ai_interview.jobs
 
 import java.sql.ResultSet
 import java.sql.SQLException
-import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
 import java.util.Optional
@@ -18,8 +17,8 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class BackgroundJobStore(private val jdbcTemplate: JdbcTemplate, private val objectMapper: ObjectMapper) {
     @Transactional
-    fun createIfAbsent(userId: UUID, jobType: JobType, resourceType: String, resourceId: UUID?,
-                       requestPayload: JsonNode?, requestFingerprint: String, maxAttempts: Int): Optional<BackgroundJob> {
+    fun createIfAbsent(userId: UUID, jobType: JobType, resourceType: String?, resourceId: UUID?,
+                       requestPayload: JsonNode?, requestFingerprint: String?, maxAttempts: Int): Optional<BackgroundJob> {
         val jobId = UUID.randomUUID()
         val insertedIds = jdbcTemplate.query("""
             INSERT INTO ai_interview_app.background_jobs (
@@ -32,15 +31,23 @@ class BackgroundJobStore(private val jdbcTemplate: JdbcTemplate, private val obj
         return Optional.ofNullable(insertedIds.firstOrNull()?.let { findById(it).orElse(null) })
     }
 
-    fun findReusable(userId: UUID, jobType: JobType, requestFingerprint: String, recentSuccessWindow: Duration): Optional<BackgroundJob> {
-        val completedAfter = Instant.now().minus(recentSuccessWindow)
-        return Optional.ofNullable(jdbcTemplate.query("""
+    fun findReusable(userId: UUID, jobType: JobType, requestFingerprint: String): Optional<BackgroundJob> = queryOne("""
+        SELECT $JOB_COLUMNS FROM ai_interview_app.background_jobs
+        WHERE user_id = ? AND job_type = ? AND request_fingerprint = ? AND status IN ('QUEUED', 'PROCESSING', 'RETRYING')
+        ORDER BY created_at DESC LIMIT 1
+        """, userId, jobType.name, requestFingerprint)
+    fun findLatestForResource(userId: UUID, resourceType: String, resourceId: UUID, jobTypes: Collection<JobType> = emptyList()): Optional<BackgroundJob> {
+        val typeFilter = if (jobTypes.isEmpty()) "" else "AND job_type IN (${jobTypes.joinToString { "'${it.name}'" }})"
+        return queryOne("""
             SELECT $JOB_COLUMNS FROM ai_interview_app.background_jobs
-            WHERE user_id = ? AND job_type = ? AND request_fingerprint = ?
-              AND (status IN ('QUEUED', 'PROCESSING', 'RETRYING') OR (status IN ('SUCCEEDED', 'PARTIAL') AND completed_at >= ?))
-            ORDER BY CASE WHEN status IN ('QUEUED', 'PROCESSING', 'RETRYING') THEN 0 ELSE 1 END, created_at DESC
-            LIMIT 1
-            """, { rs, _ -> mapJob(rs) }, userId, jobType.name, requestFingerprint, Timestamp.from(completedAfter)).firstOrNull())
+            WHERE user_id = ? AND resource_type = ? AND resource_id = ? $typeFilter
+            ORDER BY created_at DESC LIMIT 1
+            """, userId, resourceType, resourceId)
+    }
+    fun deleteByResources(resourceType: String, resourceIds: Collection<UUID>): Int {
+        if (resourceIds.isEmpty()) return 0
+        return jdbcTemplate.update("DELETE FROM ai_interview_app.background_jobs WHERE resource_type = ? AND resource_id IN (${resourceIds.joinToString { "?" }})",
+            resourceType, *resourceIds.toTypedArray())
     }
     fun findForUser(jobId: UUID, userId: UUID): Optional<BackgroundJob> = queryOne("SELECT $JOB_COLUMNS FROM ai_interview_app.background_jobs WHERE id = ? AND user_id = ?", jobId, userId)
     fun findById(jobId: UUID): Optional<BackgroundJob> = queryOne("SELECT $JOB_COLUMNS FROM ai_interview_app.background_jobs WHERE id = ?", jobId)
@@ -120,10 +127,12 @@ class BackgroundJobStore(private val jdbcTemplate: JdbcTemplate, private val obj
         """)
     fun clearExpiredPayloads(retentionDays: Int): Int = jdbcTemplate.update("""
         UPDATE ai_interview_app.background_jobs SET request_payload = jsonb_strip_nulls(jsonb_build_object(
-            'payloadVersion', request_payload -> 'payloadVersion', 'resumeId', COALESCE(request_payload -> 'resumeId', to_jsonb(resource_id)),
-            'jobDescriptionId', request_payload -> 'jobDescriptionId')), result_payload = NULL, updated_at = now()
+            'payloadVersion', request_payload -> 'payloadVersion',
+            'resumeId', COALESCE(request_payload -> 'resumeId', CASE WHEN resource_type IN ($RESUME_RESOURCE_TYPES) THEN to_jsonb(resource_id) END),
+            'jobDescriptionId', request_payload -> 'jobDescriptionId', 'targetJobId', request_payload -> 'targetJobId',
+            'practiceSetId', request_payload -> 'practiceSetId', 'attemptId', request_payload -> 'attemptId')), result_payload = NULL, updated_at = now()
         WHERE status IN ('SUCCEEDED', 'PARTIAL', 'FAILED') AND completed_at < now() - (? * interval '1 day')
-          AND (result_payload IS NOT NULL OR (request_payload - 'payloadVersion' - 'resumeId' - 'jobDescriptionId') <> '{}'::jsonb)
+          AND (result_payload IS NOT NULL OR (request_payload - ARRAY['payloadVersion', 'resumeId', 'jobDescriptionId', 'targetJobId', 'practiceSetId', 'attemptId']) <> '{}'::jsonb)
         """, retentionDays)
 
     private fun markTerminal(jobId: UUID, leaseToken: UUID, status: JobStatus, resultPayload: JsonNode?, errorCode: String?, errorMessage: String?, retryable: Boolean): Boolean = jdbcTemplate.update("""
@@ -151,6 +160,7 @@ class BackgroundJobStore(private val jdbcTemplate: JdbcTemplate, private val obj
     private fun truncate(value: String?) = if (value == null || value.length <= 4_000) value else value.substring(0, 4_000)
 
     companion object {
+        private val RESUME_RESOURCE_TYPES = JobInputRefs.RESUME_RESOURCE_TYPES.joinToString { "'$it'" }
         private val JOB_COLUMNS = """
             id, user_id, job_type, resource_type, resource_id, status, stage,
             request_payload::text AS request_payload, result_payload::text AS result_payload,

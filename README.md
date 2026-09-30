@@ -329,7 +329,7 @@ Workers use SQS long polling and PostgreSQL-backed leases. Database retries use 
 | `POST /api/interview/feedback` | Submit answer-feedback work. |
 | `GET /api/jobs/{jobId}` | Poll job status, stage, attempts, result, and error. |
 
-Mutation endpoints accept an optional `Idempotency-Key`. Redis handles short-lived HTTP idempotency and rate limits; PostgreSQL fingerprints reuse identical AI jobs for five minutes.
+Mutation endpoints accept an optional `Idempotency-Key`. Redis handles short-lived HTTP idempotency and rate limits; PostgreSQL allows one running job per resource, so a second submit returns the job already in progress.
 
 ## Verification
 

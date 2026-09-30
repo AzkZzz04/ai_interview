@@ -782,7 +782,8 @@ The frontend assumes each of these. The backend plan must implement and test the
    - Job de-duplication keys on resource IDs (resume, pair, set, attempt), never on request text alone.
    - Two attempts with identical text on different questions, or a retry of a failed attempt, always start a
      new job.
-   - `reused: true` only comes from the same `Idempotency-Key`.
+   - `reused: true` comes only from the same `Idempotency-Key`, or from a submit while a job for the same resource
+     is still running, which returns that running job.
 4. **Cascade delete** as described in 3.7, 4.6 and 5.7. `delete-impact` counts match what the delete removes.
 5. **Duplicate resolution.**
    - Applies to resumes (file bytes, then normalized text), target jobs (normalized text) and experiences
