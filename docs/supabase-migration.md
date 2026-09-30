@@ -86,4 +86,12 @@ Verified on the selected live project: certificate-verified session-pooler conne
 
 Local backend check and packaged build passed: 184 unit and 38 integration tests. Frontend polling passed 8 tests; typecheck and lint passed. Bootstrap corrections and table-list simplification passed focused integration checks. Helm lint/render and the runnable chart contract check passed for local/Supabase resources, secret isolation, CA mounts, PVC retention, namespace isolation, and five invalid configurations. The chart check uses js-yaml already installed by npm ci in apps/web.
 
-Data API exposed-schema configuration, backend SDK live smoke, full workflow operation, deployment capacity and rollback rehearsal remain unverified. At this checkpoint the configured SDK key did not have the required sb_secret_ prefix. The migration is not cutover-complete until these live checks pass.
+The Data API now exposes only ai_interview_api: backend reads return HTTP 200, while public, ai_interview_app and graphql_public requests return HTTP 406/PGRST106. The opt-in live SDK smoke passed JDBC-written status transitions, nested result JSON, nullable/error mapping, input-reference fallback, wrong-owner filtering and missing jobs. Its random terminal-job/user fixtures were deleted afterward. The configured backend secret key works.
+
+Run the live check explicitly against the selected development project (ordinary checks skip it):
+
+~~~sh
+SUPABASE_LIVE_SMOKE=true ./gradlew integrationTest --tests '*SupabaseLiveSmokeTests' --rerun-tasks --no-daemon
+~~~
+
+Full workflow operation, deployment capacity and rollback rehearsal remain unverified. Anonymous/authenticated effective database grants were checked; direct authenticated Data API smoke remains pending. The migration is not cutover-complete until the remaining live checks pass.
