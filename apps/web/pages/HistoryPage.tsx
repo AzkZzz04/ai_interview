@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { Sparkline } from "@/components/history/Sparkline";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/library/ListStates";
@@ -34,7 +32,7 @@ export default function HistoryPage() {
         <EmptyState
           title="Nothing here yet"
           description="Score a resume and practice for a job; your progress shows up here."
-          action={<Button asChild><Link href="/flow">Start</Link></Button>}
+          action={<Button asChild><Link to="/flow">Start</Link></Button>}
         />
       ) : null}
       {data && !empty ? (
@@ -44,7 +42,7 @@ export default function HistoryPage() {
               const values = resume.scores.map((score) => score.overall);
               return (
                 <li key={resume.id}>
-                  <Link href={`/flow/${resume.id}`} className={rowClass}>
+                  <Link to="/flow/$resumeId" params={{ resumeId: resume.id }} className={rowClass}>
                     <span className="min-w-0 flex-1 truncate font-medium">{resume.name}</span>
                     <Sparkline values={values} noun="scores" />
                     <span className="font-semibold">{values.at(-1)}</span>
@@ -56,7 +54,7 @@ export default function HistoryPage() {
           <Section title="Job fit">
             {data.targetJobs.flatMap((job) => job.fits.map((fit) => (
               <li key={`${job.id}:${fit.resumeId}`}>
-                <Link href={`/flow/${fit.resumeId}/jobs/${job.id}`} className={rowClass}>
+                <Link to="/flow/$resumeId/jobs/$jobId" params={{ resumeId: fit.resumeId, jobId: job.id }} className={rowClass}>
                   <span className="min-w-0 flex-1 truncate"><span className="font-medium">{job.name}</span> <span className="text-muted-foreground">with {fit.resumeName}</span></span>
                   <span className="font-semibold">{fit.fitScore}</span>
                 </Link>
@@ -66,7 +64,7 @@ export default function HistoryPage() {
           <Section title="Practice">
             {data.practiceSets.map((set) => (
               <li key={set.id} className="rounded-lg border bg-card">
-                <Link href={`/practice/${set.id}`} className="flex flex-wrap items-center gap-2 px-4 py-3 font-medium hover:text-primary">
+                <Link to="/practice/$setId" params={{ setId: set.id }} className="flex flex-wrap items-center gap-2 px-4 py-3 font-medium hover:text-primary">
                   {set.targetJobName} <span className="font-normal text-muted-foreground">with {set.resumeName}</span>
                 </Link>
                 <ul className="divide-y border-t">

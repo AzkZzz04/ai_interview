@@ -1,19 +1,19 @@
 import { Check } from "lucide-react";
-import Link from "next/link";
+import { Link, linkOptions } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 
 type Props = { current: 1 | 2 | 3 | 4 | 5 | 6; resumeId?: string; targetJobId?: string; practiceSetId?: string };
 
 /** The six-step journey. Steps whose prerequisite ID is missing are disabled. */
 export function Stepper({ current, resumeId, targetJobId, practiceSetId }: Props) {
-  const pair = resumeId && targetJobId ? `/flow/${resumeId}/jobs/${targetJobId}` : null;
+  const pair = resumeId && targetJobId ? linkOptions({ to: "/flow/$resumeId/jobs/$jobId", params: { resumeId, jobId: targetJobId } }) : null;
   const steps = [
-    { label: "Resume", href: "/flow" },
-    { label: "Score", href: resumeId ? `/flow/${resumeId}` : null },
-    { label: "Target job", href: resumeId ? `/flow/${resumeId}/jobs` : null },
-    { label: "Job fit", href: pair },
-    { label: "Mode", href: pair },
-    { label: "Practice", href: practiceSetId ? `/practice/${practiceSetId}` : null }
+    { label: "Resume", link: linkOptions({ to: "/flow" }) },
+    { label: "Score", link: resumeId ? linkOptions({ to: "/flow/$resumeId", params: { resumeId } }) : null },
+    { label: "Target job", link: resumeId ? linkOptions({ to: "/flow/$resumeId/jobs", params: { resumeId } }) : null },
+    { label: "Job fit", link: pair },
+    { label: "Mode", link: pair },
+    { label: "Practice", link: practiceSetId ? linkOptions({ to: "/practice/$setId", params: { setId: practiceSetId } }) : null }
   ];
   return (
     <nav aria-label="Progress" className="mb-8">
@@ -38,10 +38,10 @@ export function Stepper({ current, resumeId, targetJobId, practiceSetId }: Props
           const className = cn("flex items-center gap-2 text-sm", isCurrent ? "font-medium" : "text-muted-foreground");
           return (
             <li key={step.label} className="flex items-center gap-2">
-              {step.href && !isCurrent ? (
-                <Link href={step.href as never} className={cn(className, "hover:text-foreground")}>{content}</Link>
+              {step.link && !isCurrent ? (
+                <Link {...step.link} className={cn(className, "hover:text-foreground")}>{content}</Link>
               ) : (
-                <span className={cn(className, !step.href && "opacity-50")} aria-current={isCurrent ? "step" : undefined} aria-disabled={!step.href || undefined}>
+                <span className={cn(className, !step.link && "opacity-50")} aria-current={isCurrent ? "step" : undefined} aria-disabled={!step.link || undefined}>
                   {content}
                 </span>
               )}

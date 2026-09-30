@@ -1,14 +1,12 @@
-"use client";
-
 import { Mic, MessageSquareText } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@tanstack/react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { friendlyError } from "@/lib/errorMessages";
 import { useCreatePracticeSet } from "@/lib/query/practice";
 
 export function ModeChooser({ resumeId, targetJobId, fitReady }: { resumeId: string; targetJobId: string; fitReady: boolean }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const create = useCreatePracticeSet();
   return (
     <section aria-labelledby="mode-heading" className="space-y-4">
@@ -19,7 +17,7 @@ export function ModeChooser({ resumeId, targetJobId, fitReady }: { resumeId: str
           <p className="text-sm text-muted-foreground">Answer questions chosen for this job, get feedback, and improve each answer.</p>
           <Button
             disabled={!fitReady || create.isPending}
-            onClick={() => create.mutate({ resumeId, targetJobId }, { onSuccess: (set) => router.push(`/practice/${set.id}`) })}
+            onClick={() => create.mutate({ resumeId, targetJobId }, { onSuccess: (set) => void navigate({ to: "/practice/$setId", params: { setId: set.id } }) })}
           >
             Practice this job
           </Button>

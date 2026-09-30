@@ -6,7 +6,7 @@ HELP.md
 .kotlin/
 build/
 node_modules/
-.next/
+apps/web/dist/
 .playwright-cli/
 *.tsbuildinfo
 !gradle/wrapper/gradle-wrapper.jar

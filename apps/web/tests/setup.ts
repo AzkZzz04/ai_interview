@@ -2,18 +2,8 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
-// Tests read and assert on these router spies; each test starts with fresh ones.
-export const router = { push: vi.fn(), replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() };
-export const navigation = { pathname: "/", params: {} as Record<string, string>, searchParams: new URLSearchParams() };
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => router,
-  usePathname: () => navigation.pathname,
-  useParams: () => navigation.params,
-  useSearchParams: () => navigation.searchParams,
-  notFound: vi.fn(),
-  redirect: vi.fn()
-}));
+// jsdom has no scrolling; the router restores scroll on every navigation.
+window.scrollTo = vi.fn();
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,
@@ -38,7 +28,4 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   window.sessionStorage.clear();
-  navigation.pathname = "/";
-  navigation.params = {};
-  navigation.searchParams = new URLSearchParams();
 });

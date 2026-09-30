@@ -1,7 +1,5 @@
-"use client";
-
 import { ChevronRight, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@tanstack/react-router";
 import { Stepper } from "@/components/flow/Stepper";
 import { StepHeading } from "@/components/flow/StepHeading";
 import { AddResumeDialog } from "@/components/library/AddResumeDialog";
@@ -11,11 +9,11 @@ import { saveLastPair } from "@/lib/lastPair";
 import { useResumes } from "@/lib/query/library";
 
 export default function ResumePickerPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const resumes = useResumes();
   const choose = (id: string) => {
     saveLastPair({ resumeId: id, targetJobId: null });
-    router.push(`/flow/${id}`);
+    void navigate({ to: "/flow/$resumeId", params: { resumeId: id } });
   };
   const add = <AddResumeDialog onAdded={(resume) => resume.status === "READY" && choose(resume.id)} />;
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { LibraryKind } from "@/lib/query/library";

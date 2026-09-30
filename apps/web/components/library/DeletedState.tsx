@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 
 /** Shown for links to items that were deleted or never existed. */
@@ -8,8 +8,8 @@ export function DeletedState({ what = "item" }: { what?: string }) {
       <h1 className="text-xl font-semibold">This {what} was deleted</h1>
       <p className="text-muted-foreground">It is no longer in your library. Pick another one to continue.</p>
       <div className="flex gap-2">
-        <Button asChild><Link href="/library/resumes">Open library</Link></Button>
-        <Button asChild variant="outline"><Link href="/">Home</Link></Button>
+        <Button asChild><Link to="/library/resumes">Open library</Link></Button>
+        <Button asChild variant="outline"><Link to="/">Home</Link></Button>
       </div>
     </div>
   );

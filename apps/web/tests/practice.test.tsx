@@ -2,9 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
-import PracticePage from "@/app/practice/[setId]/page";
-import { JOB_TEXT, RESUME_TEXT, renderWithClient, setupMockBackend } from "./render";
-import { navigation } from "./setup";
+import { JOB_TEXT, RESUME_TEXT, renderRoute, setupMockBackend } from "./render";
 
 // Stages long enough to observe pending states, short enough to keep the suite fast.
 const { store, server } = setupMockBackend({ stageMs: 150 });
@@ -14,7 +12,6 @@ function newSet() {
   const resume = store.pasteResume({ name: "Backend", jobTitle: null, text: RESUME_TEXT }).body.resume;
   const job = store.createTargetJob({ name: "Acme", text: JOB_TEXT }).body.targetJob;
   const set = store.createPracticeSet({ resumeId: resume.id, targetJobId: job.id, mode: "PRACTICE" }).body;
-  navigation.params = { setId: set.id };
   return set;
 }
 
@@ -30,16 +27,16 @@ describe("practice", () => {
     const set = newSet();
     // Test jobs finish in milliseconds, so serve the first read as it looked while generating.
     server.use(http.get("*/api/practice-sets/:id", () => HttpResponse.json(set), { once: true }));
-    renderWithClient(<PracticePage />);
+    renderRoute(`/practice/${set.id}`);
     expect(await screen.findByRole("status")).toHaveTextContent(/choosing questions|waiting/i);
     expect(await screen.findByText(/why this question/i, {}, { timeout: 4_000 })).toBeInTheDocument();
     expect(screen.getAllByRole("tab").length).toBeGreaterThanOrEqual(3);
   });
 
   it("scores two attempts and shows the change, and blocks an unchanged answer", async () => {
-    newSet();
+    const set = newSet();
     const user = userEvent.setup();
-    renderWithClient(<PracticePage />);
+    renderRoute(`/practice/${set.id}`);
     await screen.findByLabelText("Your answer", {}, { timeout: 4_000 });
 
     await answer(user, "Short answer.");
@@ -57,9 +54,9 @@ describe("practice", () => {
   }, 15_000);
 
   it("keeps a draft when switching questions and back", async () => {
-    newSet();
+    const set = newSet();
     const user = userEvent.setup();
-    renderWithClient(<PracticePage />);
+    renderRoute(`/practice/${set.id}`);
     await user.type(await screen.findByLabelText("Your answer", {}, { timeout: 4_000 }), "Half-written draft");
     const tabs = screen.getAllByRole("tab");
     await user.click(tabs[1]);
@@ -73,7 +70,7 @@ describe("practice", () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     for (let i = 1; i <= 9; i++) store.addQuestion(set.id, `My own question number ${i}?`);
     const user = userEvent.setup();
-    renderWithClient(<PracticePage />);
+    renderRoute(`/practice/${set.id}`);
     await user.click(await screen.findByRole("button", { name: /add your own question/i }));
     const dialog = screen.getByRole("dialog");
     await user.type(within(dialog).getByLabelText("Question"), "Why do you want to work here?");
@@ -86,10 +83,10 @@ describe("practice", () => {
   });
 
   it("keeps a failed attempt's text and scores it on retry", async () => {
-    newSet();
+    const set = newSet();
     store.failNext("ANSWER_FEEDBACK", { retryable: false });
     const user = userEvent.setup();
-    renderWithClient(<PracticePage />);
+    renderRoute(`/practice/${set.id}`);
     await screen.findByLabelText("Your answer", {}, { timeout: 4_000 });
     await answer(user, LONG_ANSWER);
 

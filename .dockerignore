@@ -6,6 +6,5 @@ build
 node_modules
 apps/web
 **/node_modules
-**/.next
-**/.next-build
+**/dist
 **/*.tsbuildinfo

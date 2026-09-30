@@ -1,6 +1,4 @@
-"use client";
-
-import { useParams } from "next/navigation";
+import { getRouteApi } from "@tanstack/react-router";
 import { useState } from "react";
 import { JobProgress } from "@/components/flow/JobProgress";
 import { Stepper } from "@/components/flow/Stepper";
@@ -18,8 +16,10 @@ import { useTargetJob } from "@/lib/query/library";
 import { practiceKeys, usePracticeSet, useRetryPracticeSet } from "@/lib/query/practice";
 import { useFollowJob } from "@/lib/query/useJob";
 
+const route = getRouteApi("/practice/$setId");
+
 export default function PracticePage() {
-  const { setId } = useParams<{ setId: string }>();
+  const { setId } = route.useParams();
   const set = usePracticeSet(setId);
   const targetJob = useTargetJob(set.data?.targetJobId);
   const retry = useRetryPracticeSet(setId);
