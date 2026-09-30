@@ -6,25 +6,22 @@ RUN npm ci
 
 COPY . .
 
-ARG NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8080
-ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+# Empty means same origin: the browser calls /api on this server and nginx forwards it.
+ARG VITE_API_BASE_URL=
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+# "all" builds a demo image that runs on mock data; production keeps mocks off.
+ARG VITE_API_MOCKS=off
+ENV VITE_API_MOCKS=${VITE_API_MOCKS}
 RUN npm run build
 
-FROM node:22-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:alpine AS runtime
 
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
+# Where nginx forwards /api. Override per environment, e.g. a Kubernetes service FQDN.
+ENV API_UPSTREAM=http://api:8080
+# Lets the entrypoint fill NGINX_LOCAL_RESOLVERS from /etc/resolv.conf for the template's resolver line.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 
-RUN addgroup --system --gid 10001 nextjs \
-  && adduser --system --uid 10001 --ingroup nextjs nextjs
-
-WORKDIR /app
-COPY --from=build --chown=nextjs:nextjs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nextjs /app/.next/static ./.next/static
-
-USER nextjs
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 3000
-
-CMD ["node", "server.js"]

@@ -2,11 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
-import ResumePickerPage from "@/app/flow/page";
-import ScorePage from "@/app/flow/[resumeId]/page";
-import FitPage from "@/app/flow/[resumeId]/jobs/[jobId]/page";
-import { JOB_TEXT, RESUME_TEXT, renderWithClient, setupMockBackend } from "./render";
-import { navigation, router } from "./setup";
+import { JOB_TEXT, RESUME_TEXT, renderRoute, setupMockBackend } from "./render";
 
 const { store, server } = setupMockBackend();
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
@@ -24,7 +20,7 @@ describe("resume picker", () => {
       items: store.listResumes().items.map((resume) =>
         resume.name === "Still processing" ? { ...resume, status: "PROCESSING" } : resume)
     })));
-    renderWithClient(<ResumePickerPage />);
+    renderRoute("/flow");
     expect(await screen.findByRole("button", { name: /still processing/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /ready one/i })).toBeEnabled();
   });
@@ -36,8 +32,7 @@ describe("score step", () => {
     store.scoreResume(resume.id);
     await settle();
     const scoreSpy = vi.spyOn(store, "scoreResume");
-    navigation.params = { resumeId: resume.id };
-    renderWithClient(<ScorePage />);
+    renderRoute(`/flow/${resume.id}`);
     expect(await screen.findByText("Overall score")).toBeInTheDocument();
     await settle();
     expect(scoreSpy).not.toHaveBeenCalled();
@@ -46,9 +41,8 @@ describe("score step", () => {
   it("shows a failed score with retry and keeps the job title", async () => {
     const resume = paste();
     store.failNext("RESUME_SCORE", { retryable: false });
-    navigation.params = { resumeId: resume.id };
     const user = userEvent.setup();
-    renderWithClient(<ScorePage />);
+    renderRoute(`/flow/${resume.id}`);
     const alert = await screen.findByRole("alert", {}, { timeout: 4_000 });
     expect(alert).toHaveTextContent(/content policy/i);
     expect(screen.getByLabelText(/job title/i)).toHaveValue("Backend Engineer");
@@ -60,8 +54,7 @@ describe("score step", () => {
   it("shows the deleted state for a deleted resume", async () => {
     const resume = paste();
     store.deleteResume(resume.id);
-    navigation.params = { resumeId: resume.id };
-    renderWithClient(<ScorePage />);
+    renderRoute(`/flow/${resume.id}`);
     expect(await screen.findByRole("heading", { name: "This resume was deleted" })).toBeInTheDocument();
   });
 });
@@ -70,14 +63,13 @@ describe("fit step", () => {
   function pair() {
     const resume = paste();
     const job = store.createTargetJob({ name: "Acme", text: JOB_TEXT }).body.targetJob;
-    navigation.params = { resumeId: resume.id, jobId: job.id };
-    return { resume, job };
+    return { resume, job, path: `/flow/${resume.id}/jobs/${job.id}` };
   }
 
   it("invites adding experience and sends no suggestions request without other sources", async () => {
-    pair();
+    const { path } = pair();
     const suggestSpy = vi.spyOn(store, "runSuggestions");
-    renderWithClient(<FitPage />);
+    renderRoute(path);
     expect(await screen.findByText("Add past work to get suggestions")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add a project/i })).toBeInTheDocument();
     await settle();
@@ -85,24 +77,24 @@ describe("fit step", () => {
   });
 
   it("offers Refresh when suggestions are stale", async () => {
-    const { resume, job } = pair();
+    const { resume, job, path } = pair();
     paste("Older", `${RESUME_TEXT} older`);
     store.runSuggestions(resume.id, job.id);
     await settle();
     store.getSuggestions(resume.id, job.id);
     store.createExperience({ title: "Side project", description: "Built a sample tool." });
-    renderWithClient(<FitPage />);
+    renderRoute(path);
     expect(await screen.findByRole("button", { name: /refresh/i })).toBeInTheDocument();
   });
 
   it("opens the pair's practice set from the mode chooser", async () => {
-    pair();
+    const { path } = pair();
     const user = userEvent.setup();
-    renderWithClient(<FitPage />);
+    const { router } = renderRoute(path);
     const practice = await screen.findByRole("button", { name: "Practice this job" });
     await waitFor(() => expect(practice).toBeEnabled(), { timeout: 4_000 });
     expect(screen.getByText("Coming soon")).toBeInTheDocument();
     await user.click(practice);
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith(expect.stringMatching(/^\/practice\/[\w-]+$/)));
+    await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/practice\/[\w-]+$/));
   });
 });

@@ -1,18 +1,13 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import Link from "next/link";
-import { useSyncExternalStore } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { readLastPair } from "@/lib/lastPair";
 import { useResumes, useTargetJobs } from "@/lib/query/library";
 
-const noSubscribe = () => () => {};
-
 function ContinueCard() {
-  const stored = useSyncExternalStore(noSubscribe, () => JSON.stringify(readLastPair()), () => "null");
-  const pair = JSON.parse(stored) as ReturnType<typeof readLastPair>;
+  const [pair] = useState(readLastPair);
   const resumes = useResumes();
   const jobs = useTargetJobs();
   // Offer Continue only when the stored items still exist.
@@ -20,7 +15,6 @@ function ContinueCard() {
   const job = jobs.data?.items.find((item) => item.id === pair?.targetJobId);
   if (!pair || !resume) return null;
 
-  const href = job ? `/flow/${resume.id}/jobs/${job.id}` : `/flow/${resume.id}`;
   return (
     <Card>
       <CardHeader>
@@ -29,7 +23,11 @@ function ContinueCard() {
       </CardHeader>
       <CardContent>
         <Button asChild>
-          <Link href={href as never}>Continue <ArrowRight /></Link>
+          {job ? (
+            <Link to="/flow/$resumeId/jobs/$jobId" params={{ resumeId: resume.id, jobId: job.id }}>Continue <ArrowRight /></Link>
+          ) : (
+            <Link to="/flow/$resumeId" params={{ resumeId: resume.id }}>Continue <ArrowRight /></Link>
+          )}
         </Button>
       </CardContent>
     </Card>
@@ -53,7 +51,7 @@ export default function HomePage() {
         </CardHeader>
         <CardContent>
           <Button asChild variant="outline">
-            <Link href="/flow">Start <ArrowRight /></Link>
+            <Link to="/flow">Start <ArrowRight /></Link>
           </Button>
         </CardContent>
       </Card>

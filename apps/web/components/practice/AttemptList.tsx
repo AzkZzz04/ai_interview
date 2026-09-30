@@ -1,5 +1,3 @@
-"use client";
-
 import { JobProgress } from "@/components/flow/JobProgress";
 import type { Attempt } from "@/lib/api/types";
 import { useRetryAttempt } from "@/lib/query/practice";

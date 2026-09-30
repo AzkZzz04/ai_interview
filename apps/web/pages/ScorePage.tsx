@@ -1,8 +1,5 @@
-"use client";
-
 import { ArrowRight } from "lucide-react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
+import { getRouteApi, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { JobProgress } from "@/components/flow/JobProgress";
 import { ScoreCard } from "@/components/flow/ScoreCard";
@@ -42,8 +39,10 @@ function JobTitleField({ resumeId, jobTitle }: { resumeId: string; jobTitle: str
   );
 }
 
+const route = getRouteApi("/flow/$resumeId");
+
 export default function ScorePage() {
-  const { resumeId } = useParams<{ resumeId: string }>();
+  const { resumeId } = route.useParams();
   const resume = useResume(resumeId);
   const score = useScoreResume(resumeId);
   const { job, timedOut, checkAgain } = useFollowJob(resume.data?.activeJob, [keys.resume(resumeId), keys.resumes]);
@@ -62,7 +61,7 @@ export default function ScorePage() {
         title={data ? `Score for ${data.name}` : "Score"}
         description="A general score from your resume and optional job title. Add a target job next for job-specific feedback."
         action={data?.score ? (
-          <Button asChild><Link href={`/flow/${resumeId}/jobs`}>Continue to target job <ArrowRight /></Link></Button>
+          <Button asChild><Link to="/flow/$resumeId/jobs" params={{ resumeId }}>Continue to target job <ArrowRight /></Link></Button>
         ) : undefined}
       />
       {resume.isPending ? <ListSkeleton rows={4} /> : null}

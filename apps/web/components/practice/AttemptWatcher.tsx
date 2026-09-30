@@ -1,5 +1,3 @@
-"use client";
-
 import type { ActiveJob } from "@/lib/api/types";
 import { practiceKeys } from "@/lib/query/practice";
 import { useFollowJob } from "@/lib/query/useJob";

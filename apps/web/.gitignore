@@ -1,6 +1,4 @@
-.next/
+dist/
 node_modules/
-out/
 *.tsbuildinfo
 .env*.local
-next-env.d.ts

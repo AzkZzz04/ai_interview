@@ -1,6 +1,4 @@
-"use client";
-
-import { useParams } from "next/navigation";
+import { getRouteApi } from "@tanstack/react-router";
 import { FitCard } from "@/components/flow/FitCard";
 import { JobProgress } from "@/components/flow/JobProgress";
 import { ModeChooser } from "@/components/flow/ModeChooser";
@@ -15,8 +13,10 @@ import { useResume, useTargetJob } from "@/lib/query/library";
 import { scoringKeys, useFit, useRunFit } from "@/lib/query/scoring";
 import { useFollowJob } from "@/lib/query/useJob";
 
+const route = getRouteApi("/flow/$resumeId/jobs/$jobId");
+
 export default function FitPage() {
-  const { resumeId, jobId } = useParams<{ resumeId: string; jobId: string }>();
+  const { resumeId, jobId } = route.useParams();
   const resume = useResume(resumeId);
   const targetJob = useTargetJob(jobId);
   const fit = useFit(resumeId, jobId);

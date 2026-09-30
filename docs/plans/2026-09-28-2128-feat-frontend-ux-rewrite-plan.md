@@ -4,6 +4,8 @@ type: feat
 date: 2026-09-28
 origin: docs/brainstorms/2026-09-28-frontend-ux-rewrite-brainstorm.md
 artifact_contract: ce-unified-plan/v1
+artifact_readiness: implementation-ready
+deepened: 2026-09-29
 product_contract_source: legacy-requirements
 execution: code
 ---
@@ -13,9 +15,9 @@ execution: code
 ## Goal Capsule
 
 - **Objective:** A candidate can score a resume, save named resumes and target jobs, see job fit with suggestions from their past experience, and practice interview answers that are kept and compared over time, in a redesigned web app whose results survive reloads; and the backend team has an exact API contract to build against.
-- **Means:** Rebuild `apps/web` on Next.js 16, React 19, TanStack Query, Tailwind CSS and shadcn/ui (KTD1–KTD3), develop it against mocks generated from a written API contract (KTD5), and leave the backend untouched (KTD4).
+- **Means:** Build `apps/web` as a React 19 Vite SPA with TanStack Router and TanStack Query, Tailwind CSS and shadcn/ui (KTD1–KTD3), develop it against mocks generated from a written API contract (KTD5), and leave the backend untouched (KTD4).
 - **Authority:** This plan's Product Contract, then the origin brainstorm (see origin: `docs/brainstorms/2026-09-28-frontend-ux-rewrite-brainstorm.md`), then the API contract doc for request and response shapes, then current source code.
-- **Execution profile:** Contract and platform first, then mocks, then screens. Branch `feat/frontend-rewrite`.
+- **Execution profile:** Preserve the delivered frontend behavior while replacing the Next.js platform with Vite, then prove browser routing, mock startup, and container deep-link behavior. Branch `feat/frontend-rewrite`.
 - **Stop conditions:**
   - Do not change anything under `src/`, `build.gradle.kts` or backend migrations; record needed backend behavior in the API contract instead.
   - Do not ship a screen that shows fabricated AI results outside mock mode.
@@ -29,6 +31,8 @@ execution: code
 ### Summary
 
 Replace the single-page app with a guided flow (resume → score → target job → job fit and suggestions → mode → practice) plus a library of named resumes, target jobs, experiences and history. The frontend is built entirely against a new API contract document and a mock layer generated from it, because most endpoints the new UX needs do not exist yet. Backend work, voice, sign-in and deployment are separate plans.
+
+Product Contract preservation: Product Contract unchanged.
 
 ### Problem Frame
 
@@ -93,7 +97,7 @@ The current UI is one 512-line client page. Completed results vanish on reload, 
 
 - No backend code, schema or configuration changes.
 - Sign-in, the visitor trial and public launch belong to a later auth phase.
-- Deployment and hosting changes (AWS, Supabase provisioning, Vercel) are not part of this plan.
+- Cloud-provider selection and public hosting cutover are not part of this plan. The existing web container must continue serving all SPA routes after a direct navigation or reload.
 - Out of this phase per the brainstorm: in-app resume editor and export, job URL import, generated bullets for past items, "generate more questions", side-by-side attempt comparison, deleting practice history on its own, account deletion, Chinese UI, mobile-first design, a progress dashboard.
 
 #### Deferred to Follow-Up Work
@@ -120,15 +124,15 @@ The current UI is one 512-line client page. Completed results vanish on reload, 
 
 ### Key Technical Decisions
 
-- KTD1. **Upgrade to Next.js 16 and React 19 inside this rewrite.** Adopt Next 16 (Turbopack default, `middleware` renamed `proxy`, `next lint` removed, async request APIs) and React 19 with matching `@types`. Remove the custom `distDir` (`NEXT_DIST_DIR`). (session-settled: user-directed — chosen over staying on Next 15.5 and React 18: the rewrite replaces nearly all UI code anyway.)
+- KTD1. **Use React 19 with Vite and TanStack Router.** Keep the current React, TypeScript, TanStack Query, Radix and React Testing Library ecosystem, replace Next.js routing and build output with a code-based TanStack Router route tree, and serve the resulting static SPA with history fallback. Code-based routes avoid a route-generation plugin and generated route-tree artifact. Angular and Vue would require a second framework migration of every component, hook and test. Implements R21–R24.
 - KTD2. **TanStack Query owns server state.** Every API read is a query keyed by resource ID; mutations invalidate affected lists; job polling uses `refetchInterval` that stops when the job is terminal or after about 10 minutes, then offers "Check again". No other global store. (session-settled: user-approved — chosen over SWR and hand-written polling: stronger invalidation and self-stopping polling.)
 - KTD3. **New visual design on Tailwind CSS and shadcn/ui.** Radix-based components give accessible dialogs, tabs, sheets and toasts; design tokens (neutral scale, one accent, spacing up to 64px, type scale, one light theme; dark mode deferred) live in the Tailwind theme. The old `apps/web/app/globals.css` is replaced. (session-settled: user-directed — chosen over extending the existing CSS tokens: the user asked for a redesign.)
 - KTD4. **The backend is read-only for this plan.** The contract doc (`docs/api/frontend-api-contract.md`) records every endpoint the UI needs, marked `existing`, `changed` or `new`, plus backend obligations the UI assumes: owner-scoped lookups returning 404 for other users' IDs, the existing AI rate limit on every AI job submission including retries, resource-ID job fingerprints so repeated attempts are never swallowed, cascade-delete behavior, and duplicate resolution. Implements R23.
-- KTD5. **Mocks come from the contract through Mock Service Worker.** `apps/web/mocks/` holds MSW handlers backed by a mock store and a job simulator. In the browser the store persists to localStorage under a versioned key so data survives reloads and is shared across tabs; tests keep it in memory. The simulator derives each job's status and stage from its stored creation time and configured delays (no timers), so a job in progress keeps advancing after a reload; a programmatic switch forces the next job of a type to fail. `NEXT_PUBLIC_API_MOCKS` selects `all` (default in dev), `new-only` (endpoints marked `new` or `changed` are mocked; `existing` ones pass through to the backend) or `off`. In `new-only`, the job-poll handler answers for job IDs the mock store created and passes other IDs to the backend. The backend plan changes an endpoint's status to `existing` when it ships it, so passthrough follows the contract. Vitest uses the same handlers through `msw/node`. Production builds default to `off`. Implements R24.
+- KTD5. **Mocks come from the contract through Mock Service Worker.** `apps/web/mocks/` holds MSW handlers backed by a mock store and a job simulator. In the browser the store persists to localStorage under a versioned key so data survives reloads and is shared across tabs; tests keep it in memory. The simulator derives each job's status and stage from its stored creation time and configured delays (no timers), so a job in progress keeps advancing after a reload; a programmatic switch forces the next job of a type to fail. `VITE_API_MOCKS` selects `all` (default in dev), `new-only` (endpoints marked `new` or `changed` are mocked; `existing` ones pass through to the backend) or `off`. The app waits for MSW before the router mounts; a worker startup failure shows an actionable retry state and never falls through silently. The static build serves `mockServiceWorker.js` at the origin root with a scope that covers every app route. In `new-only`, the job-poll handler answers for job IDs the mock store created and passes other IDs to the backend. The backend plan changes an endpoint's status to `existing` when it ships it, so passthrough follows the contract. Vitest uses the same handlers through `msw/node`. Production builds default to `off`. Implements R24.
 - KTD6. **Shared TypeScript types mirror the contract.** `apps/web/lib/api/types.ts` defines every request, response, job type, stage and error code named in the contract; the API client and mocks both use it, so drift between screens and mocks is a type error.
 - KTD7. **The API is the source of truth.** URLs carry the selected resume, target job and practice set IDs; every item read includes its active job (ID, status, stage). Browser storage holds only conveniences: last-used pair and unsent answer drafts. This replaces the per-job-type localStorage keys in `apps/web/lib/jobWorkflow.ts`.
 - KTD8. **Honest failures.** `apps/web/lib/mockAssessment.ts` and the starter resume are deleted after moving the real result types into `apps/web/lib/api/types.ts`. Every AI step renders progress, retrying ("attempt 2 of 3"), failed-with-retry, or a non-retryable message from the error-code map; copy names no vendors.
-- KTD9. **One API client and base URL.** `apps/web/lib/api/config.ts` reads `NEXT_PUBLIC_API_BASE_URL` (default `http://127.0.0.1:8080`); `client.ts` wraps fetch with timeout, `no-store`, an idempotency key per user action (the client's automatic retries reuse it; a user pressing Retry after a failed request or job sends a new one), and one `ApiError` type with retryable status for network errors, 408, 429 and 5xx.
+- KTD9. **One API client and build-time public configuration.** `apps/web/lib/api/config.ts` reads `VITE_API_BASE_URL` (default `http://127.0.0.1:8080`) and `VITE_API_MOCKS`; both are public build inputs, so changing either rebuilds the image. `client.ts` wraps fetch with timeout, an idempotency key per user action (the client's automatic retries reuse it; a user pressing Retry after a failed request or job sends a new one), and one `ApiError` type with retryable status for network errors, 408, 429 and 5xx.
 
 ### High-Level Technical Design
 
@@ -136,7 +140,9 @@ The current UI is one 512-line client page. Completed results vanish on reload, 
 
 ```mermaid
 flowchart TB
-  UI[Screens: flow, practice, library, history] --> Q[TanStack Query hooks per resource]
+  S[Static server with SPA history fallback] --> R[TanStack Router route tree]
+  R --> UI[Screens: flow, practice, library, history]
+  UI --> Q[TanStack Query hooks per resource]
   Q --> C[API client and shared contract types]
   C -->|mocks all or new-only| M[MSW handlers + persisted mock store + job simulator]
   C -->|existing endpoints or mocks off| B[Kotlin API, unchanged]
@@ -189,21 +195,30 @@ The stepper shows all six steps; steps whose prerequisite ID is missing are disa
 
 ### Sequencing
 
-U1 (contract) and U2 (platform) can run in parallel because U2 only defines platform types; U3 writes the contract-derived types and mocks, so it needs both; screen units U4–U7 build on U3.
+U1 remains the API authority. U2 replaces the runtime and route shell, U3 moves MSW startup into that shell, and U4–U7 keep their screen boundaries while replacing Next navigation with typed router navigation. Validate the static image only after every route has migrated.
 
 ### Risks & Dependencies
 
 | Risk | Mitigation |
 |---|---|
 | Mocks drift from what the backend later builds | Contract doc is the single authority; shared types (KTD6); the backend plan implements the doc and the `new-only` mock mode exercises real endpoints as they land |
-| Next 16 and React 19 break testing-library or shadcn assumptions | U2 lands the platform with a smoke page and passing checks before any screen work |
+| A Vite SPA serves a blank page after direct navigation to a nested route | U2 requires a static-server history fallback and a container-level deep-link smoke |
+| Next navigation mocks mask broken TanStack Router behavior | U2 replaces them with a memory-router harness and includes browser history and direct-route coverage |
 | The app only works end to end in mock mode until the backend plan ships | Accepted; Success Criteria are measured in mock mode |
-| Mock data leaks into a real build | Production defaults to `off`; the MSW worker is only registered when mocks are enabled |
+| Mock startup fails and the first screen runs unmocked | U3 fails closed with a retryable startup state and verifies interception before route content renders |
 
 ### System-Wide Impact
 
 - **API contract:** the doc becomes the interface agreement between this frontend and the next backend plan; old endpoints the new UI no longer uses are marked for removal there, not removed here.
-- **Build and CI:** Next 16 drops `next lint`; `.github/workflows/publish-images.yml` keeps running the ESLint CLI, and the web Dockerfile stops using `.next-build`.
+- **Build and CI:** `apps/web` produces Vite static assets. `.github/workflows/publish-images.yml`, the web Dockerfile and deployment notes switch from `NEXT_PUBLIC_*` and the Next standalone server to `VITE_*` build inputs and an SPA-serving container. That container continues to listen on port 3000, preserving the existing Helm service and probe configuration.
+
+### Sources & Research
+
+- Current implementation: `apps/web/package.json`, `apps/web/app/`, `apps/web/components/`, `apps/web/lib/query/`, `apps/web/mocks/`, `apps/web/tests/`, `apps/web/Dockerfile`, and `.github/workflows/publish-images.yml`.
+- React client-app guidance: <https://react.dev/learn/build-a-react-app-from-scratch>.
+- TanStack Router route trees and Vite integration: <https://tanstack.com/router/latest/docs/framework/react/overview> and <https://tanstack.com/router/latest/docs/routing/route-trees>.
+- Vite static deployment: <https://vite.dev/guide/static-deploy>.
+- Mock Service Worker browser integration: <https://mswjs.io/docs/integrations/browser>.
 
 ---
 
@@ -225,34 +240,39 @@ U1 (contract) and U2 (platform) can run in parallel because U2 only defines plat
 - **Test scenarios:** Test expectation: none -- documentation; U3's mock tests and U2's shared types enforce it.
 - **Verification:** Every endpoint called by U4–U7 appears in the doc with its status; a reviewer can trace each screen state to a documented response.
 
-### U2. Frontend platform upgrade
+### U2. React, Vite and TanStack Router platform migration
 
-- **Goal:** Move `apps/web` to Next 16, React 19, Tailwind CSS, shadcn/ui and TanStack Query with the shared client and types, before screen work.
+Executed by `docs/plans/2026-09-29-2243-refactor-vite-tanstack-migration-plan.md`.
+
+- **Goal:** Replace the current Next.js runtime with a React 19 Vite SPA while preserving the shared client, types, visual system and public URLs.
 - **Requirements:** R20–R22; KTD1–KTD3, KTD6–KTD9.
 - **Dependencies:** none.
 - **Files:**
-  - `apps/web/package.json`, `apps/web/next.config.mjs`, `apps/web/tsconfig.json`
-  - `apps/web/eslint.config.mjs` (replaces `.eslintrc.json`)
-  - `apps/web/postcss.config.mjs`, `apps/web/components.json` (new)
-  - `apps/web/app/globals.css` (replaced by Tailwind entry and theme tokens)
-  - `apps/web/lib/api/config.ts`, `apps/web/lib/api/client.ts`, `apps/web/lib/api/types.ts` (new)
-  - `apps/web/lib/query/queryClient.ts`, `apps/web/lib/query/useJob.ts` (new)
-  - `apps/web/lib/errorMessages.ts`
-  - `apps/web/tests/setup.ts`, `apps/web/tests/apiClient.test.ts`, `apps/web/tests/useJob.test.tsx`
-  - `apps/web/Dockerfile`
+  - `apps/web/package.json`, `apps/web/tsconfig.json`, `apps/web/vite.config.ts`, `apps/web/index.html` (new)
+  - `apps/web/main.tsx`, `apps/web/router.tsx`, `apps/web/app/AppRoot.tsx` (new)
+  - `apps/web/next.config.mjs`, `apps/web/next-env.d.ts`, `apps/web/app/layout.tsx`, `apps/web/app/providers.tsx` (removed or replaced)
+  - `apps/web/lib/api/config.ts`, `apps/web/lib/api/client.ts`, `apps/web/lib/api/types.ts`
+  - `apps/web/lib/query/queryClient.ts`, `apps/web/lib/query/useJob.ts`
+  - `apps/web/tests/setup.ts`, `apps/web/tests/render.tsx`, `apps/web/tests/apiClient.test.ts`, `apps/web/tests/useJob.test.tsx`
+  - `apps/web/Dockerfile`, `apps/web/nginx.conf` (new)
+  - `.github/workflows/publish-images.yml`, `deploy/ai-interview/templates/NOTES.txt`
 - **Approach:**
-  1. Upgrade Next, React, types and eslint-config-next together; run the Next 16 codemod; drop `NEXT_DIST_DIR`.
-  2. Add Tailwind and shadcn/ui; define tokens and one light theme.
-  3. Build `client.ts` per KTD9 and `useJob` per KTD2; `types.ts` starts with platform types only (ApiError, the job status envelope, result types moved out of `mockAssessment.ts`); strip vendor names from error copy.
-  4. Test setup mocks `next/navigation` and stubs `matchMedia` and clipboard.
-- **Execution note:** Land with a temporary smoke page and green lint, typecheck, test and build before screen units start.
-- **Patterns to follow:** error parsing in `apps/web/lib/api/jobs.ts` and the `friendlyError` code map.
+  1. Replace Next scripts, dependencies, configuration and standalone output with Vite, React 19 and TanStack Router while preserving the existing TypeScript aliases, Tailwind theme and shadcn components.
+  2. Define a code-based route tree for every current public URL, including dynamic resume, target-job and practice-set IDs; validate route parameters, render the existing deleted-resource state for a known deleted ID, and use generic not-found content only for unmatched paths.
+  3. Build the SPA entry point from the existing query provider, application shell and route content; restore document title and description without Next metadata.
+  4. Move public configuration to KTD9 and replace the Next navigation mocks with a reusable TanStack Router memory-router harness.
+  5. Build `dist/` into a static-server image listening on port 3000, preserving the existing Helm service and probe contract; its fallback sends browser routes to `index.html` without masking API or asset requests.
+- **Execution note:** Establish a passing router and static-image smoke before converting screen navigation.
+- **Patterns to follow:** existing query composition in `apps/web/app/providers.tsx`, error parsing in `apps/web/lib/api/client.ts`, and the `friendlyError` code map.
 - **Test scenarios:**
   - A fetch TypeError maps to a retryable network error.
   - A 429 response is retryable; a 400 with a code is not and keeps the code.
   - `useJob` stops polling on SUCCEEDED and after its time ceiling, then exposes "Check again".
+  - A memory router resolves each existing dynamic route, shows the deleted-resource state for a deleted ID, and rejects an unmatched route without invoking an API query.
   - Automatic retries of one request send the same idempotency key; a user-initiated Retry after a FAILED job sends a new one.
-- **Verification:** `npm run lint`, `typecheck`, `test` and `build` pass on Node 22.
+  - The built static image returns the SPA document for a direct request to a nested flow or practice URL, including after browser reload; an unmatched route reaches router not-found content.
+  - The built static image serves `/mockServiceWorker.js` as JavaScript and returns an error, not `index.html`, for a missing JavaScript asset.
+- **Verification:** Vite development, lint, typecheck, tests, production build and static-image smoke pass on Node 22.
 
 ### U3. Mock API layer
 
@@ -263,13 +283,13 @@ U1 (contract) and U2 (platform) can run in parallel because U2 only defines plat
   - `apps/web/lib/api/types.ts` (contract-derived request, response, job-type and error-code types)
   - `apps/web/mocks/handlers.ts`, `apps/web/mocks/store.ts`, `apps/web/mocks/jobSimulator.ts`, `apps/web/mocks/fixtures.ts` (new)
   - `apps/web/mocks/browser.ts`, `apps/web/mocks/server.ts` (new)
-  - `apps/web/app/MockProvider.tsx` (new)
+  - `apps/web/app/MockProvider.tsx`, `apps/web/mocks/MockWorker.tsx`
   - `apps/web/public/mockServiceWorker.js` (generated)
   - `apps/web/tests/mocks.test.ts` (new)
 - **Approach:**
   1. Write the contract-derived types (KTD6). The store holds resumes, target jobs, experiences, scores, fit results, suggestions, practice sets and attempts, and applies the contract's duplicate, cascade-delete and validation rules.
   2. The store and simulator follow KTD5: persisted in the browser, stage derived from timestamps, and a programmatic failure switch (retryable or not) for tests and the browser console.
-  3. `MockProvider` starts the worker only when `NEXT_PUBLIC_API_MOCKS` is `all` or `new-only`, and renders children only after the worker has started. All API reads happen in client components, with no server-side fetch or prefetch, so every request goes through the worker.
+  3. `MockProvider` starts the worker only when `VITE_API_MOCKS` is `all` or `new-only`, and mounts the router only after interception is ready. A failed worker startup renders an error with Retry and never renders children in an unmocked state.
   4. Fixtures are clearly fake sample content; mock mode shows a small "Mock data" badge in the header.
 - **Patterns to follow:** contract types from `apps/web/lib/api/types.ts`.
 - **Test scenarios:**
@@ -279,7 +299,8 @@ U1 (contract) and U2 (platform) can run in parallel because U2 only defines plat
   - Submitting text identical to the latest attempt is rejected with the contract's error code.
   - A forced failure produces a FAILED job with the documented error shape.
   - A resume, its score and a pending job survive re-creating the store from storage, and the pending job reaches SUCCEEDED once its delay has passed.
-- **Verification:** Mock tests pass; the dev app runs with the backend stopped.
+  - A rejected worker startup blocks the routed app, shows Retry, and starts normally after the retry succeeds.
+- **Verification:** Mock tests pass; the Vite dev app runs with the backend stopped and intercepts its first API request.
 
 ### U4. App shell, design system and library screens
 
@@ -396,14 +417,15 @@ U1 (contract) and U2 (platform) can run in parallel because U2 only defines plat
 | Frontend lint | `npm run lint` in `apps/web` (ESLint CLI) | U2–U7 |
 | Frontend types | `npm run typecheck` in `apps/web` | U2–U7 |
 | Frontend tests | `npm test` in `apps/web` on Node 22 | U2–U7 |
-| Frontend build | `npm run build` in `apps/web` | U2–U7 |
+| Frontend build | `npm run build` in `apps/web` (Vite) | U2–U7 |
+| SPA route delivery | Build the web image and request `/`, `/flow/<resumeId>`, and `/practice/<setId>` directly | U2–U7 |
 | Backend untouched | `git diff master -- src build.gradle.kts` shows no changes from this plan | all |
 | End-to-end smoke | Manual run of the Success Criteria journey in mock mode, backend stopped | after U7 |
 
 ## Definition of Done
 
 - Every unit's verification passes, and all gates above pass on the final branch.
-- The Success Criteria journey works in mock mode, including reloads at each step.
+- The Success Criteria journey works in mock mode, including reloads, direct nested URLs and browser back/forward navigation.
 - `docs/api/frontend-api-contract.md` covers every request the frontend makes, and the shared types match it.
 - No screen shows fabricated results outside mock mode; no user-facing copy names vendors; no seniority input remains.
 - Removed modules have no remaining references.

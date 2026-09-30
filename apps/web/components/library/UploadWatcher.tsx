@@ -1,5 +1,3 @@
-"use client";
-
 import type { ResumeExtractionResult } from "@/lib/api/types";
 import { useJob } from "@/lib/query/useJob";
 import { DuplicateNotice } from "./DuplicateNotice";

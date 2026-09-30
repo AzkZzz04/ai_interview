@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, type ReactNode } from "react";
 
 /** Page heading that takes focus after navigation, so screen readers announce the new step. */

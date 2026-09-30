@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,6 +35,8 @@ export function InlineRename({ kind, id, name, max }: { kind: LibraryKind; id: s
       <Input
         aria-label="New name"
         value={draft}
+        // The field appears only after the user presses Rename, so focus follows their action.
+        // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus
         className="h-8 w-56"
         aria-invalid={Boolean(error)}

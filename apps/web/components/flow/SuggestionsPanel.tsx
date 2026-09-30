@@ -1,5 +1,3 @@
-"use client";
-
 import { RefreshCw } from "lucide-react";
 import { LinkedInDialog } from "@/components/library/LinkedInDialog";
 import { ErrorState, ListSkeleton } from "@/components/library/ListStates";

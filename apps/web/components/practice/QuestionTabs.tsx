@@ -1,5 +1,3 @@
-"use client";
-
 import { useRef, type KeyboardEvent } from "react";
 import type { Question } from "@/lib/api/types";
 import { cn } from "@/lib/utils";

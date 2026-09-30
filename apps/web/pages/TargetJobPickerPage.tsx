@@ -1,7 +1,5 @@
-"use client";
-
 import { ChevronRight } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { Stepper } from "@/components/flow/Stepper";
 import { StepHeading } from "@/components/flow/StepHeading";
 import { AddTargetJobDialog } from "@/components/library/AddTargetJobDialog";
@@ -11,14 +9,16 @@ import { isNotFound } from "@/lib/api/isNotFound";
 import { saveLastPair } from "@/lib/lastPair";
 import { useResume, useTargetJobs } from "@/lib/query/library";
 
+const route = getRouteApi("/flow/$resumeId/jobs");
+
 export default function TargetJobPickerPage() {
-  const { resumeId } = useParams<{ resumeId: string }>();
-  const router = useRouter();
+  const { resumeId } = route.useParams();
+  const navigate = useNavigate();
   const resume = useResume(resumeId);
   const jobs = useTargetJobs();
   const choose = (targetJobId: string) => {
     saveLastPair({ resumeId, targetJobId });
-    router.push(`/flow/${resumeId}/jobs/${targetJobId}`);
+    void navigate({ to: "/flow/$resumeId/jobs/$jobId", params: { resumeId, jobId: targetJobId } });
   };
   if (isNotFound(resume.error)) return <DeletedState what="resume" />;
   const add = <AddTargetJobDialog onAdded={(job) => choose(job.id)} />;

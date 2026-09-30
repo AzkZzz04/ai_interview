@@ -1,5 +1,3 @@
-"use client";
-
 import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api/client";

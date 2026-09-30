@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { AddResumeDialog } from "@/components/library/AddResumeDialog";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/library/ListStates";

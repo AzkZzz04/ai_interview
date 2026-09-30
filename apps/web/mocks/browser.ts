@@ -7,7 +7,11 @@ let started: Promise<void> | null = null;
 
 /** Idempotent: React strict mode runs the starting effect twice. */
 export function startMockWorker(mode: "all" | "new-only") {
-  started ??= start(mode);
+  // A failed start is forgotten so Retry can try again.
+  started ??= start(mode).catch((error: unknown) => {
+    started = null;
+    throw error;
+  });
   return started;
 }
 

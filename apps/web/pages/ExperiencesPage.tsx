@@ -1,5 +1,3 @@
-"use client";
-
 import { DeleteConfirm } from "@/components/library/DeleteConfirm";
 import { InlineRename } from "@/components/library/InlineRename";
 import { LinkedInDialog } from "@/components/library/LinkedInDialog";

@@ -1,5 +1,3 @@
-"use client";
-
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";

@@ -1,5 +1,3 @@
-"use client";
-
 import { Copy } from "lucide-react";
 import { useRef } from "react";
 import { toast } from "sonner";

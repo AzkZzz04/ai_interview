@@ -1,5 +1,3 @@
-"use client";
-
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api/client";
 import type {

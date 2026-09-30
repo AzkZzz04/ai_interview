@@ -2,17 +2,15 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
-import HomePage from "@/app/page";
-import ResumesPage from "@/app/library/resumes/page";
 import { saveLastPair } from "@/lib/lastPair";
-import { renderWithClient, RESUME_TEXT, JOB_TEXT, setupMockBackend } from "./render";
+import { renderRoute, RESUME_TEXT, JOB_TEXT, setupMockBackend } from "./render";
 
 const { store, server } = setupMockBackend();
 
 describe("resume library", () => {
   it("blocks saving without a name", async () => {
     const user = userEvent.setup();
-    renderWithClient(<ResumesPage />);
+    renderRoute("/library/resumes");
     await user.click((await screen.findAllByRole("button", { name: /add resume/i }))[0]);
     await user.click(screen.getByRole("button", { name: "Save resume" }));
     expect(screen.getByText("Give this resume a name.")).toBeInTheDocument();
@@ -27,7 +25,7 @@ describe("resume library", () => {
       return HttpResponse.json(body, { status });
     }));
     const user = userEvent.setup();
-    renderWithClient(<ResumesPage />);
+    renderRoute("/library/resumes");
     await user.click((await screen.findAllByRole("button", { name: /add resume/i }))[0]);
     await user.upload(screen.getByLabelText("File"), new File([RESUME_TEXT], "copy.txt", { type: "text/plain" }));
     await user.click(screen.getByRole("button", { name: "Save resume" }));
@@ -43,7 +41,7 @@ describe("resume library", () => {
     store.scoreResume(resume.id);
     await new Promise((resolve) => setTimeout(resolve, 20));
     const user = userEvent.setup();
-    renderWithClient(<ResumesPage />);
+    renderRoute("/library/resumes");
     await user.click(await screen.findByRole("button", { name: "Delete Doomed" }));
     const dialog = await screen.findByRole("alertdialog");
     expect(await within(dialog).findByText("1 score")).toBeInTheDocument();
@@ -58,12 +56,12 @@ describe("home", () => {
     const resume = store.pasteResume({ name: "Kept", jobTitle: null, text: RESUME_TEXT }).body.resume;
     const job = store.createTargetJob({ name: "Acme", text: JOB_TEXT }).body.targetJob;
     saveLastPair({ resumeId: resume.id, targetJobId: job.id });
-    const first = renderWithClient(<HomePage />);
+    const first = renderRoute("/");
     expect(await screen.findByRole("link", { name: /continue/i })).toHaveAttribute("href", `/flow/${resume.id}/jobs/${job.id}`);
     first.unmount();
 
     store.deleteResume(resume.id);
-    renderWithClient(<HomePage />);
+    renderRoute("/");
     expect(await screen.findByRole("link", { name: /start/i })).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByRole("link", { name: /continue/i })).not.toBeInTheDocument();

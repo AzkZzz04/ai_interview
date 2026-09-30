@@ -1,8 +1,5 @@
-"use client";
-
 import { BookOpen, BriefcaseBusiness, FileText, History, Home, Menu, Sparkles } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { MockBadge } from "@/app/MockProvider";
 import { Button } from "@/components/ui/button";
@@ -18,7 +15,7 @@ const NAV = [
 ] as const;
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   return (
     <nav aria-label="Main">
       <ul className="space-y-1">
@@ -27,7 +24,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           return (
             <li key={href}>
               <Link
-                href={href}
+                to={href}
                 onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
                 className={cn(
@@ -71,7 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <NavLinks onNavigate={() => setMenuOpen(false)} />
           </SheetContent>
         </Sheet>
-        <Link href="/" className="flex items-center gap-2 font-semibold">
+        <Link to="/" className="flex items-center gap-2 font-semibold">
           <Sparkles className="size-4 text-primary" aria-hidden />
           AI Interview
         </Link>
