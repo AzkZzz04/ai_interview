@@ -78,7 +78,7 @@ class SupabaseMigrationIntegrationTests {
 
             assertHistory(dataSource, baseline = true)
             assertViewShape(dataSource)
-            assertThat(migrationChecksums(dataSource).filterKeys { it.toInt() <= 8 }).isEqualTo(v1ToV8Checksums)
+            assertThat(migrationChecksums(dataSource).filterKeys { it in v1ToV8Checksums }).isEqualTo(v1ToV8Checksums)
             val userId = UUID.randomUUID()
             val jobId = UUID.randomUUID()
             val resumeId = UUID.randomUUID()
@@ -112,7 +112,7 @@ class SupabaseMigrationIntegrationTests {
             }
             runner.migrate()
             assertHistory(dataSource, baseline = true)
-            assertThat(migrationChecksums(dataSource).filterKeys { it.toInt() <= 8 }).isEqualTo(v1ToV8Checksums)
+            assertThat(migrationChecksums(dataSource).filterKeys { it in v1ToV8Checksums }).isEqualTo(v1ToV8Checksums)
         } finally {
             dropDatabase(database)
             dropApiRoles()
@@ -144,6 +144,7 @@ class SupabaseMigrationIntegrationTests {
                 }
             }
             assertThat(versions).startsWith("1", "2", "3", "4", "5", "6", "7", "8", "9")
+            assertThat(versions).contains("11")
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = 'public.vector_store'::regclass AND attname = 'embedding'").use { result ->
                     result.next(); assertThat(result.getString(1)).isEqualTo("vector(1024)")

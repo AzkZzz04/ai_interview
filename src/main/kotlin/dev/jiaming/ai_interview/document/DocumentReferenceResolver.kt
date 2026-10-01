@@ -92,8 +92,8 @@ class DocumentReferenceResolver(
             val document = jobDescriptionPersistenceService.findDocument(userId, jobDescriptionId).orElseThrow {
                 ApiRequestException(
                     HttpStatus.NOT_FOUND,
-                    "JOB_DESCRIPTION_NOT_FOUND",
-                    "Job description was not found",
+                    "TARGET_JOB_NOT_FOUND",
+                    "Target job was not found",
                 )
             }
             assertMatchingText(document, jobDescription)
