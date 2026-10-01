@@ -27,6 +27,12 @@ class JobDescriptionPersistenceService(
         return Optional.of(findOrCreateDocument(userId, jobDescription).resourceId())
     }
 
+    @Transactional
+    fun findOrCreateTargetJob(userId: UUID, name: String, jobDescription: String): TargetJobDocumentSave {
+        val saved = findOrCreate(userId, jobDescription, name)
+        return TargetJobDocumentSave(saved.document, saved.created)
+    }
+
     fun findDocument(userId: UUID, jobDescriptionId: UUID): Optional<ResolvedDocument> = queryDocument(
         """
             SELECT id, normalized_text, content_hash
@@ -43,7 +49,7 @@ class JobDescriptionPersistenceService(
                 SELECT id, normalized_text, content_hash
                 FROM ai_interview_app.job_descriptions
                 WHERE user_id = ? AND content_hash = ? AND normalized_text = ?
-                ORDER BY created_at DESC
+                ORDER BY created_at, id
                 LIMIT 1
             """.trimIndent(),
             userId,
@@ -53,22 +59,28 @@ class JobDescriptionPersistenceService(
 
     @Transactional
     fun findOrCreateDocument(userId: UUID, jobDescription: String): ResolvedDocument {
+        return findOrCreate(userId, jobDescription, "Untitled job").document
+    }
+
+    private fun findOrCreate(userId: UUID, jobDescription: String, name: String): DocumentSave {
         val normalizedText = normalizer.normalize(jobDescription)
         if (normalizedText.isBlank()) throw IllegalArgumentException("Job description text is required")
         val contentHash = contentHasher.sha256(normalizedText)
+        lockOwner(userId)
         val existing = findDocumentByContent(userId, contentHash, normalizedText)
-        if (existing.isPresent) return existing.get()
+        if (existing.isPresent) return DocumentSave(existing.get(), false)
 
         val jobDescriptionId = UUID.randomUUID()
         jdbcTemplate.update(
             """
                 INSERT INTO ai_interview_app.job_descriptions (
-                    id, user_id, raw_text, normalized_text, content_hash, parsed_requirements
+                    id, user_id, name, raw_text, normalized_text, content_hash, parsed_requirements
                 )
-                VALUES (?, ?, ?, ?, ?, '[]'::jsonb)
+                VALUES (?, ?, ?, ?, ?, ?, '[]'::jsonb)
             """.trimIndent(),
             jobDescriptionId,
             userId,
+            name,
             jobDescription,
             normalizedText,
             contentHash,
@@ -89,7 +101,15 @@ class JobDescriptionPersistenceService(
                 RagContextId.forChunk("job_description", chunk.section, chunk.index),
             )
         }
-        return findDocument(userId, jobDescriptionId).orElseThrow()
+        return DocumentSave(findDocument(userId, jobDescriptionId).orElseThrow(), true)
+    }
+
+    private fun lockOwner(userId: UUID) {
+        jdbcTemplate.query(
+            "SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR UPDATE",
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            userId,
+        )
     }
 
     private fun queryDocument(sql: String, vararg arguments: Any): Optional<ResolvedDocument> =
@@ -123,4 +143,8 @@ class JobDescriptionPersistenceService(
         },
         jobDescriptionId,
     )
+
+    private data class DocumentSave(val document: ResolvedDocument, val created: Boolean)
 }
+
+data class TargetJobDocumentSave(val document: ResolvedDocument, val created: Boolean)

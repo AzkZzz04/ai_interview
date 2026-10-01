@@ -113,12 +113,12 @@ kept and marked stale (section 6), not deleted.
 | 3.6 | `GET /api/resumes/{resumeId}/delete-impact` | new | Delete dialog |
 | 3.7 | `DELETE /api/resumes/{resumeId}` | new | Library |
 | 3.8 | `POST /api/resumes/{resumeId}/score` | new | Score page |
-| 4.1 | `POST /api/target-jobs` | new | Target job picker, library |
-| 4.2 | `GET /api/target-jobs` | new | Target job picker, library, home |
-| 4.3 | `GET /api/target-jobs/{targetJobId}` | new | Fit page, library |
-| 4.4 | `PATCH /api/target-jobs/{targetJobId}` | new | Rename |
-| 4.5 | `GET /api/target-jobs/{targetJobId}/delete-impact` | new | Delete dialog |
-| 4.6 | `DELETE /api/target-jobs/{targetJobId}` | new | Library |
+| 4.1 | `POST /api/target-jobs` | existing | Target job picker, library |
+| 4.2 | `GET /api/target-jobs` | existing | Target job picker, library, home |
+| 4.3 | `GET /api/target-jobs/{targetJobId}` | existing | Fit page, library |
+| 4.4 | `PATCH /api/target-jobs/{targetJobId}` | existing | Rename |
+| 4.5 | `GET /api/target-jobs/{targetJobId}/delete-impact` | existing | Delete dialog |
+| 4.6 | `DELETE /api/target-jobs/{targetJobId}` | existing | Library |
 | 5.1 | `POST /api/experiences` | new | Experience library (project form) |
 | 5.2 | `POST /api/experiences/linkedin-split` | new | Experience library (LinkedIn paste) |
 | 5.3 | `POST /api/experiences/batch` | new | Experience library (save reviewed items) |
@@ -269,7 +269,7 @@ Body: `{}`. Starts a `RESUME_SCORE` job and returns `202` with `JobAccepted`.
 
 **`TargetJobCreated`**: `{ "targetJob": TargetJobDetail, "duplicate": boolean }`.
 
-### 4.1 `POST /api/target-jobs` — new
+### 4.1 `POST /api/target-jobs` — existing
 
 ```json
 { "name": "Acme — Senior Backend", "text": "…" }
@@ -281,23 +281,23 @@ Body: `{}`. Starts a `RESUME_SCORE` job and returns `202` with `JobAccepted`.
 - The same normalized text returns `200` with `duplicate: true` and the existing item (R4).
 - Errors: `400 INVALID_REQUEST`.
 
-### 4.2 `GET /api/target-jobs` — new
+### 4.2 `GET /api/target-jobs` — existing
 
 Returns `200` with `{ "items": TargetJob[] }`.
 
-### 4.3 `GET /api/target-jobs/{targetJobId}` — new
+### 4.3 `GET /api/target-jobs/{targetJobId}` — existing
 
 Returns `200` with `TargetJobDetail`. Errors: `404 TARGET_JOB_NOT_FOUND`.
 
-### 4.4 `PATCH /api/target-jobs/{targetJobId}` — new
+### 4.4 `PATCH /api/target-jobs/{targetJobId}` — existing
 
 Body: `{ "name": string }`. Returns `200` with `TargetJob`. `text` is not accepted.
 
-### 4.5 `GET /api/target-jobs/{targetJobId}/delete-impact` — new
+### 4.5 `GET /api/target-jobs/{targetJobId}/delete-impact` — existing
 
 Returns `200` with `DeleteImpact`. `scores` is always `0` and `staleSuggestionSets` is always `0`.
 
-### 4.6 `DELETE /api/target-jobs/{targetJobId}` — new
+### 4.6 `DELETE /api/target-jobs/{targetJobId}` — existing
 
 Returns `204`. Cascades to fits, suggestion sets, practice sets, questions and attempts for every pair that uses
 this job, and cancels their in-flight jobs.

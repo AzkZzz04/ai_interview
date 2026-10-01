@@ -133,7 +133,7 @@ class DocumentReferenceResolverTests {
     }
 
     @Test
-    fun unknownJobDescriptionIdRaisesNotFound() {
+    fun unknownTargetJobIdRaisesNotFound() {
         val jobDescriptionId = UUID.randomUUID()
         val resume = document(DocumentSourceType.RESUME, UUID.randomUUID(), "Resume text")
         Mockito.`when`(resumes.findOrCreateDocument(userId, "Resume text")).thenReturn(resume)
@@ -142,7 +142,7 @@ class DocumentReferenceResolverTests {
         assertThatThrownBy {
             resolver.resolveForSubmission(userId, null, "Resume text", jobDescriptionId, null)
         }.isInstanceOfSatisfying(ApiRequestException::class.java) { exception ->
-            assertThat(exception.code()).isEqualTo("JOB_DESCRIPTION_NOT_FOUND")
+            assertThat(exception.code()).isEqualTo("TARGET_JOB_NOT_FOUND")
             assertThat(exception.status()).isEqualTo(HttpStatus.NOT_FOUND)
         }
     }
