@@ -1,21 +1,23 @@
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { STAGE_LABELS } from "@/lib/api/jobLabels";
 import type { ExperienceDraft, ExperienceSplitResult } from "@/lib/api/types";
-import { friendlyError } from "@/lib/errorMessages";
+import { errorCode, friendlyError } from "@/lib/errorMessages";
+import { clearLinkedInRecovery, readLinkedInRecovery, writeLinkedInRecovery } from "@/lib/linkedInRecovery";
 import { useSaveExperiences, useSplitLinkedIn } from "@/lib/query/library";
 import { useJob } from "@/lib/query/useJob";
 import { TextField } from "./TextField";
 
 /** Paste LinkedIn Experience text, let the AI split it, review the items, then save the ones kept. */
 export function LinkedInDialog({ onSaved, trigger }: { onSaved?: () => void; trigger?: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [removed, setRemoved] = useState<number[]>([]);
+  const [recovery] = useState(readLinkedInRecovery);
+  const [open, setOpen] = useState(Boolean(recovery?.text || recovery?.jobId));
+  const [text, setText] = useState(recovery?.text ?? "");
+  const [jobId, setJobId] = useState<string | null>(recovery?.jobId ?? null);
+  const [removed, setRemoved] = useState<number[]>(recovery?.removed ?? []);
   const split = useSplitLinkedIn();
   const save = useSaveExperiences();
   const { job, error: pollError, timedOut, checkAgain } = useJob<ExperienceSplitResult>(jobId);
@@ -23,15 +25,19 @@ export function LinkedInDialog({ onSaved, trigger }: { onSaved?: () => void; tri
   const items: ExperienceDraft[] = job?.status === "SUCCEEDED" ? job.result?.items ?? [] : [];
   const kept = items.filter((item, index) => !item.duplicateOf && !removed.includes(index));
   const failed = job?.status === "FAILED";
-  const working = split.isPending || (jobId !== null && !job?.status) || (job && !["SUCCEEDED", "FAILED"].includes(job.status));
+  const lostJob = jobId !== null && ["JOB_NOT_FOUND", "NOT_FOUND"].includes(errorCode(pollError) ?? "");
+  const working = split.isPending || (jobId !== null && !job?.status && !pollError) || (job && !["SUCCEEDED", "FAILED"].includes(job.status));
   const tooShort = text.trim().length < 50;
+
+  useEffect(() => writeLinkedInRecovery({ jobId, text, removed }), [jobId, text, removed]);
 
   function start() {
     setRemoved([]);
     split.mutate(text, { onSuccess: (accepted) => setJobId(accepted.jobId) });
   }
 
-  function close() {
+  function discard() {
+    clearLinkedInRecovery();
     setOpen(false);
     setText("");
     setJobId(null);
@@ -41,7 +47,7 @@ export function LinkedInDialog({ onSaved, trigger }: { onSaved?: () => void; tri
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger ?? <Button variant="outline">Paste LinkedIn experience</Button>}</DialogTrigger>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
@@ -62,19 +68,24 @@ export function LinkedInDialog({ onSaved, trigger }: { onSaved?: () => void; tri
             {failed || split.isError || pollError ? (
               <p role="alert" className="text-sm text-destructive">{friendlyError(job?.error ?? split.error ?? pollError)}</p>
             ) : null}
+            {lostJob ? (
+              <p role="status" className="text-sm">This split expired or is no longer available. Your saved text is still available.</p>
+            ) : null}
             {timedOut ? (
               <p className="text-sm">This is taking longer than usual. <Button variant="link" className="h-auto p-0" onClick={checkAgain}>Check again</Button></p>
             ) : null}
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={close}>Cancel</Button>
-              <Button onClick={start} disabled={tooShort || Boolean(working)}>{failed ? "Try again" : "Split into items"}</Button>
+              <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button variant="ghost" onClick={discard}>Discard</Button>
+              <Button onClick={start} disabled={tooShort || Boolean(working)}>{failed || split.isError || lostJob ? "Split again" : "Split into items"}</Button>
             </div>
           </div>
         ) : items.length === 0 ? (
           <div className="space-y-4">
             <p>No experience items were found in that text. Check that you copied the Experience section, then try again.</p>
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setJobId(null)}>Edit the text</Button>
+              <Button variant="ghost" onClick={discard}>Discard</Button>
             </div>
           </div>
         ) : (
@@ -105,6 +116,7 @@ export function LinkedInDialog({ onSaved, trigger }: { onSaved?: () => void; tri
             {save.isError ? <p role="alert" className="text-sm text-destructive">{friendlyError(save.error)}</p> : null}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setJobId(null)}>Back</Button>
+              <Button variant="ghost" onClick={discard}>Discard</Button>
               <Button
                 disabled={kept.length === 0 || save.isPending}
                 onClick={() => save.mutate(
@@ -114,7 +126,7 @@ export function LinkedInDialog({ onSaved, trigger }: { onSaved?: () => void; tri
                       const skipped = result.skipped.length ? ` ${result.skipped.length} already saved.` : "";
                       toast.success(`Saved ${result.created.length} ${result.created.length === 1 ? "item" : "items"}.${skipped}`);
                       onSaved?.();
-                      close();
+                      discard();
                     }
                   }
                 )}

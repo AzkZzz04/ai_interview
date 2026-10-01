@@ -19,7 +19,7 @@ import java.util.UUID
 @Testcontainers
 class SupabaseMigrationIntegrationTests {
     @Test
-    fun `empty database runs V1 through V9 without a baseline or Supabase roles`() {
+    fun `empty database runs the applied migrations without a baseline or Supabase roles`() {
         dropApiRoles()
         val database = createDatabase()
         try {
@@ -78,7 +78,7 @@ class SupabaseMigrationIntegrationTests {
 
             assertHistory(dataSource, baseline = true)
             assertViewShape(dataSource)
-            assertThat(migrationChecksums(dataSource).filterKeys { it != "9" }).isEqualTo(v1ToV8Checksums)
+            assertThat(migrationChecksums(dataSource).filterKeys(v1ToV8Checksums::containsKey)).isEqualTo(v1ToV8Checksums)
             val userId = UUID.randomUUID()
             val jobId = UUID.randomUUID()
             val resumeId = UUID.randomUUID()
@@ -102,7 +102,7 @@ class SupabaseMigrationIntegrationTests {
 
             val password = "runtime' test password"
             runner.bootstrapRuntime(password)
-            assertRuntimePrivileges(database, password, jobId)
+            assertRuntimePrivileges(database, password, jobId, userId)
             dataSource.connection.use { connection ->
                 connection.createStatement().use { it.execute("ALTER ROLE ai_interview_runtime BYPASSRLS") }
             }
@@ -112,7 +112,7 @@ class SupabaseMigrationIntegrationTests {
             }
             runner.migrate()
             assertHistory(dataSource, baseline = true)
-            assertThat(migrationChecksums(dataSource).filterKeys { it != "9" }).isEqualTo(v1ToV8Checksums)
+            assertThat(migrationChecksums(dataSource).filterKeys(v1ToV8Checksums::containsKey)).isEqualTo(v1ToV8Checksums)
         } finally {
             dropDatabase(database)
             dropApiRoles()
@@ -143,7 +143,7 @@ class SupabaseMigrationIntegrationTests {
                     buildList { while (result.next()) add(result.getString(1)) }
                 }
             }
-            assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9")
+            assertThat(versions).contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "14")
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = 'public.vector_store'::regclass AND attname = 'embedding'").use { result ->
                     result.next(); assertThat(result.getString(1)).isEqualTo("vector(1024)")
@@ -208,6 +208,9 @@ class SupabaseMigrationIntegrationTests {
             assertThatThrownBy {
                 connection.createStatement().use { it.executeQuery("SELECT request_fingerprint FROM ai_interview_app.background_jobs") }
             }.isInstanceOf(SQLException::class.java)
+            assertThatThrownBy {
+                connection.createStatement().use { it.executeQuery("SELECT id FROM ai_interview_app.experiences") }
+            }.isInstanceOf(SQLException::class.java)
         }
     }
 
@@ -216,6 +219,7 @@ class SupabaseMigrationIntegrationTests {
             dataSource(database, role, password).connection.use { connection ->
                 assertDenied(connection, "SELECT id FROM ai_interview_api.job_status")
                 assertDenied(connection, "SELECT id FROM ai_interview_app.background_jobs")
+                assertDenied(connection, "SELECT id FROM ai_interview_app.experiences")
                 assertDenied(connection, "SELECT id FROM public.vector_store")
             }
         }
@@ -229,7 +233,7 @@ class SupabaseMigrationIntegrationTests {
         }
     }
 
-    private fun assertRuntimePrivileges(database: String, password: String, jobId: UUID) {
+    private fun assertRuntimePrivileges(database: String, password: String, jobId: UUID, userId: UUID) {
         dataSource(database, "ai_interview_runtime", password).connection.use { connection ->
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls OR rolinherit FROM pg_roles WHERE rolname = current_user").use { result ->
@@ -239,6 +243,14 @@ class SupabaseMigrationIntegrationTests {
             }
             connection.prepareStatement("UPDATE ai_interview_app.background_jobs SET stage = 'PROCESSING' WHERE id = ?").use { statement ->
                 statement.setObject(1, jobId)
+                assertThat(statement.executeUpdate()).isEqualTo(1)
+            }
+            connection.prepareStatement("INSERT INTO ai_interview_app.experiences (user_id, title, description, source, content_hash) VALUES (?, ?, ?, ?, ?)").use { statement ->
+                statement.setObject(1, userId)
+                statement.setString(2, "Runtime access test")
+                statement.setString(3, "The app runtime can write the private experience table.")
+                statement.setString(4, "FORM")
+                statement.setString(5, "runtime-experience-hash")
                 assertThat(statement.executeUpdate()).isEqualTo(1)
             }
             connection.createStatement().use {

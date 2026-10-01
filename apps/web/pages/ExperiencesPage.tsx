@@ -28,7 +28,6 @@ export default function ExperiencesPage() {
         <EmptyState
           title="No experiences yet"
           description="Optional. Add a project or paste your LinkedIn experience to get better suggestions."
-          action={actions}
         />
       ) : null}
       {experiences.data?.items.length ? (

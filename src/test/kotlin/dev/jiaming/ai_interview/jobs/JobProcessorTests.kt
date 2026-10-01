@@ -20,7 +20,12 @@ class JobProcessorTests {
 		val payload = AnalysisJobPayload(UUID.randomUUID(), null, "Backend", "Mid-level")
 		val expected = objectMapper.createObjectNode().put("ok", true)
 		val handler = TestHandler(expected)
-		val registry = JobHandlerRegistry(listOf(NoOpHandler(JobType.RESUME_EXTRACTION, Any::class.java), handler, NoOpHandler(JobType.ANSWER_FEEDBACK, Any::class.java)))
+		val registry = JobHandlerRegistry(listOf(
+			NoOpHandler(JobType.RESUME_EXTRACTION, Any::class.java),
+			handler,
+			NoOpHandler(JobType.ANSWER_FEEDBACK, Any::class.java),
+			NoOpHandler(JobType.EXPERIENCE_SPLIT, Any::class.java)
+		))
 		val processor = JobProcessor(decoder, registry, store, materialization, metrics, objectMapper)
 		val job = job()
 		val leaseToken = UUID.randomUUID()

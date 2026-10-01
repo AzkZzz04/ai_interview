@@ -3,6 +3,8 @@ package dev.jiaming.ai_interview.coach
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.gemini.GeminiException
+import dev.jiaming.ai_interview.experience.ExperienceSplitItem
+import dev.jiaming.ai_interview.experience.ExperienceSplitResult
 import org.springframework.stereotype.Component
 import java.io.IOException
 import java.util.Locale
@@ -13,6 +15,25 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
     fun <T> parse(json: String, responseType: Class<T>): T = try { objectMapper.readValue(json, responseType) }
     catch (exception: IOException) {
         throw GeminiException(GeminiErrorCode.INVALID_RESPONSE, "Gemini returned JSON that did not match the expected AI contract", exception, false)
+    }
+
+    fun normalizeExperienceSplit(response: ExperienceSplitResponse): ExperienceSplitResult {
+        val items = response.items.orEmpty().filterNotNull().map { item ->
+            val title = experienceText(item.title, "title", 1, 120)
+            val description = experienceText(item.description, "description", 1, 4_000)
+            val organization = item.organization?.let(::normalizeExperienceText)?.takeIf(String::isNotEmpty)?.also {
+                if (it.length > 120) invalidExperience("organization")
+            }
+            ExperienceSplitItem(
+                title,
+                organization,
+                experienceMonth(item.startDate, "startDate"),
+                experienceMonth(item.endDate, "endDate"),
+                description,
+                null
+            )
+        }
+        return ExperienceSplitResult(items)
     }
 
     fun normalizeAssessment(response: AssessmentResponse, fallbackSourceContextIds: List<String>): AssessmentResponse {
@@ -64,6 +85,19 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
     }
     private fun average(scores: AssessmentScores) = Math.round((scores.technicalDepth + scores.impact + scores.clarity + scores.relevance + scores.ats) / 5.0f)
     private fun clampScore(value: Int) = value.coerceIn(0, 100)
+    private fun experienceText(value: String?, field: String, min: Int, max: Int): String = value?.let(::normalizeExperienceText)
+        ?.takeIf { it.length in min..max } ?: invalidExperience(field)
+    private fun normalizeExperienceText(value: String) = value.trim().replace(Regex("\\s+"), " ")
+    private fun experienceMonth(value: String?, field: String): String? {
+        val month = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
+        if (!Regex("\\d{4}-(0[1-9]|1[0-2])").matches(month)) invalidExperience(field)
+        return month
+    }
+    private fun invalidExperience(field: String): Nothing = throw GeminiException(
+        GeminiErrorCode.INVALID_RESPONSE,
+        "Gemini returned an experience with an invalid $field field",
+        false
+    )
     private fun slug(value: String?): String {
         val slug = fallback(value, "question").lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "-").replace(Regex("(^-|-$)"), "")
         if (slug.isBlank()) return UUID.randomUUID().toString()

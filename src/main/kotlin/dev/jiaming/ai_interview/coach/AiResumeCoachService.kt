@@ -1,5 +1,6 @@
 package dev.jiaming.ai_interview.coach
 
+import dev.jiaming.ai_interview.experience.ExperienceSplitResult
 import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.gemini.GeminiException
 import io.micrometer.core.instrument.MeterRegistry
@@ -31,16 +32,24 @@ class AiResumeCoachService(
         return responseMapper.normalizeFeedback(generateStructured(promptBuilder.buildFeedbackPrompt(input, context), AnswerFeedbackResponse::class.java), context.sourceContextIds)
     }
 
-    private fun <T> generateStructured(prompt: String, responseType: Class<T>): T {
+    fun splitExperience(text: String): ExperienceSplitResult = generateStructured(
+        promptBuilder.buildExperienceSplitPrompt(text),
+        ExperienceSplitResponse::class.java,
+        responseMapper::normalizeExperienceSplit
+    )
+
+    private fun <T> generateStructured(prompt: String, responseType: Class<T>): T = generateStructured(prompt, responseType) { it }
+
+    private fun <T, R> generateStructured(prompt: String, responseType: Class<T>, normalize: (T) -> R): R {
         val firstOutput = generationClient.generateJson(prompt)
-        try { return responseMapper.parse(firstOutput, responseType) }
+        try { return normalize(responseMapper.parse(firstOutput, responseType)) }
         catch (firstFailure: GeminiException) {
             if (firstFailure.code != GeminiErrorCode.INVALID_RESPONSE) throw firstFailure
             meterRegistry.counter("ai.gemini.schema_repair", "outcome", "attempted").increment()
             val parseError = firstFailure.cause?.message ?: firstFailure.message
             val repairedOutput = generationClient.generateJson(promptBuilder.buildRepairPrompt(prompt, firstOutput, parseError))
             try {
-                val repaired = responseMapper.parse(repairedOutput, responseType)
+                val repaired = normalize(responseMapper.parse(repairedOutput, responseType))
                 meterRegistry.counter("ai.gemini.schema_repair", "outcome", "succeeded").increment()
                 return repaired
             } catch (secondFailure: GeminiException) {

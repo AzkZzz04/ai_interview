@@ -8,6 +8,7 @@ import dev.jiaming.ai_interview.document.DocumentReferenceResolver
 import dev.jiaming.ai_interview.document.DocumentSourceType
 import dev.jiaming.ai_interview.document.ResolvedDocument
 import dev.jiaming.ai_interview.document.ResolvedJobInputs
+import dev.jiaming.ai_interview.experience.ExperienceSplitJobPayload
 import java.time.Instant
 import java.util.Optional
 import java.util.UUID
@@ -50,6 +51,18 @@ class JobPayloadDecoderTests {
 		assertThat(decoded).isEqualTo(payload)
 		assertThat(decoded.expectedSignals()).containsExactly("trade-offs", "failure handling")
 		Mockito.verifyNoInteractions(resolver)
+	}
+
+	@Test
+	fun readsExperienceSplitPayloadWithoutResourceResolution() {
+		val payload = ExperienceSplitJobPayload(text = "LinkedIn Experience section with enough detail to split")
+		val stored = objectMapper.valueToTree<JsonNode>(payload)
+
+		val decoded = decoder.decode(job(stored, JobType.EXPERIENCE_SPLIT), UUID.randomUUID(), ExperienceSplitJobPayload::class.java)
+
+		assertThat(decoded).isEqualTo(payload)
+		Mockito.verifyNoInteractions(resolver)
+		Mockito.verify(jobStore, Mockito.never()).replaceRequestPayload(any(), any(), any())
 	}
 
 	@Test

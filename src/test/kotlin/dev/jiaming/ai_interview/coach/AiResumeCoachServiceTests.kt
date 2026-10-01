@@ -6,6 +6,7 @@ import dev.jiaming.ai_interview.document.DocumentSourceType
 import dev.jiaming.ai_interview.document.ResolvedDocument
 import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.gemini.GeminiException
+import dev.jiaming.ai_interview.experience.ExperienceSplitItem
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import java.util.Optional
 import java.util.UUID
@@ -48,6 +49,18 @@ class AiResumeCoachServiceTests {
 		Mockito.`when`(client.generateJson(anyString())).thenThrow(GeminiException(GeminiErrorCode.MAX_TOKENS, "token limit", false))
 		assertThatThrownBy { service.assess(input) }.isInstanceOfSatisfying(GeminiException::class.java) { exception -> assertThat(exception.code()).isEqualTo(GeminiErrorCode.MAX_TOKENS) }
 		Mockito.verify(client).generateJson(anyString())
+	}
+
+	@Test fun repairsExperienceOutputThatDoesNotMeetSaveableFieldRules() {
+		val input = "Engineer\nBuilt durable services with PostgreSQL and measurable reliability improvements."
+		Mockito.`when`(client.generateJson(anyString()))
+			.thenReturn("""{"items":[{"title":"Engineer","organization":null,"startDate":"2023-1","endDate":null,"description":"Built a service."}]}""")
+			.thenReturn("""{"items":[{"title":" Engineer ","organization":" Acme ","startDate":"2023-01","endDate":null,"description":" Built durable services. "}]}""")
+
+		val result = service.splitExperience(input)
+
+		assertThat(result.items).containsExactly(ExperienceSplitItem("Engineer", "Acme", "2023-01", null, "Built durable services.", null))
+		Mockito.verify(client, Mockito.times(2)).generateJson(anyString())
 	}
 
 	private fun input(): CoachAnalysisInput {
