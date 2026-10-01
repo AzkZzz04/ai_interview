@@ -19,7 +19,7 @@ import java.util.UUID
 @Testcontainers
 class SupabaseMigrationIntegrationTests {
     @Test
-    fun `empty database runs V1 through V9 without a baseline or Supabase roles`() {
+    fun `empty database runs preserved migrations without a baseline or Supabase roles`() {
         dropApiRoles()
         val database = createDatabase()
         try {
@@ -78,7 +78,7 @@ class SupabaseMigrationIntegrationTests {
 
             assertHistory(dataSource, baseline = true)
             assertViewShape(dataSource)
-            assertThat(migrationChecksums(dataSource).filterKeys { it != "9" }).isEqualTo(v1ToV8Checksums)
+            assertThat(migrationChecksums(dataSource).filterKeys { it.toInt() <= 8 }).isEqualTo(v1ToV8Checksums)
             val userId = UUID.randomUUID()
             val jobId = UUID.randomUUID()
             val resumeId = UUID.randomUUID()
@@ -112,7 +112,7 @@ class SupabaseMigrationIntegrationTests {
             }
             runner.migrate()
             assertHistory(dataSource, baseline = true)
-            assertThat(migrationChecksums(dataSource).filterKeys { it != "9" }).isEqualTo(v1ToV8Checksums)
+            assertThat(migrationChecksums(dataSource).filterKeys { it.toInt() <= 8 }).isEqualTo(v1ToV8Checksums)
         } finally {
             dropDatabase(database)
             dropApiRoles()
@@ -143,7 +143,7 @@ class SupabaseMigrationIntegrationTests {
                     buildList { while (result.next()) add(result.getString(1)) }
                 }
             }
-            assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9")
+            assertThat(versions).startsWith("1", "2", "3", "4", "5", "6", "7", "8", "9")
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = 'public.vector_store'::regclass AND attname = 'embedding'").use { result ->
                     result.next(); assertThat(result.getString(1)).isEqualTo("vector(1024)")
