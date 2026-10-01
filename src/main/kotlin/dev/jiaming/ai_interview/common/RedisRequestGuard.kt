@@ -44,7 +44,7 @@ class RedisRequestGuard(
         val ttl = Duration.ofSeconds(properties.idempotency.ttlSeconds.toLong())
 
         try {
-            val cached = cachedResponse(action, fingerprintKey, responseKey, requestFingerprint, responseType)
+            val cached = reserveOrReplay(action, fingerprintKey, responseKey, requestFingerprint, responseType)
             if (cached != null) return cached
         } catch (exception: ResponseStatusException) {
             throw exception
@@ -99,7 +99,7 @@ class RedisRequestGuard(
     }
 
     // The first request reserves the key; a same-key replay returns its stored response, or a retryable 503 while it still runs.
-    private fun <T> cachedResponse(
+    private fun <T> reserveOrReplay(
         action: String,
         fingerprintKey: String,
         responseKey: String,
@@ -107,7 +107,7 @@ class RedisRequestGuard(
         responseType: Class<T>
     ): T? {
         if (redisTemplate.opsForValue().setIfAbsent(fingerprintKey, requestFingerprint, IN_FLIGHT_TTL) == true) return null
-        // ponytail: a reservation released between these two reads lets this request run unreserved; same as before the reservation existed.
+        // ponytail: a reservation released between these two reads lets this request run unreserved.
         val storedFingerprint = redisTemplate.opsForValue().get(fingerprintKey) ?: return null
         if (storedFingerprint != requestFingerprint) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key was already used for a different $action request.")
@@ -132,14 +132,18 @@ class RedisRequestGuard(
         }
     }
 
+    // The response is written before the fingerprint gets the full TTL, so a failed store never leaves a key that
+    // reports "still running" for a day; releasing it lets a retry run the work again instead.
     private fun storeResponse(action: String, fingerprintKey: String, responseKey: String, fingerprint: String, response: Any?, ttl: Duration) {
         try {
-            redisTemplate.opsForValue().set(fingerprintKey, fingerprint, ttl)
             redisTemplate.opsForValue().set(responseKey, objectMapper.writeValueAsString(response), ttl)
+            redisTemplate.opsForValue().set(fingerprintKey, fingerprint, ttl)
         } catch (exception: JsonProcessingException) {
             log.warn("redis_idempotency_cache_encode_failed action={} reason={}", action, exception.message)
+            release(action, fingerprintKey)
         } catch (exception: RuntimeException) {
             log.warn("redis_idempotency_cache_store_failed action={} reason={}", action, exception.message)
+            release(action, fingerprintKey)
         }
     }
 

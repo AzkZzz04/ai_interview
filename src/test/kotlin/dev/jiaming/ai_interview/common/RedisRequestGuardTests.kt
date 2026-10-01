@@ -159,6 +159,24 @@ class RedisRequestGuardTests {
     }
 
     @Test
+    fun aResponseThatCouldNotBeStoredDoesNotLeaveTheKeyReportingInFlight() {
+        requestWithIdempotencyKey("retry-key")
+        Mockito.doThrow(IllegalStateException("redis write failed"))
+            .`when`(valueOperations).set(Mockito.endsWith(":response"), anyString(), any<Duration>())
+        val calls = AtomicInteger()
+
+        val first = guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+            CachedResponse("run-${calls.incrementAndGet()}")
+        }
+        val retry = guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+            CachedResponse("run-${calls.incrementAndGet()}")
+        }
+
+        assertThat(first).isEqualTo(CachedResponse("run-1"))
+        assertThat(retry).isEqualTo(CachedResponse("run-2"))
+    }
+
+    @Test
     fun rejectsSameIdempotencyKeyForDifferentPayload() {
         requestWithIdempotencyKey("retry-key")
         guard.withIdempotentRetryCache("assessment", listOf("resume-a"), CachedResponse::class.java) { CachedResponse("saved") }
