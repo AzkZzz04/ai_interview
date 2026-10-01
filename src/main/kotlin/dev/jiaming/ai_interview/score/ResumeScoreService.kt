@@ -21,10 +21,13 @@ class ResumeScoreService(
     /** Snapshots the ready resume's text and job title into a new score job; the row lock keeps a delete from racing it. */
     @Transactional
     fun submit(resumeId: UUID): JobAcceptedResponse {
+        val userId = localUserService.localUserId()
+        // Owner before resume, the order resume deletion locks them in, so the two cannot deadlock.
+        jdbcTemplate.queryForList("SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR KEY SHARE", userId)
         val resume = jdbcTemplate.query(
             "SELECT processing_status, job_title, normalized_text FROM ai_interview_app.resumes WHERE id = ? AND user_id = ? FOR SHARE",
             RowMapper { rs, _ -> ScoreSource(rs.getString("processing_status"), rs.getString("job_title"), rs.getString("normalized_text")) },
-            resumeId, localUserService.localUserId()
+            resumeId, userId
         ).firstOrNull() ?: throw ApiRequestException(HttpStatus.NOT_FOUND, "RESUME_NOT_FOUND", "Resume was not found")
         if (resume.status != "READY" || resume.text.isNullOrBlank()) {
             throw ApiRequestException(HttpStatus.CONFLICT, "RESUME_NOT_READY", "Resume text is not ready to score")

@@ -47,6 +47,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @Testcontainers
 class ResumeScoreServiceIntegrationTests {
@@ -123,6 +126,34 @@ class ResumeScoreServiceIntegrationTests {
         library.delete(resumeId)
         assertThat(count("resume_scores")).isZero()
         assertThat(count("background_jobs")).isZero()
+    }
+
+    @Test
+    fun scoreSubmissionLocksTheOwnerBeforeTheResumeLikeDeletionDoes() {
+        val resumeId = insertResume("READY", null, "Built a payment API.")
+        val insideSubmit = CountDownLatch(1)
+        val releaseSubmit = CountDownLatch(1)
+        Mockito.`when`(jobSubmission.submit(eq(JobType.RESUME_SCORE), eq("resume"), any(), any())).thenAnswer {
+            insideSubmit.countDown()
+            releaseSubmit.await(10, TimeUnit.SECONDS)
+            null
+        }
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            transactions.execute {
+                // Resume deletion's order: the owner row first, then the resume row.
+                jdbc.queryForList("SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR UPDATE", local.localUserId())
+                val submit = executor.submit { transactions.execute { scores.submit(resumeId) } }
+                insideSubmit.await(500, TimeUnit.MILLISECONDS)
+                assertThat(jdbc.queryForList("SELECT id FROM ai_interview_app.resumes WHERE id = ? FOR UPDATE NOWAIT", resumeId)).hasSize(1)
+                releaseSubmit.countDown()
+                submit
+            }
+        } finally {
+            releaseSubmit.countDown()
+            executor.shutdown()
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue()
+        }
     }
 
     private fun materialize(resumeId: UUID, result: ResumeScoreResult) {
