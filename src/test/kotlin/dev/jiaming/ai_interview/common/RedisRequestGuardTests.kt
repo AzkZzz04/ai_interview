@@ -27,6 +27,9 @@ import org.springframework.web.context.request.ServletRequestAttributes
 import org.springframework.web.server.ResponseStatusException
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 @ExtendWith(MockitoExtension::class)
@@ -60,6 +63,7 @@ class RedisRequestGuardTests {
             nextValue
         }
         Mockito.`when`(redisTemplate.expire(anyString(), any<Duration>())).thenReturn(true)
+        Mockito.`when`(redisTemplate.delete(anyString())).thenAnswer { redis.remove(it.getArgument<String>(0)) != null }
         guard = RedisRequestGuard(
             redisTemplate,
             RedisUsageProperties(
@@ -87,6 +91,71 @@ class RedisRequestGuardTests {
         assertThat(first).isEqualTo(CachedResponse("run-1"))
         assertThat(second).isEqualTo(first)
         assertThat(calls).hasValue(1)
+    }
+
+    @Test
+    fun rejectsSameKeyRetryWhileFirstRequestIsInFlight() {
+        requestWithIdempotencyKey("retry-key")
+        val calls = AtomicInteger()
+        val firstStarted = CountDownLatch(1)
+        val releaseFirst = CountDownLatch(1)
+        val executor = Executors.newSingleThreadExecutor()
+        val firstRequest = executor.submit<CachedResponse> {
+            requestWithIdempotencyKey("retry-key")
+            guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+                calls.incrementAndGet()
+                firstStarted.countDown()
+                check(releaseFirst.await(5, TimeUnit.SECONDS))
+                CachedResponse("first")
+            }
+        }
+
+        var retryError: Throwable? = null
+        try {
+            assertThat(firstStarted.await(5, TimeUnit.SECONDS)).isTrue()
+            try {
+                guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+                    calls.incrementAndGet()
+                    CachedResponse("duplicate")
+                }
+            } catch (exception: Throwable) {
+                retryError = exception
+            }
+        } finally {
+            releaseFirst.countDown()
+            executor.shutdown()
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue()
+        }
+
+        assertThat(firstRequest.get(5, TimeUnit.SECONDS)).isEqualTo(CachedResponse("first"))
+        assertThat(retryError).isInstanceOf(ResponseStatusException::class.java)
+        assertThat((retryError as ResponseStatusException).statusCode).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+        assertThat(calls).hasValue(1)
+
+        val replay = guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+            calls.incrementAndGet()
+            CachedResponse("duplicate")
+        }
+        assertThat(replay).isEqualTo(CachedResponse("first"))
+        assertThat(calls).hasValue(1)
+    }
+
+    @Test
+    fun aFailedFirstRequestReleasesItsKeySoTheRetryRuns() {
+        requestWithIdempotencyKey("retry-key")
+        val calls = AtomicInteger()
+        assertThatThrownBy {
+            guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+                calls.incrementAndGet()
+                throw IllegalStateException("job insert failed")
+            }
+        }.isInstanceOf(IllegalStateException::class.java)
+
+        val retried = guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+            CachedResponse("run-${calls.incrementAndGet()}")
+        }
+
+        assertThat(retried).isEqualTo(CachedResponse("run-2"))
     }
 
     @Test

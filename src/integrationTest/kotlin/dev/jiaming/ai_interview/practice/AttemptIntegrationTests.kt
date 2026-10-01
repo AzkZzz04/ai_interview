@@ -470,6 +470,7 @@ class AttemptIntegrationTests {
                 .thenAnswer { redis.putIfAbsent(it.getArgument(0), it.getArgument(1)) == null }
             Mockito.doAnswer { redis[it.getArgument(0)] = it.getArgument(1); null }
                 .`when`(values).set(anyString(), anyString(), any<Duration>())
+            Mockito.`when`(template.delete(anyString())).thenAnswer { redis.remove(it.getArgument<String>(0)) != null }
             return template
         }
     }
