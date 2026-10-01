@@ -109,3 +109,15 @@ SUPABASE_LIVE_SMOKE=true ./gradlew integrationTest --tests '*SupabaseLiveSmokeTe
 ~~~
 
 Full workflow operation, deployment capacity and rollback rehearsal remain unverified. Anonymous/authenticated effective database grants were checked; direct authenticated Data API smoke remains pending. The migration is not cutover-complete until the remaining live checks pass.
+
+## Verification status (2026-10-01, U17)
+
+Live project mjzycnjhtwyqcblwbjvy: before migrating it held baseline 0 and V1–V11 with one user row and no resumes, jobs or vectors, so no backup was taken (owner's decision). The standalone runner then applied V12–V17 with checksums validated, and `bootstrap-runtime` refreshed the runtime role. The opt-in live smoke failed once while the new runtime password propagated, then passed.
+
+Local Compose, mocks off, through the browser: paste, score, target job, fit, experience, suggestions, practice questions, two answer attempts with a score delta, and history all completed and survived reloads and a full API/worker/web restart. A job claimed by a worker that was then restarted was redelivered after the 300-second visibility timeout and finished. Gemini `gemini-3.6-flash` returned sustained `503 UNAVAILABLE` (high demand) and the key is free-tier (5 requests/minute), so the AI steps after scoring ran with the optional OpenAI provider (`AI_CHAT_PROVIDER=openai`, gpt-4.1-mini); embeddings stayed on Gemini.
+
+Supabase Compose (`--profile supabase`), mocks off, through the API the web app uses: the same journey completed against the live database, with SDK job polling showing every JDBC transition and an unknown job returning `404 JOB_NOT_FOUND`. Data survived an API/worker restart. The worker received neither the SDK key nor migration credentials; the API received only the SDK key.
+
+Rollback rehearsal: with the Supabase stack's API, worker and web stopped, the old local environment kept serving its own data with none of the new Supabase rows merged in. Queues (`ai-interview-jobs` vs `ai-interview-supabase-jobs`, separate LocalStacks) and Redis prefixes were separate, so no old process can consume new work.
+
+Still open: Supavisor pool capacity for 12–20 connections (read Pool Size in the dashboard), and a direct anonymous/authenticated Data API request (database grants already deny both roles).
