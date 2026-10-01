@@ -69,6 +69,7 @@ class CoachPromptBuilder {
         rules = listOf(
             "Use only the retrieved resume and job-description context.",
             "Count a requirement as matched only when the resume gives specific supporting evidence for it.",
+            "Put each requirement in exactly one list: matchedRequirements when the evidence covers it fully, otherwise missingRequirements.",
             "Return empty arrays when nothing qualifies."
         ),
         outputShape = """

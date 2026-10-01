@@ -41,6 +41,7 @@ class CoachPromptBuilderSeniorityTests {
 
 		assertThat(prompt).contains("only the retrieved resume and job-description context", "specific supporting evidence", "missingRequirements")
 		assertThat(prompt).contains("fitScore", "matchedRequirements", "feedback", "Platform Engineer", "Kafka required")
+		assertThat(prompt).contains("Put each requirement in exactly one list")
 		assertThat(prompt).doesNotContain("Seniority")
 	}
 
