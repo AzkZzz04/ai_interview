@@ -51,6 +51,11 @@ class SupabaseLiveSmokeTests {
                                    has_schema_privilege('authenticated', 'ai_interview_api', 'USAGE') AS authenticated_schema,
                                    has_table_privilege('authenticated', 'ai_interview_api.job_status', 'SELECT') AS authenticated_view,
                                    has_table_privilege('service_role', 'ai_interview_api.job_status', 'SELECT') AS service_view,
+                                   has_table_privilege('anon', 'ai_interview_app.storage_cleanup', 'SELECT') AS anon_cleanup,
+                                   has_table_privilege('authenticated', 'ai_interview_app.storage_cleanup', 'SELECT') AS authenticated_cleanup,
+                                   has_table_privilege(current_user, 'ai_interview_app.storage_cleanup', 'SELECT') AS runtime_cleanup_select,
+                                   has_table_privilege(current_user, 'ai_interview_app.storage_cleanup', 'INSERT') AS runtime_cleanup_insert,
+                                   has_table_privilege(current_user, 'ai_interview_app.storage_cleanup', 'DELETE') AS runtime_cleanup_delete,
                                    has_schema_privilege(current_user, 'public', 'CREATE') AS runtime_public_ddl,
                                    has_schema_privilege(current_user, 'ai_interview_app', 'CREATE') AS runtime_app_ddl
                         """.trimIndent()).use { permissions ->
@@ -60,6 +65,11 @@ class SupabaseLiveSmokeTests {
                             assertFalse(permissions.getBoolean("authenticated_schema"))
                             assertFalse(permissions.getBoolean("authenticated_view"))
                             assertTrue(permissions.getBoolean("service_view"))
+                            assertFalse(permissions.getBoolean("anon_cleanup"))
+                            assertFalse(permissions.getBoolean("authenticated_cleanup"))
+                            assertTrue(permissions.getBoolean("runtime_cleanup_select"))
+                            assertTrue(permissions.getBoolean("runtime_cleanup_insert"))
+                            assertTrue(permissions.getBoolean("runtime_cleanup_delete"))
                             assertFalse(permissions.getBoolean("runtime_public_ddl"))
                             assertFalse(permissions.getBoolean("runtime_app_ddl"))
                         }
