@@ -112,7 +112,7 @@ kept and marked stale (section 6), not deleted.
 | 3.5 | `PATCH /api/resumes/{resumeId}` | existing | Rename, job-title edit |
 | 3.6 | `GET /api/resumes/{resumeId}/delete-impact` | existing | Delete dialog |
 | 3.7 | `DELETE /api/resumes/{resumeId}` | existing | Library |
-| 3.8 | `POST /api/resumes/{resumeId}/score` | new | Score page |
+| 3.8 | `POST /api/resumes/{resumeId}/score` | existing | Score page |
 | 4.1 | `POST /api/target-jobs` | existing | Target job picker, library |
 | 4.2 | `GET /api/target-jobs` | existing | Target job picker, library, home |
 | 4.3 | `GET /api/target-jobs/{targetJobId}` | existing | Fit page, library |

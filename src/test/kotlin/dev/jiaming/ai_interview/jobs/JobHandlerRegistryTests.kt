@@ -9,11 +9,13 @@ class JobHandlerRegistryTests {
 	@Test
 	fun requiresExactlyOneHandlerForEveryJobType() {
 		val resume = handler(JobType.RESUME_EXTRACTION)
+		val score = handler(JobType.RESUME_SCORE)
 		val analysis = handler(JobType.ANALYSIS)
 		val feedback = handler(JobType.ANSWER_FEEDBACK)
 		val experienceSplit = handler(JobType.EXPERIENCE_SPLIT)
-		val registry = JobHandlerRegistry(listOf(resume, analysis, feedback, experienceSplit))
+		val registry = JobHandlerRegistry(listOf(resume, score, analysis, feedback, experienceSplit))
 		assertThat(registry.require(JobType.ANALYSIS)).isSameAs(analysis)
+		assertThat(registry.require(JobType.RESUME_SCORE)).isSameAs(score)
 		assertThat(registry.require(JobType.EXPERIENCE_SPLIT)).isSameAs(experienceSplit)
 	}
 

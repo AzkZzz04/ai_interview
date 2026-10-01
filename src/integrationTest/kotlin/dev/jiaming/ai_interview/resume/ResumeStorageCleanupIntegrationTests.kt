@@ -172,7 +172,7 @@ class ResumeStorageCleanupIntegrationTests {
             )
             guard = RedisRequestGuard(StringRedisTemplate(), properties, ObjectMapper().findAndRegisterModules())
             library = ResumeLibraryService(
-                jdbc, local, persistence, normalizer, guard, transactions, cleanup, DeleteImpactService(jdbc)
+                jdbc, local, persistence, normalizer, guard, transactions, cleanup, DeleteImpactService(jdbc), ObjectMapper().findAndRegisterModules()
             )
         }
     }

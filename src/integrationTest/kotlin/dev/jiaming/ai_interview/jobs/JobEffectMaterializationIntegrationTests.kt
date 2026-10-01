@@ -107,5 +107,5 @@ open class TestConfiguration {
     @Bean open fun interviewSessionPersistenceService(jdbc: JdbcTemplate, json: PersistenceJsonSupport) = InterviewSessionPersistenceService(jdbc, json)
     @Bean open fun answerPersistenceService(jdbc: JdbcTemplate, json: PersistenceJsonSupport) = AnswerPersistenceService(jdbc, json)
     @Bean open fun interviewPersistenceService(assessments: AssessmentPersistenceService, sessions: InterviewSessionPersistenceService, answers: AnswerPersistenceService) = InterviewPersistenceService(assessments, sessions, answers)
-    @Bean open fun jobEffectMaterializationService(jdbc: JdbcTemplate, persistence: InterviewPersistenceService) = JobEffectMaterializationService(jdbc, persistence)
+    @Bean open fun jobEffectMaterializationService(jdbc: JdbcTemplate, persistence: InterviewPersistenceService, mapper: ObjectMapper) = JobEffectMaterializationService(jdbc, persistence, mapper)
 }

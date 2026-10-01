@@ -63,10 +63,34 @@ class AiResumeCoachServiceTests {
 		Mockito.verify(client, Mockito.times(2)).generateJson(anyString())
 	}
 
+	@Test fun scoreResumeRepairsInvalidJsonOnceWithoutUsingRetrieval() {
+		Mockito.`when`(client.generateJson(anyString())).thenReturn("not-json").thenReturn(scoreJson())
+
+		val score = service.scoreResume("Built the payment API.", "Backend Engineer")
+
+		assertThat(score.overall).isEqualTo(82)
+		assertThat(score.jobTitle).isEqualTo("Backend Engineer")
+		Mockito.verify(client, Mockito.times(2)).generateJson(anyString())
+		Mockito.verifyNoInteractions(contextService)
+	}
+
+	@Test fun scoreResumeStopsAfterOneFailedRepairWithGeminiError() {
+		Mockito.`when`(client.generateJson(anyString())).thenReturn("not-json")
+
+		assertThatThrownBy { service.scoreResume("Built the payment API.", null) }
+			.isInstanceOfSatisfying(GeminiException::class.java) { exception ->
+				assertThat(exception.code()).isEqualTo(GeminiErrorCode.INVALID_RESPONSE)
+				assertThat(exception.retryable()).isFalse()
+			}
+		Mockito.verify(client, Mockito.times(2)).generateJson(anyString())
+		Mockito.verifyNoInteractions(contextService)
+	}
+
 	private fun input(): CoachAnalysisInput {
 		val resume = ResolvedDocument(DocumentSourceType.RESUME, UUID.randomUUID(), "hash", "EXPERIENCE\nBuilt APIs", listOf(DocumentChunk(0, "Experience", "Built APIs", "resume:experience:0")))
 		return CoachAnalysisInput(resume, Optional.empty(), "Backend Engineer", "Mid-level")
 	}
 
 	private fun assessmentJson() = """{"overallScore":80,"scores":{"technicalDepth":80,"impact":80,"clarity":80,"relevance":80,"ats":80},"strengths":["Clear impact"],"weaknesses":["More scale detail needed"],"recommendations":[{"section":"Experience","priority":"high","message":"Add scale"}],"sourceContextIds":["resume:experience:0"]}"""
+	private fun scoreJson() = """{"overall":82,"scores":{"technicalDepth":82,"impact":80,"clarity":84,"relevance":81,"ats":83},"summary":"Strong backend work.","fixes":[{"section":"Experience","priority":"HIGH","message":"Add scope."}],"rewrites":[{"section":"Experience","original":"Built API.","rewritten":"Built API serving [N] services."}]}"""
 }

@@ -24,7 +24,7 @@ class DeleteImpactService(private val jdbcTemplate: JdbcTemplate) {
         if (!exists) throw ApiRequestException(HttpStatus.NOT_FOUND, "RESUME_NOT_FOUND", "Resume was not found")
 
         val scores = jdbcTemplate.queryForObject(
-            "SELECT count(*) FROM ai_interview_app.resume_assessments WHERE resume_id = ? AND user_id = ?",
+            "SELECT count(*) FROM ai_interview_app.resume_scores WHERE resume_id = ? AND user_id = ?",
             Int::class.java, resumeId, userId
         ) ?: 0
         return DeleteImpact(scores, 0, 0, 0, 0, 0)

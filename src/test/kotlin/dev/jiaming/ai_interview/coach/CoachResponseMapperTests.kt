@@ -58,4 +58,28 @@ class CoachResponseMapperTests {
 			.isInstanceOf(GeminiException::class.java)
 			.hasMessageContaining("experience")
 	}
+
+    @Test
+    fun normalizesResumeScoresFixRanksPrioritiesAndRewritePlaceholders() {
+        val draft = ResumeScoreDraftResponse(
+            130,
+            AssessmentScores(130, -4, 64, 75, 71),
+            "Strong backend depth; impact is under-quantified.",
+            listOf(
+                ResumeScoreFixDraft("Experience", "high", "Quantify the result."),
+                ResumeScoreFixDraft("Skills", "invalid", "Group related tools.")
+            ),
+            listOf(ResumeScoreRewriteDraft("Experience", "Improved latency.", "Cut latency by [X%] across [N] services."))
+        )
+
+        val normalized = mapper.normalizeResumeScore(draft, "Backend Engineer")
+
+        assertThat(normalized.overall).isEqualTo(100)
+        assertThat(normalized.scores.technicalDepth).isEqualTo(100)
+        assertThat(normalized.scores.impact).isZero()
+        assertThat(normalized.fixes.map { it.rank }).containsExactly(1, 2)
+        assertThat(normalized.fixes.map { it.priority }).containsExactly("HIGH", "MEDIUM")
+        assertThat(normalized.rewrites.single().placeholders).containsExactly("[X%]", "[N]")
+        assertThat(normalized.jobTitle).isEqualTo("Backend Engineer")
+    }
 }

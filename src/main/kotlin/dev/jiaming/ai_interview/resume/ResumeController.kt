@@ -1,6 +1,9 @@
 package dev.jiaming.ai_interview.resume
 
 import com.fasterxml.jackson.databind.JsonNode
+import dev.jiaming.ai_interview.common.RedisRequestGuard
+import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
+import dev.jiaming.ai_interview.score.ResumeScoreService
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestPart
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.server.ResponseStatusException
@@ -22,7 +26,9 @@ import org.springframework.web.server.ResponseStatusException
 class ResumeController(
     private val resumeUploadService: ResumeUploadService,
     private val resumeJobSubmissionService: ResumeJobSubmissionService,
-    private val resumeLibraryService: ResumeLibraryService
+    private val resumeLibraryService: ResumeLibraryService,
+    private val resumeScoreService: ResumeScoreService,
+    private val requestGuard: RedisRequestGuard
 ) {
     @PostMapping(consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun upload(
@@ -46,6 +52,13 @@ class ResumeController(
 
     @PatchMapping("/{resumeId}", consumes = [MediaType.APPLICATION_JSON_VALUE])
     fun patch(@PathVariable resumeId: UUID, @RequestBody body: JsonNode): ResumeLibraryItem = resumeLibraryService.patch(resumeId, body)
+
+    @PostMapping("/{resumeId}/score")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    fun score(@PathVariable resumeId: UUID): JobAcceptedResponse =
+        requestGuard.withIdempotentRetryCache("resume-score", resumeId, JobAcceptedResponse::class.java) {
+            resumeScoreService.submit(resumeId)
+        }
 
     @GetMapping("/{resumeId}/delete-impact")
     fun deleteImpact(@PathVariable resumeId: UUID) = resumeLibraryService.deleteImpact(resumeId)

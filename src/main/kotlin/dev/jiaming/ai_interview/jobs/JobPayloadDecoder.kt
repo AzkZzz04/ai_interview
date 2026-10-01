@@ -11,6 +11,7 @@ import dev.jiaming.ai_interview.document.DocumentReferenceResolver
 import dev.jiaming.ai_interview.document.ResolvedJobInputs
 import dev.jiaming.ai_interview.experience.ExperienceSplitJobPayload
 import dev.jiaming.ai_interview.resume.ResumeExtractionJobPayload
+import dev.jiaming.ai_interview.score.ResumeScorePayload
 
 @Component
 class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobStore: BackgroundJobStore,
@@ -34,9 +35,16 @@ class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobS
         return upgraded
     }
 
+    fun resumeScore(job: BackgroundJob): ResumeScorePayload {
+        val payload = convert(job.requestPayload, ResumeScorePayload::class.java)
+        require(payload.payloadVersion == ResumeScorePayload.CURRENT_VERSION) { "Unsupported resume score payload version ${payload.payloadVersion}" }
+        return payload
+    }
+
     fun decode(job: BackgroundJob, leaseToken: UUID, payloadType: Class<*>): Any {
         val payload: Any = when (job.jobType) {
             JobType.RESUME_EXTRACTION -> convert(job.requestPayload, ResumeExtractionJobPayload::class.java)
+            JobType.RESUME_SCORE -> resumeScore(job)
             JobType.ANALYSIS -> analysis(job, leaseToken)
             JobType.ANSWER_FEEDBACK -> feedback(job, leaseToken)
             JobType.EXPERIENCE_SPLIT -> convert(job.requestPayload, ExperienceSplitJobPayload::class.java)

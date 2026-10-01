@@ -3,6 +3,8 @@ package dev.jiaming.ai_interview.jobs
 import java.util.UUID
 import java.util.function.Consumer
 import java.util.function.Supplier
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -12,10 +14,12 @@ import dev.jiaming.ai_interview.coach.InterviewQuestionsResponse
 import dev.jiaming.ai_interview.interview.AnalysisPersistenceInput
 import dev.jiaming.ai_interview.interview.FeedbackPersistenceInput
 import dev.jiaming.ai_interview.interview.InterviewPersistenceService
+import dev.jiaming.ai_interview.score.ResumeScoreResult
 
 @Service
 class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate,
-                                      private val interviewPersistenceService: InterviewPersistenceService) {
+                                      private val interviewPersistenceService: InterviewPersistenceService,
+                                      private val objectMapper: ObjectMapper) {
     @Transactional
     fun materializeAssessment(job: BackgroundJob, leaseToken: UUID, input: AnalysisPersistenceInput, response: AssessmentResponse): UUID {
         lockOwnedLease(job.id, leaseToken)
@@ -31,6 +35,22 @@ class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate,
     fun materializeFeedback(job: BackgroundJob, leaseToken: UUID, input: FeedbackPersistenceInput, response: AnswerFeedbackResponse): UUID {
         lockOwnedLease(job.id, leaseToken)
         return materialize(job.id, JobEffectType.ANSWER_FEEDBACK) { id -> interviewPersistenceService.saveAnswer(id, input, response) }
+    }
+    @Transactional
+    fun materializeResumeScore(job: BackgroundJob, leaseToken: UUID, resumeId: UUID, response: ResumeScoreResult): UUID {
+        lockOwnedLease(job.id, leaseToken)
+        val userId = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+        return materialize(job.id, JobEffectType.RESUME_SCORE) { id ->
+            val resultJson = try { objectMapper.writeValueAsString(response) }
+            catch (exception: JsonProcessingException) { throw IllegalStateException("Could not serialize resume score", exception) }
+            jdbcTemplate.update(
+                """
+                    INSERT INTO ai_interview_app.resume_scores (id, user_id, resume_id, job_title, overall, result, scored_at)
+                    VALUES (?, ?, ?, ?, ?, ?::jsonb, ?)
+                """.trimIndent(),
+                id, userId, resumeId, response.jobTitle, response.overall, resultJson, java.sql.Timestamp.from(response.scoredAt)
+            )
+        }
     }
     @Transactional
     fun <T> withOwnedLease(job: BackgroundJob, leaseToken: UUID, work: Supplier<T>): T {

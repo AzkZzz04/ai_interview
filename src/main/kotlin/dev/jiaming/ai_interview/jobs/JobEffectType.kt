@@ -1,3 +1,3 @@
 package dev.jiaming.ai_interview.jobs
 
-enum class JobEffectType { ASSESSMENT, QUESTIONS, ANSWER_FEEDBACK }
+enum class JobEffectType { ASSESSMENT, QUESTIONS, ANSWER_FEEDBACK, RESUME_SCORE }

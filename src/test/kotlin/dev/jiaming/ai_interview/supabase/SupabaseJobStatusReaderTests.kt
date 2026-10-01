@@ -155,6 +155,28 @@ class SupabaseJobStatusReaderTests {
     }
 
     @Test
+    fun `maps resume score jobs to their resume and nested score result`() = runBlocking {
+        val resultPayload = """{"overall":72,"scores":{"technicalDepth":70,"impact":64,"clarity":80,"relevance":75,"ats":71},"summary":"Solid.","fixes":[{"rank":1,"section":"Experience","priority":"HIGH","message":"Quantify it."}],"rewrites":[{"section":"Experience","original":"Did it.","rewritten":"Cut cost by [X%].","placeholders":["[X%]"]}],"jobTitle":null,"scoredAt":"2026-09-30T21:00:00Z"}"""
+        val (client, reader) = reader(row(
+            jobType = "RESUME_SCORE",
+            stage = "SCORING_RESUME",
+            requestPayload = """{"resumeId":"$resourceId"}""",
+            resultPayload = resultPayload
+        ))
+        try {
+            val status = reader.findForUser(jobId, userId)!!
+            assertEquals(JobType.RESUME_SCORE, status.jobType)
+            assertEquals(JobStage.SCORING_RESUME, status.stage)
+            assertEquals(resourceId, status.inputRefs.resumeId)
+            val result = status.result as Map<*, *>
+            assertEquals(72, result["overall"])
+            assertNull(result["jobTitle"])
+            val rewrite = (result["rewrites"] as List<*>).single() as Map<*, *>
+            assertEquals(listOf("[X%]"), rewrite["placeholders"])
+        } finally { client.close() }
+    }
+
+    @Test
     fun `resume fallback is resource aware and malformed reference UUIDs stay null`() = runBlocking {
         val invalidRefs = """{"resumeId":"invalid","jobDescriptionId":"invalid","practiceSetId":"invalid","attemptId":"invalid"}"""
         val (resumeClient, resumeReader) = reader(row(requestPayload = invalidRefs, resourceType = "\"resume\""))

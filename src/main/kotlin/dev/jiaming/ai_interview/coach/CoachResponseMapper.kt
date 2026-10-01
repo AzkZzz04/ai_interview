@@ -5,8 +5,12 @@ import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.gemini.GeminiException
 import dev.jiaming.ai_interview.experience.ExperienceSplitItem
 import dev.jiaming.ai_interview.experience.ExperienceSplitResult
+import dev.jiaming.ai_interview.score.ResumeScoreFix
+import dev.jiaming.ai_interview.score.ResumeScoreResult
+import dev.jiaming.ai_interview.score.ResumeScoreRewrite
 import org.springframework.stereotype.Component
 import java.io.IOException
+import java.time.Instant
 import java.util.Locale
 import java.util.UUID
 
@@ -42,6 +46,31 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         val overall = if (response.overallScore > 0) clampScore(response.overallScore) else average(normalized)
         return AssessmentResponse(overall, normalized, nonEmpty(response.strengths), nonEmpty(response.weaknesses),
             nonEmptyRecommendations(response.recommendations), "gemini", sourceContextIds(response.sourceContextIds, fallbackSourceContextIds))
+    }
+
+    fun normalizeResumeScore(response: ResumeScoreDraftResponse, jobTitle: String?): ResumeScoreResult {
+        val scores = response.scores ?: AssessmentScores(0, 0, 0, 0, 0)
+        val normalizedScores = AssessmentScores(
+            clampScore(scores.technicalDepth), clampScore(scores.impact), clampScore(scores.clarity),
+            clampScore(scores.relevance), clampScore(scores.ats)
+        )
+        val fixes = response.fixes.orEmpty().filterNotNull().filter { !it.message.isNullOrBlank() }.take(6).mapIndexed { index, fix ->
+            ResumeScoreFix(index + 1, fallback(fix.section, "Resume"), normalizePriority(fix.priority).uppercase(Locale.ROOT), fix.message!!.trim())
+        }.ifEmpty {
+            listOf(ResumeScoreFix(1, "Experience", "MEDIUM", "Add clear scope and measurable outcomes where you can support them."))
+        }
+        val rewrites = response.rewrites.orEmpty().filterNotNull().filter { !it.rewritten.isNullOrBlank() }.take(5).map { rewrite ->
+            val rewritten = rewrite.rewritten!!.trim()
+            ResumeScoreRewrite(
+                fallback(rewrite.section, "Experience"), fallback(rewrite.original, ""), rewritten,
+                PLACEHOLDER.findAll(rewritten).map { it.value }.distinct().toList()
+            )
+        }
+        return ResumeScoreResult(
+            response.overall?.let(::clampScore) ?: average(normalizedScores), normalizedScores,
+            fallback(response.summary, "The resume was scored, but no summary was returned."),
+            fixes, rewrites, jobTitle?.trim()?.ifBlank { null }, Instant.now()
+        )
     }
 
     fun normalizeQuestions(response: InterviewQuestionsResponse, fallbackSourceContextIds: List<String>): InterviewQuestionsResponse {
@@ -104,4 +133,8 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         return slug.take(44)
     }
     private fun fallback(value: String?, default: String) = if (value.isNullOrBlank()) default else value.trim()
+
+    private companion object {
+        val PLACEHOLDER = Regex("""\[[^\]\r\n]+\]""")
+    }
 }

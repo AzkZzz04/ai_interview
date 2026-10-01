@@ -22,6 +22,7 @@ class JobProcessorTests {
 		val handler = TestHandler(expected)
 		val registry = JobHandlerRegistry(listOf(
 			NoOpHandler(JobType.RESUME_EXTRACTION, Any::class.java),
+			NoOpHandler(JobType.RESUME_SCORE, Any::class.java),
 			handler,
 			NoOpHandler(JobType.ANSWER_FEEDBACK, Any::class.java),
 			NoOpHandler(JobType.EXPERIENCE_SPLIT, Any::class.java)

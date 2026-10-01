@@ -1,5 +1,11 @@
 package dev.jiaming.ai_interview.resume
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import dev.jiaming.ai_interview.common.RedisRequestGuard
+import dev.jiaming.ai_interview.common.RedisUsageProperties
+import dev.jiaming.ai_interview.jobs.JobInputRefs
+import dev.jiaming.ai_interview.score.ResumeScoreService
+import org.springframework.data.redis.core.StringRedisTemplate
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
 import dev.jiaming.ai_interview.jobs.JobStage
 import dev.jiaming.ai_interview.jobs.JobStatus
@@ -29,7 +35,10 @@ class ResumeControllerTests {
 	private val service = Mockito.mock(ResumeUploadService::class.java)
 	private val submissionService = Mockito.mock(ResumeJobSubmissionService::class.java)
 	private val libraryService = Mockito.mock(ResumeLibraryService::class.java)
-	private val mockMvc = standaloneSetup(ResumeController(service, submissionService, libraryService)).build()
+	private val scoreService = Mockito.mock(ResumeScoreService::class.java)
+	private val guard = RedisRequestGuard(StringRedisTemplate(), RedisUsageProperties("resume-controller-test:",
+		RedisUsageProperties.RateLimit(false, 60, 12, 20), RedisUsageProperties.Idempotency(false, 86_400)), ObjectMapper())
+	private val mockMvc = standaloneSetup(ResumeController(service, submissionService, libraryService, scoreService, guard)).build()
 
 	@Test
 	fun uploadsResumeAndReturnsAcceptedJob() {
@@ -69,6 +78,19 @@ class ResumeControllerTests {
 	}
 
 	@Test
+	fun scoreStartsAResumeScoreJob() {
+		val resumeId = UUID.randomUUID()
+		val jobId = UUID.randomUUID()
+		Mockito.`when`(scoreService.submit(resumeId)).thenReturn(JobAcceptedResponse(
+			jobId, JobType.RESUME_SCORE, JobStatus.QUEUED, JobStage.QUEUED, "/api/jobs/$jobId", false, JobInputRefs(resumeId, null, null, null)
+		))
+		mockMvc.perform(post("/api/resumes/$resumeId/score").contentType(MediaType.APPLICATION_JSON).content("{}"))
+			.andExpect(status().isAccepted)
+			.andExpect(jsonPath("$.jobType").value("RESUME_SCORE"))
+			.andExpect(jsonPath("$.inputRefs.resumeId").value(resumeId.toString()))
+	}
+
+	@Test
 	fun returnsCurrentCompletedResume() {
 		Mockito.`when`(service.current()).thenReturn(Optional.of(ResumeUploadResponse(UUID.randomUUID().toString(), "resume.txt", "text/plain", "text/plain", 24, 24, 24, "SKILLS\nJava Spring Boot", listOf(ResumeChunkResponse(0, "Skills", "Java Spring Boot", 16)), Instant.now())))
 		mockMvc.perform(get("/api/resumes/current"))
@@ -80,7 +102,7 @@ class ResumeControllerTests {
 	fun returnsNotFoundWhenNoResumeHasBeenUploaded() {
 		val emptyService = Mockito.mock(ResumeUploadService::class.java)
 		Mockito.`when`(emptyService.current()).thenReturn(Optional.empty())
-		val emptyMockMvc = standaloneSetup(ResumeController(emptyService, submissionService, libraryService)).build()
+		val emptyMockMvc = standaloneSetup(ResumeController(emptyService, submissionService, libraryService, scoreService, guard)).build()
 		emptyMockMvc.perform(get("/api/resumes/current")).andExpect(status().isNotFound)
 	}
 }

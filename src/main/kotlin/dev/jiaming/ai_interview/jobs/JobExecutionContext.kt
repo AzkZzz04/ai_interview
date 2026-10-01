@@ -14,6 +14,7 @@ import dev.jiaming.ai_interview.coach.AssessmentResponse
 import dev.jiaming.ai_interview.coach.InterviewQuestionsResponse
 import dev.jiaming.ai_interview.interview.AnalysisPersistenceInput
 import dev.jiaming.ai_interview.interview.FeedbackPersistenceInput
+import dev.jiaming.ai_interview.score.ResumeScoreResult
 
 class JobExecutionContext internal constructor(
     private val job: BackgroundJob, private val leaseToken: UUID, private val jobStore: BackgroundJobStore,
@@ -51,6 +52,7 @@ class JobExecutionContext internal constructor(
     fun materializeAssessment(input: AnalysisPersistenceInput, response: AssessmentResponse) = materializationService.materializeAssessment(job, leaseToken, input, response)
     fun materializeQuestions(input: AnalysisPersistenceInput, response: InterviewQuestionsResponse) = materializationService.materializeQuestions(job, leaseToken, input, response)
     fun materializeFeedback(input: FeedbackPersistenceInput, response: AnswerFeedbackResponse) = materializationService.materializeFeedback(job, leaseToken, input, response)
+    fun materializeResumeScore(resumeId: UUID, response: ResumeScoreResult) = materializationService.materializeResumeScore(job, leaseToken, resumeId, response)
     fun <T> withOwnedLease(work: Supplier<T>): T = materializationService.withOwnedLease(job, leaseToken, work)
     fun toJson(value: Any): JsonNode = objectMapper.valueToTree(value)
     internal fun finish() { finishActiveStage() }

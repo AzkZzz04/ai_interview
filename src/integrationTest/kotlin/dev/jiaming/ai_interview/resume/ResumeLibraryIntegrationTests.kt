@@ -264,11 +264,11 @@ class ResumeLibraryIntegrationTests {
             )
             val guard = RedisRequestGuard(StringRedisTemplate(), properties, ObjectMapper().findAndRegisterModules())
             library = ResumeLibraryService(
-                jdbc, local, persistence, normalizer, guard, transactions, cleanup, DeleteImpactService(jdbc)
+                jdbc, local, persistence, normalizer, guard, transactions, cleanup, DeleteImpactService(jdbc), ObjectMapper().findAndRegisterModules()
             )
             val mapper = ObjectMapper().findAndRegisterModules()
             jobs = BackgroundJobStore(jdbc, mapper)
-            materialization = JobEffectMaterializationService(jdbc, Mockito.mock(InterviewPersistenceService::class.java))
+            materialization = JobEffectMaterializationService(jdbc, Mockito.mock(InterviewPersistenceService::class.java), ObjectMapper().findAndRegisterModules())
         }
 
     }

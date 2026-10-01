@@ -28,6 +28,31 @@ class CoachPromptBuilder {
         %s
     """.trimIndent().format(text)
 
+    fun buildResumeScorePrompt(resumeText: String, jobTitle: String?): String {
+        val title = fallback(jobTitle, "Not provided")
+        return """
+        You are a practical resume coach. Evaluate the resume using only the resume text and optional job title below.
+        Do not add experience, scope, metrics, or tools that the resume does not support. Use bracketed placeholders
+        such as [X%] or [N] wherever a rewrite needs a value the resume does not provide.
+        Return only valid JSON matching this shape:
+        {
+          "overall": 0,
+          "scores": { "technicalDepth": 0, "impact": 0, "clarity": 0, "relevance": 0, "ats": 0 },
+          "summary": "one concise assessment",
+          "fixes": [{ "section": "Experience", "priority": "HIGH", "message": "one concrete change" }],
+          "rewrites": [{ "section": "Experience", "original": "source text", "rewritten": "fact-preserving rewrite" }]
+        }
+        All scores must be integers from 0 to 100. Order fixes by importance. Use priorities HIGH, MEDIUM, or LOW.
+
+        Job title: $title
+
+        Resume text:
+        <resume>
+        $resumeText
+        </resume>
+    """.trimIndent()
+    }
+
     fun buildAssessmentPrompt(input: CoachAnalysisInput, context: CoachRagContext): String {
         val settings = SenioritySettings.forValue(input.seniority())
         return """

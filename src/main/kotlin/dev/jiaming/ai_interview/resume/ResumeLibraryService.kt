@@ -1,6 +1,7 @@
 package dev.jiaming.ai_interview.resume
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import dev.jiaming.ai_interview.common.ApiRequestException
 import dev.jiaming.ai_interview.common.DeleteImpactService
 import dev.jiaming.ai_interview.common.LocalUserService
@@ -11,6 +12,8 @@ import dev.jiaming.ai_interview.jobs.JobErrorResponse
 import dev.jiaming.ai_interview.jobs.JobStage
 import dev.jiaming.ai_interview.jobs.JobStatus
 import dev.jiaming.ai_interview.jobs.JobType
+import dev.jiaming.ai_interview.score.ResumeScoreResult
+import dev.jiaming.ai_interview.score.ResumeScoreSummary
 import java.sql.ResultSet
 import java.util.UUID
 import org.springframework.http.HttpStatus
@@ -30,7 +33,8 @@ class ResumeLibraryService(
     private val requestGuard: RedisRequestGuard,
     private val transactionOperations: TransactionOperations,
     private val storageCleanupService: ResumeStorageCleanupService,
-    private val deleteImpactService: DeleteImpactService
+    private val deleteImpactService: DeleteImpactService,
+    private val objectMapper: ObjectMapper
 ) {
     fun list(): ResumePage {
         val userId = localUserService.localUserId()
@@ -167,7 +171,7 @@ class ResumeLibraryService(
         return ResumeLibraryItem(
             rs.getObject("id", UUID::class.java).toString(), rs.getString("name"), rs.getString("job_title"),
             rs.getString("source"), rs.getString("original_filename"), apiStatus(rs.getString("processing_status")),
-            null, job, rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant()
+            latestScore(rs), job, rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant()
         )
     }
 
@@ -176,14 +180,21 @@ class ResumeLibraryService(
         val text = rs.getString("normalized_text")?.takeIf { item.status == "READY" }
         return ResumeLibraryDetail(
             item.id, item.name, item.jobTitle, item.source, item.originalFilename, item.status,
-            item.latestScore, item.activeJob, item.createdAt, item.updatedAt, text, null
+            item.latestScore, item.activeJob, item.createdAt, item.updatedAt, text,
+            rs.getString("score_result")?.let { objectMapper.readValue(it, ResumeScoreResult::class.java) }
         )
     }
 
+    // A score is stale once the resume's job title no longer matches the title it was scored with.
+    private fun latestScore(rs: ResultSet): ResumeScoreSummary? {
+        val scoredAt = rs.getTimestamp("score_scored_at") ?: return null
+        return ResumeScoreSummary(rs.getInt("score_overall"), scoredAt.toInstant(), rs.getString("score_job_title") != rs.getString("job_title"))
+    }
+
+    // The latest extraction or score job, kept after it ends so the UI can show the last failure.
     private fun activeJob(rs: ResultSet): ActiveJob? {
         val id = rs.getObject("active_job_id", UUID::class.java) ?: return null
         val status = JobStatus.valueOf(rs.getString("active_job_status"))
-        if (status == JobStatus.SUCCEEDED || status == JobStatus.PARTIAL) return null
         val message = rs.getString("active_job_error")
         return ActiveJob(
             id, JobType.valueOf(rs.getString("active_job_type")), status,
@@ -212,15 +223,23 @@ class ResumeLibraryService(
                    j.id AS active_job_id, j.job_type AS active_job_type, j.status AS active_job_status,
                    j.stage AS active_job_stage, j.attempts AS active_job_attempts,
                    j.max_attempts AS active_job_max_attempts, j.error_code AS active_job_error_code,
-                   j.last_error AS active_job_error, j.retryable AS active_job_retryable
+                   j.last_error AS active_job_error, j.retryable AS active_job_retryable,
+                   s.overall AS score_overall, s.job_title AS score_job_title, s.scored_at AS score_scored_at,
+                   s.result AS score_result
             FROM ai_interview_app.resumes r
             LEFT JOIN LATERAL (
                 SELECT id, job_type, status, stage, attempts, max_attempts, error_code, last_error, retryable
                 FROM ai_interview_app.background_jobs
                 WHERE user_id = r.user_id AND resource_type = 'resume' AND resource_id = r.id
-                  AND job_type = 'RESUME_EXTRACTION'
+                  AND job_type IN ('RESUME_EXTRACTION', 'RESUME_SCORE')
                 ORDER BY created_at DESC LIMIT 1
             ) j ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT overall, job_title, scored_at, result::text AS result
+                FROM ai_interview_app.resume_scores
+                WHERE user_id = r.user_id AND resume_id = r.id
+                ORDER BY scored_at DESC, id DESC LIMIT 1
+            ) s ON TRUE
         """.trimIndent()
     }
 }
