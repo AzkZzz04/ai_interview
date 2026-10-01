@@ -39,20 +39,31 @@ class ResumePersistenceService(
     fun createPending(
         userId: UUID, originalFilename: String?, contentType: String?, detectedContentType: String?, sizeBytes: Long,
         storageKey: String?
-    ): UUID {
+    ): UUID = createPending(
+        userId, originalFilename, contentType, detectedContentType, sizeBytes, storageKey,
+        defaultName(originalFilename), null, null
+    ).orElseThrow { IllegalStateException("Could not create pending resume") }
+
+    fun createPending(
+        userId: UUID, originalFilename: String?, contentType: String?, detectedContentType: String?, sizeBytes: Long,
+        storageKey: String?, name: String, jobTitle: String?, fileHash: String?
+    ): Optional<UUID> {
         val resumeId = UUID.randomUUID()
-        jdbcTemplate.update(
+        val inserted = jdbcTemplate.query(
             """
                 INSERT INTO ai_interview_app.resumes (
                     id, user_id, original_filename, content_type, detected_content_type,
                     size_bytes, storage_key, raw_text, normalized_text, parsed_skills,
-                    processing_status, failure_code, failure_message, updated_at
+                    processing_status, failure_code, failure_message, name, job_title, source, file_hash, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, '[]'::jsonb, 'PENDING', NULL, NULL, now())
+                VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, '[]'::jsonb, 'PENDING', NULL, NULL, ?, ?, 'UPLOAD', ?, now())
+                ON CONFLICT (user_id, file_hash) WHERE file_hash IS NOT NULL DO NOTHING
+                RETURNING id
                 """.trimIndent(),
-            resumeId, userId, originalFilename, contentType, detectedContentType, sizeBytes, storageKey
+            { rs, _ -> rs.getObject("id", UUID::class.java) },
+            resumeId, userId, originalFilename, contentType, detectedContentType, sizeBytes, storageKey, name, jobTitle, fileHash
         )
-        return resumeId
+        return Optional.ofNullable(inserted.firstOrNull())
     }
 
     @Transactional
@@ -87,6 +98,92 @@ class ResumePersistenceService(
             )
         }
         return findById(resumeId).orElseThrow()
+    }
+
+    /** Called while the extraction job row is locked by JobEffectMaterializationService. */
+    @Transactional
+    fun completeExtractionForJob(
+        resumeId: UUID, storageKey: String, rawText: String, normalizedText: String, chunks: List<ResumeChunkResponse>
+    ): ResumeExtractionResult {
+        val userId = localUserService.localUserId()
+        lockOwner(userId)
+        val contentHash = contentHasher.sha256(normalizedText)
+        val duplicate = jdbcTemplate.query(
+            """
+                SELECT id, name FROM ai_interview_app.resumes
+                WHERE user_id = ? AND id <> ? AND processing_status = 'READY'
+                  AND content_hash = ? AND normalized_text = ?
+                ORDER BY created_at DESC LIMIT 1
+                """.trimIndent(),
+            RowMapper { rs, _ -> DuplicateResume(rs.getObject("id", UUID::class.java).toString(), rs.getString("name")) },
+            userId, resumeId, contentHash, normalizedText
+        ).firstOrNull()
+        if (duplicate != null) {
+            enqueueStorageCleanup(storageKey)
+            jdbcTemplate.update("DELETE FROM ai_interview_app.resumes WHERE id = ? AND user_id = ?", resumeId, userId)
+            return ResumeExtractionResult(resumeId.toString(), duplicate)
+        }
+
+        val updated = jdbcTemplate.update(
+            """
+                UPDATE ai_interview_app.resumes
+                SET raw_text = ?, normalized_text = ?, processing_status = 'READY',
+                    failure_code = NULL, failure_message = NULL, content_hash = ?, updated_at = now()
+                WHERE id = ? AND user_id = ? AND processing_status IN ('PENDING', 'READY')
+                """.trimIndent(),
+            rawText, normalizedText, contentHash, resumeId, userId
+        )
+        if (updated != 1) throw IllegalStateException("Pending resume does not exist: $resumeId")
+        replaceChunks(resumeId, chunks)
+        return ResumeExtractionResult(resumeId.toString(), null)
+    }
+
+    @Transactional
+    fun createPaste(userId: UUID, name: String, jobTitle: String?, rawText: String, normalizedText: String): PastePersistenceResult {
+        lockOwner(userId)
+        val contentHash = contentHasher.sha256(normalizedText)
+        val duplicate = jdbcTemplate.query(
+            """
+                SELECT id FROM ai_interview_app.resumes
+                WHERE user_id = ? AND processing_status = 'READY'
+                  AND content_hash = ? AND normalized_text = ?
+                ORDER BY created_at DESC LIMIT 1
+                """.trimIndent(),
+            RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId, contentHash, normalizedText
+        ).firstOrNull()
+        if (duplicate != null) return PastePersistenceResult(duplicate, true)
+
+        val resumeId = UUID.randomUUID()
+        jdbcTemplate.update(
+            """
+                INSERT INTO ai_interview_app.resumes (
+                    id, user_id, original_filename, content_type, detected_content_type, size_bytes,
+                    raw_text, normalized_text, content_hash, parsed_skills, processing_status,
+                    name, job_title, source, updated_at
+                )
+                VALUES (?, ?, NULL, 'text/plain', 'text/plain', ?, ?, ?, ?, '[]'::jsonb, 'READY', ?, ?, 'PASTE', now())
+                """.trimIndent(),
+            resumeId, userId, normalizedText.toByteArray(StandardCharsets.UTF_8).size, rawText, normalizedText,
+            contentHash, name, jobTitle
+        )
+        insertChunks(resumeId, normalizedText)
+        return PastePersistenceResult(resumeId, false)
+    }
+
+    fun enqueueStorageCleanup(storageKey: String) {
+        jdbcTemplate.update(
+            "INSERT INTO ai_interview_app.storage_cleanup (storage_key) VALUES (?) ON CONFLICT (storage_key) DO NOTHING",
+            storageKey
+        )
+    }
+
+    fun findPendingStorageCleanup(limit: Int): List<String> = jdbcTemplate.query(
+        "SELECT storage_key FROM ai_interview_app.storage_cleanup ORDER BY created_at LIMIT ?",
+        RowMapper { rs, _ -> rs.getString("storage_key") }, limit
+    )
+
+    fun acknowledgeStorageCleanup(storageKey: String) {
+        jdbcTemplate.update("DELETE FROM ai_interview_app.storage_cleanup WHERE storage_key = ?", storageKey)
     }
 
     fun deletePending(resumeId: UUID) {
@@ -193,6 +290,7 @@ class ResumePersistenceService(
     fun findOrCreateDocument(userId: UUID, rawText: String): ResolvedDocument {
         val normalizedText = normalizer.normalize(rawText)
         val contentHash = contentHasher.sha256(normalizedText)
+        lockOwner(userId)
         val existing = findReadyDocumentByContent(userId, contentHash, normalizedText)
         if (existing.isPresent) return existing.get()
         val resumeId = UUID.randomUUID()
@@ -201,9 +299,9 @@ class ResumePersistenceService(
                 INSERT INTO ai_interview_app.resumes (
                     id, user_id, original_filename, content_type, detected_content_type,
                     size_bytes, raw_text, normalized_text, content_hash, parsed_skills,
-                    processing_status, updated_at
+                    processing_status, name, source, updated_at
                 )
-                VALUES (?, ?, 'pasted-resume.txt', 'text/plain', 'text/plain', ?, ?, ?, ?, '[]'::jsonb, 'READY', now())
+                VALUES (?, ?, 'pasted-resume.txt', 'text/plain', 'text/plain', ?, ?, ?, ?, '[]'::jsonb, 'READY', 'Pasted resume', 'PASTE', now())
                 """.trimIndent(),
             resumeId, userId, normalizedText.toByteArray(StandardCharsets.UTF_8).size, rawText, normalizedText, contentHash
         )
@@ -268,6 +366,31 @@ class ResumePersistenceService(
             )
         }
     }
+
+    private fun replaceChunks(resumeId: UUID, chunks: List<ResumeChunkResponse>) {
+        jdbcTemplate.update("DELETE FROM ai_interview_app.resume_chunks WHERE resume_id = ?", resumeId)
+        for (chunk in chunks) {
+            jdbcTemplate.update(
+                """
+                    INSERT INTO ai_interview_app.resume_chunks (id, resume_id, chunk_index, section, content, metadata)
+                    VALUES (?, ?, ?, ?, ?, jsonb_build_object('sourceType', 'resume', 'contextId', ?))
+                    """.trimIndent(),
+                UUID.randomUUID(), resumeId, chunk.index, chunk.section, chunk.content,
+                RagContextId.forChunk("resume", chunk.section, chunk.index)
+            )
+        }
+    }
+
+    private fun lockOwner(userId: UUID) {
+        val owner = jdbcTemplate.query(
+            "SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR UPDATE",
+            RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId
+        )
+        if (owner.isEmpty()) throw IllegalStateException("Resume owner does not exist")
+    }
+
+    private fun defaultName(filename: String?): String = filename.orEmpty().substringBeforeLast('.', filename.orEmpty())
+        .trim().take(80).ifBlank { "Untitled resume" }
 
     private fun findStorageKey(resumeId: UUID): Optional<String> = jdbcTemplate.query(
         "SELECT storage_key FROM ai_interview_app.resumes WHERE id = ?",

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { saveLastPair } from "@/lib/lastPair";
+import { readResumeUploadJobs, RESUME_UPLOAD_JOBS_KEY, saveResumeUploadJobs } from "@/lib/resumeUploadJobs";
 import { renderRoute, RESUME_TEXT, JOB_TEXT, setupMockBackend } from "./render";
 
 const { store, server } = setupMockBackend();
@@ -34,6 +35,25 @@ describe("resume library", () => {
     const box = notice.closest("[role=status]") as HTMLElement;
     expect(within(box).getByRole("link", { name: "Backend" })).toHaveAttribute("href", `#item-${saved.id}`);
     expect(within(box).getByRole("button", { name: "Rename Backend" })).toBeInTheDocument();
+  });
+
+  it("recovers a duplicate notice after reload and clears the stored job when dismissed", async () => {
+    store.pasteResume({ name: "Backend", jobTitle: null, text: RESUME_TEXT });
+    const upload = store.uploadResume({ fileName: "copy.txt", size: RESUME_TEXT.length, content: RESUME_TEXT, name: "Copy" });
+    const jobId = upload.body.resume.activeJob!.jobId;
+    saveResumeUploadJobs([jobId]);
+
+    const firstTab = renderRoute("/library/resumes");
+    const firstNotice = await screen.findByText(/already saved as/i, {}, { timeout: 4_000 });
+    expect(firstNotice).toBeInTheDocument();
+    firstTab.unmount();
+
+    renderRoute("/library/resumes");
+    const recovered = await screen.findByText(/already saved as/i, {}, { timeout: 4_000 });
+    expect(recovered).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(readResumeUploadJobs()).toEqual([]);
+    expect(window.localStorage.getItem(RESUME_UPLOAD_JOBS_KEY)).toBeNull();
   });
 
   it("previews what a delete removes, then removes the row", async () => {
