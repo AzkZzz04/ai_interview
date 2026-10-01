@@ -105,13 +105,13 @@ kept and marked stale (section 6), not deleted.
 | # | Method and path | Status | Used by |
 |---|---|---|---|
 | 2.1 | `GET /api/status` | existing | Health badge (optional) |
-| 3.1 | `POST /api/resumes` (multipart) | changed | Resume picker, library |
-| 3.2 | `POST /api/resumes/paste` | new | Resume picker, library |
-| 3.3 | `GET /api/resumes` | new | Resume picker, library, home |
-| 3.4 | `GET /api/resumes/{resumeId}` | new | Score page, home |
-| 3.5 | `PATCH /api/resumes/{resumeId}` | new | Rename, job-title edit |
-| 3.6 | `GET /api/resumes/{resumeId}/delete-impact` | new | Delete dialog |
-| 3.7 | `DELETE /api/resumes/{resumeId}` | new | Library |
+| 3.1 | `POST /api/resumes` (multipart) | existing | Resume picker, library |
+| 3.2 | `POST /api/resumes/paste` | existing | Resume picker, library |
+| 3.3 | `GET /api/resumes` | existing | Resume picker, library, home |
+| 3.4 | `GET /api/resumes/{resumeId}` | existing | Score page, home |
+| 3.5 | `PATCH /api/resumes/{resumeId}` | existing | Rename, job-title edit |
+| 3.6 | `GET /api/resumes/{resumeId}/delete-impact` | existing | Delete dialog |
+| 3.7 | `DELETE /api/resumes/{resumeId}` | existing | Library |
 | 3.8 | `POST /api/resumes/{resumeId}/score` | new | Score page |
 | 4.1 | `POST /api/target-jobs` | new | Target job picker, library |
 | 4.2 | `GET /api/target-jobs` | new | Target job picker, library, home |

@@ -7,7 +7,8 @@ import org.springframework.stereotype.Component
 @Component
 internal class ResumeStorageReconciler(
     private val persistenceService: ResumePersistenceService,
-    private val storageService: ResumeStorageService
+    private val storageService: ResumeStorageService,
+    private val cleanupService: ResumeStorageCleanupService
 ) {
     @Scheduled(fixedDelayString = "\${app.storage.cleanup-interval-ms:300000}")
     fun deleteFailedResumeObjects() {
@@ -27,6 +28,7 @@ internal class ResumeStorageReconciler(
                 log.warn("resume_failed_object_reconcile_failed resumeId={} reason={}", failed.resumeId, exception.message)
             }
         }
+        cleanupService.retryPending(25)
     }
 
     private companion object { val log = LoggerFactory.getLogger(ResumeStorageReconciler::class.java) }
