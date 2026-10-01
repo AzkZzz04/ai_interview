@@ -20,6 +20,7 @@ import org.mockito.kotlin.isNull
 import org.mockito.kotlin.whenever
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DriverManagerDataSource
+import org.springframework.http.HttpStatus
 import org.testcontainers.postgresql.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 import java.util.UUID
@@ -47,6 +48,52 @@ class ExperienceIntegrationTests {
 		assertThat(duplicate.duplicate).isTrue()
 		assertThat(duplicate.experience.id).isEqualTo(original.experience.id)
 		assertThat(otherOwner.duplicate).isFalse()
+	}
+
+	@Test
+	fun renameRecomputesContentHashForFutureDuplicateDetection() {
+		val original = service.create(userId, input(title = "Backend Engineer", description = "Built reliable platform services.")).experience
+
+		val renamed = service.rename(userId, original.id, ExperienceRenameRequest("  Senior   Backend Engineer  "))
+		val duplicate = service.create(userId, input(title = "senior backend engineer", description = "Built   reliable platform services."))
+
+		assertThat(renamed.title).isEqualTo("Senior   Backend Engineer")
+		assertThat(duplicate.duplicate).isTrue()
+		assertThat(duplicate.experience.id).isEqualTo(original.id)
+	}
+
+	@Test
+	fun renameHidesMissingAndForeignExperiencesBehindTheSameNotFound() {
+		val foreignUser = UUID.randomUUID()
+		jdbc.update("INSERT INTO ai_interview_app.app_users (id, email) VALUES (?, ?)", foreignUser, "$foreignUser@experience-test.example")
+		val foreign = service.create(foreignUser, input()).experience
+
+		assertThatThrownBy { service.rename(userId, UUID.randomUUID(), ExperienceRenameRequest("Renamed")) }
+			.isInstanceOfSatisfying(ApiRequestException::class.java) {
+				assertThat(it.status()).isEqualTo(HttpStatus.NOT_FOUND)
+				assertThat(it.code()).isEqualTo("EXPERIENCE_NOT_FOUND")
+			}
+		assertThatThrownBy { service.rename(userId, foreign.id, ExperienceRenameRequest("Renamed")) }
+			.isInstanceOfSatisfying(ApiRequestException::class.java) {
+				assertThat(it.status()).isEqualTo(HttpStatus.NOT_FOUND)
+				assertThat(it.code()).isEqualTo("EXPERIENCE_NOT_FOUND")
+			}
+	}
+
+	@Test
+	fun renameCollisionReturnsSanitizedConflictAndKeepsOriginalTitle() {
+		val first = service.create(userId, input(title = "First role", description = "Shared role details.")).experience
+		service.create(userId, input(title = "Existing role", description = "Shared role details."))
+
+		assertThatThrownBy { service.rename(userId, first.id, ExperienceRenameRequest("Existing role")) }
+			.isInstanceOfSatisfying(ApiRequestException::class.java) {
+				assertThat(it.status()).isEqualTo(HttpStatus.CONFLICT)
+				assertThat(it.code()).isEqualTo("CONFLICT")
+				assertThat(it.message).isEqualTo("An experience with this title and description already exists")
+				assertThat(it.message).doesNotContain("Existing role", first.id.toString())
+			}
+
+		assertThat(service.list(userId).items.single { it.id == first.id }.title).isEqualTo("First role")
 	}
 
 	@Test

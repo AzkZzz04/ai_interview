@@ -1,6 +1,7 @@
 package dev.jiaming.ai_interview.experience
 
 import dev.jiaming.ai_interview.common.ContentHasher
+import dev.jiaming.ai_interview.common.ApiRequestException
 import dev.jiaming.ai_interview.common.RequestValidation
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
 import dev.jiaming.ai_interview.jobs.JobSubmissionService
@@ -8,6 +9,8 @@ import dev.jiaming.ai_interview.jobs.JobType
 import java.sql.ResultSet
 import java.util.Locale
 import java.util.UUID
+import org.springframework.dao.DuplicateKeyException
+import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Service
@@ -24,6 +27,31 @@ class ExperienceService(
         experienceRowMapper,
         userId
     ))
+
+    @Transactional
+    fun rename(userId: UUID, experienceId: UUID, request: ExperienceRenameRequest): Experience {
+        val title = RequestValidation.text("title", request.title, 1, 120)
+        val current = jdbcTemplate.query(
+            "SELECT id, title, organization, start_date, end_date, description, source, created_at FROM ai_interview_app.experiences WHERE user_id = ? AND id = ? FOR UPDATE",
+            experienceRowMapper,
+            userId,
+            experienceId
+        ).firstOrNull() ?: throw experienceNotFound()
+        val hash = contentHash(title, current.description)
+        findByHash(userId, hash)?.let { if (it.id != experienceId) throw duplicateExperienceConflict() }
+        return try {
+            jdbcTemplate.query(
+                "UPDATE ai_interview_app.experiences SET title = ?, content_hash = ? WHERE user_id = ? AND id = ? RETURNING id, title, organization, start_date, end_date, description, source, created_at",
+                experienceRowMapper,
+                title,
+                hash,
+                userId,
+                experienceId
+            ).firstOrNull() ?: throw experienceNotFound()
+        } catch (exception: DuplicateKeyException) {
+            throw duplicateExperienceConflict()
+        }
+    }
 
     @Transactional
     fun create(userId: UUID, input: ExperienceInput): ExperienceCreatedResponse {
@@ -129,6 +157,14 @@ class ExperienceService(
 
     private fun contentHash(title: String, description: String): String = contentHasher.sha256(
         "${normalize(title)}|${normalize(description)}"
+    )
+
+    private fun experienceNotFound() = ApiRequestException(HttpStatus.NOT_FOUND, "EXPERIENCE_NOT_FOUND", "Experience not found")
+
+    private fun duplicateExperienceConflict() = ApiRequestException(
+        HttpStatus.CONFLICT,
+        "CONFLICT",
+        "An experience with this title and description already exists"
     )
 
     private fun normalize(value: String) = value.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)

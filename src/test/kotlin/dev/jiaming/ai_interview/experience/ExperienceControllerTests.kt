@@ -1,6 +1,7 @@
 package dev.jiaming.ai_interview.experience
 
 import dev.jiaming.ai_interview.common.ApiExceptionHandler
+import dev.jiaming.ai_interview.common.ApiRequestException
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
 import dev.jiaming.ai_interview.common.RedisUsageProperties
@@ -20,11 +21,13 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.assertj.core.api.Assertions.assertThat
 import org.springframework.http.MediaType
+import org.springframework.http.HttpStatus
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup
@@ -65,6 +68,49 @@ class ExperienceControllerTests {
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.items[0].id").value(experience.id.toString()))
 			.andExpect(jsonPath("$.items[0].source").value("FORM"))
+	}
+
+	@Test
+	fun patchesExperienceTitleForCurrentUser() {
+		val original = experience()
+		val renamed = original.copy(title = "Senior Backend Engineer")
+		Mockito.`when`(service.rename(eq(userId), eq(original.id), eq(ExperienceRenameRequest("Senior Backend Engineer"))))
+			.thenReturn(renamed)
+
+		mockMvc.perform(patch("/api/experiences/${original.id}").contentType(MediaType.APPLICATION_JSON)
+			.content("""{"title":"Senior Backend Engineer"}"""))
+			.andExpect(status().isOk)
+			.andExpect(jsonPath("$.id").value(original.id.toString()))
+			.andExpect(jsonPath("$.title").value("Senior Backend Engineer"))
+
+		Mockito.verify(service).rename(eq(userId), eq(original.id), eq(ExperienceRenameRequest("Senior Backend Engineer")))
+	}
+
+	@Test
+	fun patchReturnsExperienceNotFoundForUnknownOrForeignIds() {
+		val missingId = UUID.randomUUID()
+		Mockito.`when`(service.rename(eq(userId), eq(missingId), any())).thenThrow(
+			ApiRequestException(HttpStatus.NOT_FOUND, "EXPERIENCE_NOT_FOUND", "Experience not found")
+		)
+
+		mockMvc.perform(patch("/api/experiences/$missingId").contentType(MediaType.APPLICATION_JSON)
+			.content("""{"title":"Updated title"}"""))
+			.andExpect(status().isNotFound)
+			.andExpect(jsonPath("$.code").value("EXPERIENCE_NOT_FOUND"))
+	}
+
+	@Test
+	fun patchDuplicateContentReturnsSanitizedConflict() {
+		val existing = experience()
+		Mockito.`when`(service.rename(eq(userId), eq(existing.id), any())).thenThrow(
+			ApiRequestException(HttpStatus.CONFLICT, "CONFLICT", "An experience with this title and description already exists")
+		)
+
+		mockMvc.perform(patch("/api/experiences/${existing.id}").contentType(MediaType.APPLICATION_JSON)
+			.content("""{"title":"Sensitive original title"}"""))
+			.andExpect(status().isConflict)
+			.andExpect(jsonPath("$.code").value("CONFLICT"))
+			.andExpect(jsonPath("$.message").value("An experience with this title and description already exists"))
 	}
 
 	@Test

@@ -16,6 +16,7 @@ data class ExperienceInput(
 
 data class ExperienceBatchRequest(val items: List<ExperienceInput>?)
 data class ExperienceSplitRequest(val text: String?)
+data class ExperienceRenameRequest(val title: String?)
 
 data class Experience(
     val id: UUID,

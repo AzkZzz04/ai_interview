@@ -374,7 +374,10 @@ Returns `200` with `{ "items": Experience[] }`.
 
 ### 5.5 `PATCH /api/experiences/{experienceId}` — existing
 
-Body: `{ "title": string }`. Returns `200` with `Experience`. Errors: `404 EXPERIENCE_NOT_FOUND`.
+Body: `{ "title": string }`. Returns `200` with the updated `Experience`. Renaming recomputes the duplicate
+hash from the normalized title and unchanged description. Errors: `400 INVALID_REQUEST` for an invalid title,
+`404 EXPERIENCE_NOT_FOUND` for a missing or other user's experience, and `409 CONFLICT` if another owned
+experience already has the same normalized title and description.
 
 ### 5.6 `GET /api/experiences/{experienceId}/delete-impact` — new
 
@@ -764,7 +767,7 @@ the UI never shows the code or the provider name.
 | `QUESTION_NOT_FOUND` | 404 | new | |
 | `ATTEMPT_NOT_FOUND` | 404 | new | |
 | `JOB_NOT_FOUND` | 404 | existing | |
-| `CONFLICT` | 409 | existing | An idempotency key was reused with a different body. |
+| `CONFLICT` | 409 | existing | An idempotency key was reused with a different body, or an experience rename would duplicate another owned item. |
 | `RESUME_NOT_READY` | 409 | existing code, new use | |
 | `NO_EXPERIENCE_SOURCES` | 409 | new | |
 | `PRACTICE_SET_NOT_READY` | 409 | new | |
