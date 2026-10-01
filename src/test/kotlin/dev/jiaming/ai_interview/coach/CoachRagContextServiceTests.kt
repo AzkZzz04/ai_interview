@@ -84,6 +84,33 @@ class CoachRagContextServiceTests {
     }
 
     @Test
+    fun suggestionSourceTextKeepsAResumeWithinBudgetWholeAndNarrowsALongerOneAgainstTheJobDescription() {
+        val indexingService = Mockito.mock(RagIndexingService::class.java)
+        val retrievalService = Mockito.mock(RagRetrievalService::class.java)
+        val service = service(indexingService, retrievalService)
+        val jobDescription = document(DocumentSourceType.JOB_DESCRIPTION, "jd-hash", "Kafka and event-driven systems required", emptyList())
+        val short = document(DocumentSourceType.RESUME, "short-hash", "Short resume text", emptyList())
+
+        assertThat(service.suggestionSourceText(short, jobDescription)).isEqualTo("Short resume text")
+        Mockito.verifyNoInteractions(indexingService, retrievalService)
+
+        val long = document(DocumentSourceType.RESUME, "long-hash", "R".repeat(6_100), listOf(
+            DocumentChunk(0, "Experience", "Ran the Kafka pipeline", "resume:experience:0")
+        ))
+        val handle = RagDocumentIndexHandle(UUID.randomUUID(), 1L)
+        Mockito.`when`(indexingService.ensureIndexed(long)).thenReturn(Optional.of(handle))
+        Mockito.`when`(retrievalService.retrieve(anyString(), eq(handle), eq(6))).thenReturn(listOf(
+            snippet("resume:experience:0", "resume", "Experience", 0, "Ran the Kafka pipeline")
+        ))
+
+        val narrowed = service.suggestionSourceText(long, jobDescription)
+
+        assertThat(narrowed).contains("Ran the Kafka pipeline").doesNotContain("R".repeat(100))
+        Mockito.verify(retrievalService, Mockito.atLeastOnce()).retrieve(Mockito.contains("Kafka and event-driven systems required"), eq(handle), eq(6))
+        Mockito.verify(indexingService, Mockito.never()).ensureIndexed(jobDescription)
+    }
+
+    @Test
     fun localDocumentContextIsReservedWhenAnotherDocumentUsesVectorRetrieval() {
         val indexingService = Mockito.mock(RagIndexingService::class.java)
         val retrievalService = Mockito.mock(RagRetrievalService::class.java)

@@ -2,6 +2,7 @@ package dev.jiaming.ai_interview.experience
 
 import dev.jiaming.ai_interview.common.ApiExceptionHandler
 import dev.jiaming.ai_interview.common.ApiRequestException
+import dev.jiaming.ai_interview.common.DeleteImpact
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
 import dev.jiaming.ai_interview.common.RedisUsageProperties
@@ -25,6 +26,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
 import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
@@ -220,6 +222,30 @@ class ExperienceControllerTests {
 			.andExpect(jsonPath("$.jobId").value(second.jobId.toString()))
 
 		Mockito.verify(service, Mockito.times(2)).split(any())
+	}
+
+	@Test
+	fun deleteImpactReportsStaleSuggestionSetsAndDeleteReturnsNoContent() {
+		val id = UUID.randomUUID()
+		Mockito.`when`(service.deleteImpact(userId, id)).thenReturn(DeleteImpact(0, 0, 0, 0, 0, 2))
+
+		mockMvc.perform(get("/api/experiences/$id/delete-impact"))
+			.andExpect(status().isOk)
+			.andExpect(jsonPath("$.staleSuggestionSets").value(2))
+			.andExpect(jsonPath("$.suggestionSets").value(0))
+		mockMvc.perform(delete("/api/experiences/$id")).andExpect(status().isNoContent)
+
+		Mockito.verify(service).delete(userId, id)
+	}
+
+	@Test
+	fun deleteOfAnUnknownOrForeignExperienceIsNotFound() {
+		val id = UUID.randomUUID()
+		Mockito.`when`(service.delete(userId, id)).thenThrow(ApiRequestException(HttpStatus.NOT_FOUND, "EXPERIENCE_NOT_FOUND", "Experience not found"))
+
+		mockMvc.perform(delete("/api/experiences/$id"))
+			.andExpect(status().isNotFound)
+			.andExpect(jsonPath("$.code").value("EXPERIENCE_NOT_FOUND"))
 	}
 
 	@Test

@@ -27,6 +27,7 @@ class JobProcessorTests {
 			NoOpHandler(JobType.ANSWER_FEEDBACK, Any::class.java),
 			NoOpHandler(JobType.EXPERIENCE_SPLIT, Any::class.java),
 			NoOpHandler(JobType.JOB_FIT, Any::class.java),
+			NoOpHandler(JobType.EXPERIENCE_SUGGESTIONS, Any::class.java),
 			NoOpHandler(JobType.PRACTICE_QUESTIONS, Any::class.java)
 		))
 		val processor = JobProcessor(decoder, registry, store, materialization, metrics, objectMapper)

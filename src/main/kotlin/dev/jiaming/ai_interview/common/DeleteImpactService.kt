@@ -35,6 +35,15 @@ class DeleteImpactService(private val jdbcTemplate: JdbcTemplate) {
             "SELECT count(*) FROM ai_interview_app.practice_sets WHERE resume_id = ? AND user_id = ?",
             Int::class.java, resumeId, userId
         ) ?: 0
-        return DeleteImpact(scores, fits, 0, practiceSets, 0, 0)
+        val suggestionSets = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM ai_interview_app.experience_suggestions WHERE resume_id = ? AND user_id = ? AND result_payload IS NOT NULL",
+            Int::class.java, resumeId, userId
+        ) ?: 0
+        // Other pairs keep their suggestions; the ones built from this resume become stale.
+        val staleSuggestionSets = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM ai_interview_app.experience_suggestions WHERE user_id = ? AND resume_id <> ? AND source_ids @> jsonb_build_array(?::text)",
+            Int::class.java, userId, resumeId, resumeId.toString()
+        ) ?: 0
+        return DeleteImpact(scores, fits, suggestionSets, practiceSets, 0, staleSuggestionSets)
     }
 }

@@ -124,12 +124,12 @@ kept and marked stale (section 6), not deleted.
 | 5.3 | `POST /api/experiences/batch` | existing | Experience library (save reviewed items) |
 | 5.4 | `GET /api/experiences` | existing | Experience library |
 | 5.5 | `PATCH /api/experiences/{experienceId}` | existing | Rename |
-| 5.6 | `GET /api/experiences/{experienceId}/delete-impact` | new | Delete dialog |
-| 5.7 | `DELETE /api/experiences/{experienceId}` | new | Experience library |
+| 5.6 | `GET /api/experiences/{experienceId}/delete-impact` | existing | Delete dialog |
+| 5.7 | `DELETE /api/experiences/{experienceId}` | existing | Experience library |
 | 6.1 | `GET /api/resumes/{resumeId}/target-jobs/{targetJobId}/fit` | existing | Fit page |
 | 6.2 | `POST /api/resumes/{resumeId}/target-jobs/{targetJobId}/fit` | existing | Fit page |
-| 6.3 | `GET /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | new | Fit page |
-| 6.4 | `POST /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | new | Fit page |
+| 6.3 | `GET /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | existing | Fit page |
+| 6.4 | `POST /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | existing | Fit page |
 | 7.1 | `POST /api/practice-sets` | existing | Mode chooser |
 | 7.2 | `GET /api/practice-sets/{setId}` | existing | Practice page |
 | 7.3 | `POST /api/practice-sets/{setId}/retry` | existing | Practice page (generation failed) |
