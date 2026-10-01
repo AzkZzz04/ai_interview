@@ -49,8 +49,8 @@ class SupabaseLiveSmokeTests {
                     }
                     connection.prepareStatement("""
                         INSERT INTO ai_interview_app.background_jobs
-                        (id,user_id,job_type,resource_id,status,stage,request_payload,result_payload,enqueued_at)
-                        VALUES (?,?,'ANALYSIS',?,'SUCCEEDED','COMPLETED',
+                        (id,user_id,job_type,resource_type,resource_id,status,stage,request_payload,result_payload,enqueued_at)
+                        VALUES (?,?,'ANALYSIS','resume',?,'SUCCEEDED','COMPLETED',
                         '{"resumeId":"malformed","prompt":"PRIVATE_SMOKE_PROMPT"}'::jsonb,
                         '{"score":84,"nested":{"items":[true,null]}}'::jsonb,now())
                     """.trimIndent()).use {
