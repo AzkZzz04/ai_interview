@@ -11,8 +11,10 @@ import java.sql.DriverManager
 import java.util.Properties
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @EnabledIfEnvironmentVariable(named = "SUPABASE_LIVE_SMOKE", matches = "true")
 class SupabaseLiveSmokeTests {
@@ -42,6 +44,26 @@ class SupabaseLiveSmokeTests {
         try {
             DriverManager.getConnection(settings.getProperty("DATABASE_URL"), database).use { connection ->
                 try {
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("""
+                            SELECT has_schema_privilege('anon', 'ai_interview_api', 'USAGE') AS anon_schema,
+                                   has_table_privilege('anon', 'ai_interview_api.job_status', 'SELECT') AS anon_view,
+                                   has_schema_privilege('authenticated', 'ai_interview_api', 'USAGE') AS authenticated_schema,
+                                   has_table_privilege('authenticated', 'ai_interview_api.job_status', 'SELECT') AS authenticated_view,
+                                   has_table_privilege('service_role', 'ai_interview_api.job_status', 'SELECT') AS service_view,
+                                   has_schema_privilege(current_user, 'public', 'CREATE') AS runtime_public_ddl,
+                                   has_schema_privilege(current_user, 'ai_interview_app', 'CREATE') AS runtime_app_ddl
+                        """.trimIndent()).use { permissions ->
+                            assertTrue(permissions.next())
+                            assertFalse(permissions.getBoolean("anon_schema"))
+                            assertFalse(permissions.getBoolean("anon_view"))
+                            assertFalse(permissions.getBoolean("authenticated_schema"))
+                            assertFalse(permissions.getBoolean("authenticated_view"))
+                            assertTrue(permissions.getBoolean("service_view"))
+                            assertFalse(permissions.getBoolean("runtime_public_ddl"))
+                            assertFalse(permissions.getBoolean("runtime_app_ddl"))
+                        }
+                    }
                     connection.prepareStatement("INSERT INTO ai_interview_app.app_users(id,email) VALUES (?,?)").use {
                         it.setObject(1, userId)
                         it.setString(2, "supabase-smoke-$userId@example.invalid")
