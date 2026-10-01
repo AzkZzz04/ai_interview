@@ -3,10 +3,10 @@ package dev.jiaming.ai_interview.openai
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.jiaming.ai_interview.coach.StructuredGenerationClient
-import dev.jiaming.ai_interview.gemini.GeminiClient
 import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.gemini.GeminiException
 import dev.jiaming.ai_interview.gemini.GeminiTransport
+import dev.jiaming.ai_interview.gemini.jdkTransport
 import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -42,7 +42,7 @@ class OpenAiClient(
     @Autowired
     constructor(objectMapper: ObjectMapper, environment: Environment, meterRegistry: MeterRegistry) : this(
         objectMapper,
-        GeminiClient.jdkTransport(),
+        jdkTransport(),
         meterRegistry,
         DEFAULT_ENDPOINT,
         environment.getProperty("app.openai.api-key", ""),
@@ -91,11 +91,9 @@ class OpenAiClient(
         // OpenAI's error code only (e.g. rate_limit_exceeded, insufficient_quota); never the prompt or the full body.
         val reason = runCatching { objectMapper.readTree(body).path("error").path("code").asText("") }.getOrDefault("")
         log.warn("openai_request_rejected model={} status={} reason={}", model, statusCode, reason)
-        return when {
-            // An exhausted balance does not recover on retry; a per-minute limit does.
-            statusCode == 429 -> GeminiException(GeminiErrorCode.RATE_LIMITED, "OpenAI rate limit exceeded", statusCode, reason != "insufficient_quota")
-            else -> GeminiException(GeminiErrorCode.UPSTREAM_ERROR, "OpenAI request failed", statusCode, statusCode == 408 || statusCode >= 500)
-        }
+        // An exhausted balance does not recover on retry; a per-minute limit does.
+        return if (statusCode == 429) GeminiException(GeminiErrorCode.RATE_LIMITED, "OpenAI rate limit exceeded", statusCode, reason != "insufficient_quota")
+        else GeminiException(GeminiErrorCode.UPSTREAM_ERROR, "OpenAI request failed", statusCode, statusCode == 408 || statusCode >= 500)
     }
 
     private fun extractText(responseBody: String): String {

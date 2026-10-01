@@ -163,7 +163,7 @@ class ResumeStorageCleanupIntegrationTests {
             transactions = TransactionTemplate(DataSourceTransactionManager(source))
             local = LocalUserService(jdbc)
             normalizer = ResumeTextNormalizer()
-            persistence = ResumePersistenceService(jdbc, local, normalizer, SectionAwareTextChunker(), ContentHasher())
+            persistence = ResumePersistenceService(jdbc, local, SectionAwareTextChunker(), ContentHasher())
             storage = Mockito.mock(ResumeStorageService::class.java)
             cleanup = ResumeStorageCleanupService(jdbc, storage)
             val properties = RedisUsageProperties(

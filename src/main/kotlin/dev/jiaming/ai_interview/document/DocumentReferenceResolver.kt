@@ -24,11 +24,12 @@ class DocumentReferenceResolver(
                 "The background job does not contain a resume reference",
             )
         }
-        val status = resumePersistenceService.findProcessingStatus(userId, resumeId).orElseThrow {
-            ApiRequestException(HttpStatus.NOT_FOUND, "RESUME_NOT_FOUND", "Resume was not found")
+        // The status is read only when the ready document is missing, to tell a missing resume from an unready one.
+        val resume = resumePersistenceService.findReadyDocument(userId, resumeId).orElseThrow {
+            if (resumePersistenceService.findProcessingStatus(userId, resumeId).isEmpty) {
+                ApiRequestException(HttpStatus.NOT_FOUND, "RESUME_NOT_FOUND", "Resume was not found")
+            } else resumeNotReady()
         }
-        if (status != "READY") throw resumeNotReady()
-        val resume = resumePersistenceService.findReadyDocument(userId, resumeId).orElseThrow(::resumeNotReady)
         val jobDescription = if (jobDescriptionId == null) Optional.empty() else Optional.of(
             jobDescriptionPersistenceService.findDocument(userId, jobDescriptionId).orElseThrow {
                 ApiRequestException(HttpStatus.NOT_FOUND, "TARGET_JOB_NOT_FOUND", "Target job was not found")

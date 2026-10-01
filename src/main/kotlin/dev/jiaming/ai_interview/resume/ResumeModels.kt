@@ -54,20 +54,6 @@ data class ResumeFileContent(
 )
 
 @JvmRecord
-data class ResumeUploadResponse(
-    val id: String,
-    val originalFilename: String?,
-    val contentType: String?,
-    val detectedContentType: String?,
-    val sizeBytes: Long,
-    val rawTextLength: Int,
-    val normalizedTextLength: Int,
-    val normalizedText: String,
-    val chunks: List<ResumeChunkResponse>,
-    val processedAt: Instant
-)
-
-@JvmRecord
 data class ResumeLibraryItem(
     val id: String,
     val name: String,

@@ -221,7 +221,7 @@ class ResumeScoreServiceIntegrationTests {
             jobSubmission = Mockito.mock(JobSubmissionService::class.java)
             scores = ResumeScoreService(jdbc, local, jobSubmission)
             val normalizer = ResumeTextNormalizer()
-            val persistence = ResumePersistenceService(jdbc, local, normalizer, SectionAwareTextChunker(), ContentHasher())
+            val persistence = ResumePersistenceService(jdbc, local, SectionAwareTextChunker(), ContentHasher())
             val guard = RedisRequestGuard(StringRedisTemplate(), RedisUsageProperties(
                 "resume-score-test:", RedisUsageProperties.RateLimit(false, 60, 12, 20), RedisUsageProperties.Idempotency(false, 86_400)
             ), mapper)

@@ -21,10 +21,8 @@ class JobDescriptionPersistenceService(
     private val contentHasher: ContentHasher,
 ) {
     @Transactional
-    fun findOrCreateTargetJob(userId: UUID, name: String, jobDescription: String): TargetJobDocumentSave {
-        val saved = findOrCreate(userId, jobDescription, name)
-        return TargetJobDocumentSave(saved.document, saved.created)
-    }
+    fun findOrCreateTargetJob(userId: UUID, name: String, jobDescription: String): TargetJobDocumentSave =
+        findOrCreate(userId, jobDescription, name)
 
     fun findDocument(userId: UUID, jobDescriptionId: UUID): Optional<ResolvedDocument> = queryDocument(
         """
@@ -50,13 +48,13 @@ class JobDescriptionPersistenceService(
             normalizedText,
         )
 
-    private fun findOrCreate(userId: UUID, jobDescription: String, name: String): DocumentSave {
+    private fun findOrCreate(userId: UUID, jobDescription: String, name: String): TargetJobDocumentSave {
         val normalizedText = normalizer.normalize(jobDescription)
         if (normalizedText.isBlank()) throw IllegalArgumentException("Job description text is required")
         val contentHash = contentHasher.sha256(normalizedText)
         lockOwner(userId)
         val existing = findDocumentByContent(userId, contentHash, normalizedText)
-        if (existing.isPresent) return DocumentSave(existing.get(), false)
+        if (existing.isPresent) return TargetJobDocumentSave(existing.get(), false)
 
         val jobDescriptionId = UUID.randomUUID()
         jdbcTemplate.update(
@@ -89,7 +87,7 @@ class JobDescriptionPersistenceService(
                 RagContextId.forChunk("job_description", chunk.section, chunk.index),
             )
         }
-        return DocumentSave(findDocument(userId, jobDescriptionId).orElseThrow(), true)
+        return TargetJobDocumentSave(findDocument(userId, jobDescriptionId).orElseThrow(), true)
     }
 
     private fun lockOwner(userId: UUID) {
@@ -132,7 +130,6 @@ class JobDescriptionPersistenceService(
         jobDescriptionId,
     )
 
-    private data class DocumentSave(val document: ResolvedDocument, val created: Boolean)
 }
 
 data class TargetJobDocumentSave(val document: ResolvedDocument, val created: Boolean)

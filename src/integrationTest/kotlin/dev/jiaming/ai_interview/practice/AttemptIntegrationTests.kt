@@ -449,7 +449,7 @@ class AttemptIntegrationTests {
             practice = PracticeService(jdbc, local, submissions, guard, jobs, mapper, transactions)
             controller = AttemptController(practice, guard)
             val normalizer = ResumeTextNormalizer()
-            val persistence = ResumePersistenceService(jdbc, local, normalizer, SectionAwareTextChunker(), ContentHasher())
+            val persistence = ResumePersistenceService(jdbc, local, SectionAwareTextChunker(), ContentHasher())
             library = ResumeLibraryService(
                 jdbc, local, persistence, normalizer, guard, transactions,
                 ResumeStorageCleanupService(jdbc, Mockito.mock(ResumeStorageService::class.java)), DeleteImpactService(jdbc), mapper

@@ -13,9 +13,7 @@ import org.springframework.stereotype.Component
 import java.io.IOException
 import java.net.URI
 import java.net.URLEncoder
-import java.net.http.HttpClient
 import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.net.http.HttpTimeoutException
 import java.nio.charset.StandardCharsets
 import java.time.Duration
@@ -162,12 +160,5 @@ class GeminiClient(
     companion object {
         private val log = LoggerFactory.getLogger(GeminiClient::class.java)
         private const val DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
-        internal fun jdkTransport(): GeminiTransport {
-            val httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
-            return GeminiTransport { request ->
-                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-                GeminiTransportResponse(response.statusCode(), response.body())
-            }
-        }
     }
 }

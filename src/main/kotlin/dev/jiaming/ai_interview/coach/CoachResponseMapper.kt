@@ -74,7 +74,7 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
     }
 
     fun normalizeFeedback(response: AnswerFeedbackResponse, fallbackSourceContextIds: List<String>): AnswerFeedbackResponse = AnswerFeedbackResponse(
-        clampScore(response.score), fallback(response.summary, "The answer was scored, but Gemini did not provide a summary."),
+        clampScore(response.score), fallback(response.summary, "The answer was scored, but no summary was returned."),
         fallback(response.nextStep, "Add clearer structure, technical detail, and measurable outcomes."), nonEmpty(response.strengths),
         nonEmpty(response.gaps), nonEmpty(response.betterAnswerOutline), fallback(response.followUpQuestion, ""), "gemini",
         sourceContextIds(response.sourceContextIds, fallbackSourceContextIds)

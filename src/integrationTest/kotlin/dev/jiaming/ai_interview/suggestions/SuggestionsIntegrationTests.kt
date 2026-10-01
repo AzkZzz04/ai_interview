@@ -353,7 +353,7 @@ class SuggestionsIntegrationTests {
                 "suggestions-test:", RedisUsageProperties.RateLimit(false, 60, 12, 20), RedisUsageProperties.Idempotency(false, 86_400)
             ), mapper)
             val normalizer = ResumeTextNormalizer()
-            val persistence = ResumePersistenceService(jdbc, local, normalizer, SectionAwareTextChunker(), ContentHasher())
+            val persistence = ResumePersistenceService(jdbc, local, SectionAwareTextChunker(), ContentHasher())
             val jobDescriptions = JobDescriptionPersistenceService(jdbc, normalizer, SectionAwareTextChunker(), ContentHasher())
             val resolver = DocumentReferenceResolver(persistence, jobDescriptions)
             val submissions = JobSubmissionService(

@@ -7,7 +7,6 @@ import dev.jiaming.ai_interview.document.DocumentSourceType
 import dev.jiaming.ai_interview.document.ResolvedDocument
 import dev.jiaming.ai_interview.rag.RagContextId
 import java.nio.charset.StandardCharsets
-import java.sql.ResultSet
 import java.util.Optional
 import java.util.UUID
 import org.springframework.jdbc.core.JdbcTemplate
@@ -19,31 +18,9 @@ import org.springframework.transaction.annotation.Transactional
 class ResumePersistenceService(
     private val jdbcTemplate: JdbcTemplate,
     private val localUserService: LocalUserService,
-    private val normalizer: ResumeTextNormalizer,
     private val chunker: SectionAwareTextChunker,
     private val contentHasher: ContentHasher
 ) {
-    @Transactional
-    fun save(
-        originalFilename: String?, contentType: String?, detectedContentType: String?, sizeBytes: Long,
-        storageKey: String?, rawText: String, normalizedText: String, chunks: List<ResumeChunkResponse>
-    ): ResumeUploadResponse {
-        val resumeId = createPending(originalFilename, contentType, detectedContentType, sizeBytes, storageKey)
-        return completeExtraction(resumeId, rawText, normalizedText, chunks)
-    }
-
-    fun createPending(
-        originalFilename: String?, contentType: String?, detectedContentType: String?, sizeBytes: Long, storageKey: String?
-    ) = createPending(localUserService.localUserId(), originalFilename, contentType, detectedContentType, sizeBytes, storageKey)
-
-    fun createPending(
-        userId: UUID, originalFilename: String?, contentType: String?, detectedContentType: String?, sizeBytes: Long,
-        storageKey: String?
-    ): UUID = createPending(
-        userId, originalFilename, contentType, detectedContentType, sizeBytes, storageKey,
-        defaultName(originalFilename), null, null
-    ).orElseThrow { IllegalStateException("Could not create pending resume") }
-
     fun createPending(
         userId: UUID, originalFilename: String?, contentType: String?, detectedContentType: String?, sizeBytes: Long,
         storageKey: String?, name: String, jobTitle: String?, fileHash: String?
@@ -64,40 +41,6 @@ class ResumePersistenceService(
             resumeId, userId, originalFilename, contentType, detectedContentType, sizeBytes, storageKey, name, jobTitle, fileHash
         )
         return Optional.ofNullable(inserted.firstOrNull())
-    }
-
-    @Transactional
-    fun completeExtraction(
-        resumeId: UUID, rawText: String, normalizedText: String, chunks: List<ResumeChunkResponse>
-    ): ResumeUploadResponse {
-        val contentHash = contentHasher.sha256(normalizedText)
-        val updated = jdbcTemplate.update(
-            """
-                UPDATE ai_interview_app.resumes
-                SET raw_text = ?,
-                    normalized_text = ?,
-                    processing_status = 'READY',
-                    failure_code = NULL,
-                    failure_message = NULL,
-                    content_hash = ?,
-                    updated_at = now()
-                WHERE id = ? AND user_id = ? AND processing_status IN ('PENDING', 'READY')
-                """.trimIndent(),
-            rawText, normalizedText, contentHash, resumeId, localUserService.localUserId()
-        )
-        if (updated != 1) throw IllegalStateException("Pending resume does not exist: $resumeId")
-        jdbcTemplate.update("DELETE FROM ai_interview_app.resume_chunks WHERE resume_id = ?", resumeId)
-        for (chunk in chunks) {
-            jdbcTemplate.update(
-                """
-                    INSERT INTO ai_interview_app.resume_chunks (id, resume_id, chunk_index, section, content, metadata)
-                    VALUES (?, ?, ?, ?, ?, jsonb_build_object('sourceType', 'resume', 'contextId', ?))
-                    """.trimIndent(),
-                UUID.randomUUID(), resumeId, chunk.index, chunk.section, chunk.content,
-                RagContextId.forChunk("resume", chunk.section, chunk.index)
-            )
-        }
-        return findById(resumeId).orElseThrow()
     }
 
     /** Called while the extraction job row is locked by JobEffectMaterializationService. */
@@ -250,26 +193,6 @@ class ResumePersistenceService(
             """.trimIndent(), resumeId, userId
     )
 
-    private fun findById(resumeId: UUID): Optional<ResumeUploadResponse> = jdbcTemplate.query(
-        """
-            SELECT id, original_filename, content_type, detected_content_type, size_bytes,
-                   raw_text, normalized_text, created_at
-            FROM ai_interview_app.resumes WHERE id = ?
-            """.trimIndent(),
-        RowMapper { rs, _ -> toUploadResponse(rs) }, resumeId
-    ).stream().findFirst()
-
-    private fun toUploadResponse(rs: ResultSet): ResumeUploadResponse {
-        val resumeId = rs.getObject("id", UUID::class.java)
-        val rawText = value(rs.getString("raw_text"))
-        val normalizedText = value(rs.getString("normalized_text"))
-        return ResumeUploadResponse(
-            resumeId.toString(), rs.getString("original_filename"), rs.getString("content_type"),
-            rs.getString("detected_content_type"), rs.getLong("size_bytes"), rawText.length,
-            normalizedText.length, normalizedText, findChunks(resumeId), rs.getTimestamp("created_at").toInstant()
-        )
-    }
-
     fun findChunks(resumeId: UUID): List<ResumeChunkResponse> = jdbcTemplate.query(
         """
             SELECT chunk_index, section, content FROM ai_interview_app.resume_chunks
@@ -330,14 +253,10 @@ class ResumePersistenceService(
         if (owner.isEmpty()) throw IllegalStateException("Resume owner does not exist")
     }
 
-    private fun defaultName(filename: String?): String = filename.orEmpty().substringBeforeLast('.', filename.orEmpty())
-        .trim().take(80).ifBlank { "Untitled resume" }
-
     private fun findStorageKey(resumeId: UUID): Optional<String> = jdbcTemplate.query(
         "SELECT storage_key FROM ai_interview_app.resumes WHERE id = ?",
         RowMapper { rs, _ -> rs.getString("storage_key") }, resumeId
     ).stream().filter { !it.isNullOrBlank() }.findFirst()
 
     private fun truncate(value: String?): String? = if (value == null || value.length <= 4_000) value else value.substring(0, 4_000)
-    private fun value(value: String?) = value ?: ""
 }
