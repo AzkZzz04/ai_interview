@@ -11,7 +11,6 @@ import dev.jiaming.ai_interview.jobs.BackgroundJobStore
 import dev.jiaming.ai_interview.jobs.JobEffectMaterializationService
 import dev.jiaming.ai_interview.jobs.JobStatus
 import dev.jiaming.ai_interview.jobs.JobType
-import dev.jiaming.ai_interview.interview.InterviewPersistenceService
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.flywaydb.core.Flyway
@@ -230,7 +229,7 @@ class ResumeLibraryIntegrationTests {
 
     @BeforeEach
     fun reset() {
-        jdbc.execute("TRUNCATE TABLE ai_interview_app.storage_cleanup, ai_interview_app.background_jobs, ai_interview_app.resume_assessments, ai_interview_app.resume_chunks, ai_interview_app.resumes, ai_interview_app.app_users CASCADE")
+        jdbc.execute("TRUNCATE TABLE ai_interview_app.storage_cleanup, ai_interview_app.background_jobs, ai_interview_app.resume_chunks, ai_interview_app.resumes, ai_interview_app.app_users CASCADE")
     }
 
     private fun count(table: String) = jdbc.queryForObject("SELECT count(*) FROM ai_interview_app.$table", Int::class.java)!!
@@ -268,7 +267,7 @@ class ResumeLibraryIntegrationTests {
             )
             val mapper = ObjectMapper().findAndRegisterModules()
             jobs = BackgroundJobStore(jdbc, mapper)
-            materialization = JobEffectMaterializationService(jdbc, Mockito.mock(InterviewPersistenceService::class.java), ObjectMapper().findAndRegisterModules())
+            materialization = JobEffectMaterializationService(jdbc, ObjectMapper().findAndRegisterModules())
         }
 
     }

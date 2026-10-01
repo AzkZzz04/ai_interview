@@ -19,12 +19,10 @@ import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.server.ResponseStatusException
 
 @RestController
 @RequestMapping("/api/resumes")
 class ResumeController(
-    private val resumeUploadService: ResumeUploadService,
     private val resumeJobSubmissionService: ResumeJobSubmissionService,
     private val resumeLibraryService: ResumeLibraryService,
     private val resumeScoreService: ResumeScoreService,
@@ -42,10 +40,6 @@ class ResumeController(
 
     @GetMapping
     fun list(): ResumePage = resumeLibraryService.list()
-
-    @GetMapping("/current")
-    fun current(): ResumeUploadResponse = resumeUploadService.current()
-        .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "No resume has been uploaded") }
 
     @GetMapping("/{resumeId}")
     fun get(@PathVariable resumeId: UUID): ResumeLibraryDetail = resumeLibraryService.get(resumeId)

@@ -16,28 +16,10 @@ class CoachResponseMapperTests {
 	private val mapper = CoachResponseMapper(ObjectMapper())
 
 	@Test
-	fun rejectsQuestionResponsesWithoutUsableQuestions() {
-		val response = InterviewQuestionsResponse(listOf(InterviewQuestionResponse("", "", "", "  ", emptyList(), emptyList())), "gemini")
-		assertThatThrownBy { mapper.normalizeQuestions(response, listOf("resume:experience:0")) }
-			.isInstanceOf(GeminiException::class.java)
-			.hasMessage("Gemini returned no usable interview questions")
-	}
-
-	@Test
-	fun normalizesAUsableQuestion() {
-		val response = InterviewQuestionsResponse(listOf(InterviewQuestionResponse(null, "System Design", "deep", "How would you make this workflow idempotent?", listOf("Unique operation keys"), emptyList())), "Gemini")
-		val normalized = mapper.normalizeQuestions(response, listOf("resume:experience:0"))
-		val questions = requireNotNull(normalized.questions)
-		assertThat(questions).hasSize(1)
-		assertThat(questions.first().difficulty).isEqualTo("Deep Dive")
-		assertThat(questions.first().sourceContextIds).containsExactly("resume:experience:0")
-	}
-
-	@Test
 	fun rejectsSourceContextIdsThatWereNotRetrieved() {
-		val response = InterviewQuestionsResponse(listOf(InterviewQuestionResponse("question-id", "Projects", "Core", "How did you design this project?", listOf("Architecture decisions"), listOf("resume:4", "invented:source:9"))), "gemini")
-		val normalized = mapper.normalizeQuestions(response, listOf("resume:projects:4", "resume:skills:5"))
-		assertThat(requireNotNull(normalized.questions).first().sourceContextIds).containsExactly("resume:projects:4", "resume:skills:5")
+		val response = AnswerFeedbackResponse(70, "Clear", null, listOf("Ownership"), listOf("Metrics"), listOf("Context"), null, "gemini", listOf("resume:4", "invented:source:9"))
+		val normalized = mapper.normalizeFeedback(response, listOf("resume:projects:4", "resume:skills:5"))
+		assertThat(normalized.sourceContextIds).containsExactly("resume:projects:4", "resume:skills:5")
 	}
 
 	@Test

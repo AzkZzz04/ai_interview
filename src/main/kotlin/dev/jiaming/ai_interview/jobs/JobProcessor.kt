@@ -16,7 +16,7 @@ class JobProcessor(
 ) {
     fun process(job: BackgroundJob, leaseToken: UUID): JsonNode? {
         val handler = handlerRegistry.require(job.jobType)
-        val payload = payloadDecoder.decode(job, leaseToken, handler.payloadType())
+        val payload = payloadDecoder.decode(job, handler.payloadType())
         val context = JobExecutionContext(job, leaseToken, jobStore, materializationService, metrics, objectMapper)
         try { return invoke(handler, payload, context) } finally { context.finish() }
     }

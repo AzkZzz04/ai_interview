@@ -10,9 +10,7 @@ import dev.jiaming.ai_interview.score.ResumeScoreResult
 import dev.jiaming.ai_interview.suggestions.ExperienceSuggestionsResult
 import dev.jiaming.ai_interview.suggestions.SuggestionSourceInput
 import io.micrometer.core.instrument.MeterRegistry
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
-import org.springframework.web.server.ResponseStatusException
 
 @Service
 class AiResumeCoachService(
@@ -22,11 +20,6 @@ class AiResumeCoachService(
     private val responseMapper: CoachResponseMapper,
     private val meterRegistry: MeterRegistry
 ) {
-    fun assess(input: CoachAnalysisInput): AssessmentResponse {
-        val context = ragContextService.assessmentContext(input)
-        return responseMapper.normalizeAssessment(generateStructured(promptBuilder.buildAssessmentPrompt(input, context), AssessmentResponse::class.java), context.sourceContextIds)
-    }
-
     fun assessJobFit(input: CoachAnalysisInput): dev.jiaming.ai_interview.fit.JobFitResult {
         val context = ragContextService.jobFitContext(input)
         return responseMapper.normalizeJobFit(generateStructured(promptBuilder.buildJobFitPrompt(input, context), JobFitResponse::class.java))
@@ -48,24 +41,13 @@ class AiResumeCoachService(
         }
     }
 
-    fun generateQuestions(input: CoachAnalysisInput): InterviewQuestionsResponse {
-        val context = ragContextService.questionContext(input)
-        return responseMapper.normalizeQuestions(generateStructured(promptBuilder.buildQuestionPrompt(input, context), InterviewQuestionsResponse::class.java), context.sourceContextIds)
-    }
-
     fun generatePracticeQuestions(input: CoachAnalysisInput): PracticeQuestionDrafts {
         val context = ragContextService.practiceQuestionContext(input)
         return generateStructured(promptBuilder.buildPracticeQuestionPrompt(input, context), PracticeQuestionsResponse::class.java,
             responseMapper::normalizePracticeQuestions)
     }
 
-    fun scoreAnswer(input: CoachFeedbackInput): AnswerFeedbackResponse {
-        if (input.answerText().isNullOrBlank()) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer text is required")
-        val context = ragContextService.feedbackContext(input)
-        return responseMapper.normalizeFeedback(generateStructured(promptBuilder.buildFeedbackPrompt(input, context), AnswerFeedbackResponse::class.java), context.sourceContextIds)
-    }
-
-    /** Scores a practice attempt. The input carries no target role or seniority, so retrieval adds no seniority terms (KTD7). */
+    /** Scores a practice attempt against its question and the pair's resume and job description (KTD7). */
     fun scorePracticeAnswer(input: CoachFeedbackInput): AnswerFeedbackResult {
         val context = ragContextService.feedbackContext(input)
         val feedback = responseMapper.normalizeFeedback(

@@ -22,7 +22,7 @@ class JobHardeningMigrationIntegrationTests {
         migrateTo(null)
         connection().use { c ->
             assertThat(jobStatus(c, validJobId)).isEqualTo("QUEUED"); assertThat(jobStatus(c, legacyJobId)).isEqualTo("FAILED"); assertThat(errorCode(c, legacyJobId)).isEqualTo("LEGACY_JOB_UNSUPPORTED"); assertThat(resumeStatus(c, pendingId)).isEqualTo("PENDING"); assertThat(resumeStatus(c, readyId)).isEqualTo("READY"); assertThat(resumeStatus(c, orphanId)).isEqualTo("FAILED"); assertThat(tableExists(c, "background_job_effects")).isTrue()
-            insertEffect(c, validJobId, "ASSESSMENT", UUID.randomUUID()); assertThatThrownBy { insertEffect(c, validJobId, "ASSESSMENT", UUID.randomUUID()) }.isInstanceOf(SQLException::class.java)
+            insertEffect(c, validJobId, "ANSWER_FEEDBACK", UUID.randomUUID()); assertThatThrownBy { insertEffect(c, validJobId, "ANSWER_FEEDBACK", UUID.randomUUID()) }.isInstanceOf(SQLException::class.java)
         }
     }
     private fun migrateTo(target: String?) { val config = Flyway.configure().dataSource(POSTGRES.jdbcUrl, POSTGRES.username, POSTGRES.password).locations("classpath:db/migration"); if (target != null) config.target(target); config.load().migrate() }

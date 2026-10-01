@@ -6,8 +6,6 @@ import java.util.Optional
 class CoachFeedbackInput(
     private val resumeValue: ResolvedDocument,
     jobDescriptionValue: Optional<ResolvedDocument>?,
-    private val targetRoleValue: String?,
-    private val seniorityValue: String?,
     private val questionTextValue: String?,
     private val categoryValue: String?,
     expectedSignalsValue: List<String>?,
@@ -17,8 +15,6 @@ class CoachFeedbackInput(
     private val expectedSignalsValue = expectedSignalsValue?.toList() ?: emptyList()
     fun resume() = resumeValue
     fun jobDescription() = jobDescriptionValue
-    fun targetRole() = targetRoleValue
-    fun seniority() = seniorityValue
     fun questionText() = questionTextValue
     fun category() = categoryValue
     fun expectedSignals() = expectedSignalsValue
@@ -26,15 +22,13 @@ class CoachFeedbackInput(
 
     override fun equals(other: Any?): Boolean = other is CoachFeedbackInput &&
         resumeValue == other.resumeValue && jobDescriptionValue == other.jobDescriptionValue &&
-        targetRoleValue == other.targetRoleValue && seniorityValue == other.seniorityValue &&
         questionTextValue == other.questionTextValue && categoryValue == other.categoryValue &&
         expectedSignalsValue == other.expectedSignalsValue && answerTextValue == other.answerTextValue
 
     override fun hashCode(): Int = listOf(
-        resumeValue, jobDescriptionValue, targetRoleValue, seniorityValue, questionTextValue,
-        categoryValue, expectedSignalsValue, answerTextValue
+        resumeValue, jobDescriptionValue, questionTextValue, categoryValue, expectedSignalsValue, answerTextValue
     ).hashCode()
 
     override fun toString(): String =
-        "CoachFeedbackInput[resume=$resumeValue, jobDescription=$jobDescriptionValue, targetRole=$targetRoleValue, seniority=$seniorityValue, questionText=$questionTextValue, category=$categoryValue, expectedSignals=$expectedSignalsValue, answerText=$answerTextValue]"
+        "CoachFeedbackInput[resume=$resumeValue, jobDescription=$jobDescriptionValue, questionText=$questionTextValue, category=$categoryValue, expectedSignals=$expectedSignalsValue, answerText=$answerTextValue]"
 }

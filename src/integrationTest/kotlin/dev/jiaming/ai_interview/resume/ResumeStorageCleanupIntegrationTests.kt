@@ -120,7 +120,7 @@ class ResumeStorageCleanupIntegrationTests {
 
     @BeforeEach
     fun reset() {
-        jdbc.execute("TRUNCATE TABLE ai_interview_app.storage_cleanup, ai_interview_app.background_jobs, ai_interview_app.resume_assessments, ai_interview_app.resume_chunks, ai_interview_app.resumes, ai_interview_app.app_users CASCADE")
+        jdbc.execute("TRUNCATE TABLE ai_interview_app.storage_cleanup, ai_interview_app.background_jobs, ai_interview_app.resume_chunks, ai_interview_app.resumes, ai_interview_app.app_users CASCADE")
         Mockito.reset(storage)
     }
 

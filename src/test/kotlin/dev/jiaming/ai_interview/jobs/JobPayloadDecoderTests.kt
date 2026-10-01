@@ -2,157 +2,61 @@ package dev.jiaming.ai_interview.jobs
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import dev.jiaming.ai_interview.coach.AiAnalysisRequest
-import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest
-import dev.jiaming.ai_interview.document.DocumentReferenceResolver
-import dev.jiaming.ai_interview.document.DocumentSourceType
-import dev.jiaming.ai_interview.document.ResolvedDocument
-import dev.jiaming.ai_interview.document.ResolvedJobInputs
 import dev.jiaming.ai_interview.experience.ExperienceSplitJobPayload
 import java.time.Instant
-import java.util.Optional
 import java.util.UUID
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.any
-import org.mockito.Mockito
 
 class JobPayloadDecoderTests {
 	private val objectMapper = ObjectMapper().findAndRegisterModules()
-	private val jobStore = Mockito.mock(BackgroundJobStore::class.java)
-	private val resolver = Mockito.mock(DocumentReferenceResolver::class.java)
-	private val decoder = JobPayloadDecoder(objectMapper, jobStore, resolver)
+	private val decoder = JobPayloadDecoder(objectMapper)
 
 	@Test
-	fun readsCurrentPayloadWithoutMaterializingDocuments() {
-		val payload = AnalysisJobPayload(UUID.randomUUID(), UUID.randomUUID(), "Backend", "Mid-level")
-		val job = job(objectMapper.valueToTree(payload))
-		val decoded = decoder.decode(job, UUID.randomUUID(), AnalysisJobPayload::class.java)
-		assertThat(decoded).isEqualTo(payload)
-		Mockito.verifyNoInteractions(resolver)
-		Mockito.verify(jobStore, Mockito.never()).replaceRequestPayload(any(), any(), any())
-	}
+	fun readsCurrentJobFitPayload() {
+		val payload = JobFitPayload(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())
 
-	@Test
-	fun readsCurrentFeedbackPayloadWithThePersistedJsonShape() {
-		val payload = FeedbackJobPayload(
-			FeedbackJobPayload.CURRENT_VERSION,
-			UUID.randomUUID(), null, "Backend", "Mid-level", "Explain the design", "Architecture",
-			listOf("trade-offs", "failure handling"), "I chose Postgres for durable jobs"
-		)
-		val stored = objectMapper.valueToTree<JsonNode>(payload)
-		assertThat(stored.fieldNames().asSequence().toList()).containsExactly(
-			"payloadVersion", "resumeId", "jobDescriptionId", "targetRole", "seniority", "questionText",
-			"category", "expectedSignals", "answerText"
-		)
-
-		val decoded = decoder.decode(job(stored, JobType.ANSWER_FEEDBACK), UUID.randomUUID(), FeedbackJobPayload::class.java) as FeedbackJobPayload
+		val decoded = decoder.decode(job(objectMapper.valueToTree(payload), JobType.JOB_FIT, "job-fit"), JobFitPayload::class.java)
 
 		assertThat(decoded).isEqualTo(payload)
-		assertThat(decoded.expectedSignals()).containsExactly("trade-offs", "failure handling")
-		Mockito.verifyNoInteractions(resolver)
 	}
 
 	@Test
 	fun readsExperienceSplitPayloadWithoutResourceResolution() {
 		val payload = ExperienceSplitJobPayload(text = "LinkedIn Experience section with enough detail to split")
-		val stored = objectMapper.valueToTree<JsonNode>(payload)
 
-		val decoded = decoder.decode(job(stored, JobType.EXPERIENCE_SPLIT), UUID.randomUUID(), ExperienceSplitJobPayload::class.java)
+		val decoded = decoder.decode(job(objectMapper.valueToTree(payload), JobType.EXPERIENCE_SPLIT, null), ExperienceSplitJobPayload::class.java)
 
 		assertThat(decoded).isEqualTo(payload)
-		Mockito.verifyNoInteractions(resolver)
-		Mockito.verify(jobStore, Mockito.never()).replaceRequestPayload(any(), any(), any())
 	}
 
 	@Test
-	fun upgradesLegacyTextPayloadToStableResourceReferences() {
-		val resumeMarker = "LEGACY_RESUME_PII_04C"
-		val jobMarker = "LEGACY_JOB_PII_88A"
-		val job = job(objectMapper.valueToTree(AiAnalysisRequest(resumeMarker, jobMarker, "Backend", "Mid-level")))
-		val leaseToken = UUID.randomUUID()
-		val resumeId = UUID.randomUUID()
-		val jobDescriptionId = UUID.randomUUID()
-		val resolved = ResolvedJobInputs(
-			ResolvedDocument(DocumentSourceType.RESUME, resumeId, "resume-hash", resumeMarker, emptyList()),
-			Optional.of(ResolvedDocument(DocumentSourceType.JOB_DESCRIPTION, jobDescriptionId, "jd-hash", jobMarker, emptyList()))
-		)
-		Mockito.`when`(resolver.resolveLegacy(requireNotNull(job.userId), null, resumeMarker, null, jobMarker)).thenReturn(resolved)
-
-		val decoded = decoder.analysis(job, leaseToken)
-
-		assertThat(decoded.resumeId).isEqualTo(resumeId)
-		assertThat(decoded.jobDescriptionId).isEqualTo(jobDescriptionId)
-		val upgradedJson = objectMapper.valueToTree<JsonNode>(decoded)
-		assertThat(upgradedJson.toString()).doesNotContain(resumeMarker, jobMarker)
-		Mockito.verify(jobStore).replaceRequestPayload(job.id, leaseToken, upgradedJson)
-	}
-
-	@Test
-	fun upgradesLegacyFeedbackPayloadAndPersistsExpectedSignals() {
-		val resumeMarker = "LEGACY_FEEDBACK_RESUME_PII_04C"
-		val jobMarker = "LEGACY_FEEDBACK_JOB_PII_88A"
-		val legacy = AnswerFeedbackRequest(resumeMarker, jobMarker, "Backend", "Mid-level", "Explain the design", "Architecture", listOf("trade-offs", "failure handling"), "I chose Postgres")
-		val job = job(objectMapper.valueToTree(legacy), JobType.ANSWER_FEEDBACK)
-		val leaseToken = UUID.randomUUID()
-		val resumeId = UUID.randomUUID()
-		val jobDescriptionId = UUID.randomUUID()
-		val resolved = ResolvedJobInputs(
-			ResolvedDocument(DocumentSourceType.RESUME, resumeId, "resume-hash", resumeMarker, emptyList()),
-			Optional.of(ResolvedDocument(DocumentSourceType.JOB_DESCRIPTION, jobDescriptionId, "jd-hash", jobMarker, emptyList()))
-		)
-		Mockito.`when`(resolver.resolveLegacy(requireNotNull(job.userId), null, resumeMarker, null, jobMarker)).thenReturn(resolved)
-
-		val decoded = decoder.decode(job, leaseToken, FeedbackJobPayload::class.java) as FeedbackJobPayload
-
-		assertThat(decoded.resumeId).isEqualTo(resumeId)
-		assertThat(decoded.jobDescriptionId).isEqualTo(jobDescriptionId)
-		assertThat(decoded.expectedSignals()).containsExactly("trade-offs", "failure handling")
-		val upgradedJson = objectMapper.valueToTree<JsonNode>(decoded)
-		assertThat(upgradedJson.path("payloadVersion").asInt()).isEqualTo(FeedbackJobPayload.CURRENT_VERSION)
-		assertThat(upgradedJson.path("expectedSignals").map { it.asText() }).containsExactly("trade-offs", "failure handling")
-		assertThat(upgradedJson.toString()).doesNotContain(resumeMarker, jobMarker)
-		Mockito.verify(jobStore).replaceRequestPayload(job.id, leaseToken, upgradedJson)
-	}
-
-	@Test
-	fun attemptJobsDecodeTheirOwnPayloadVersionWithoutTheLegacyUpgrade() {
+	fun attemptJobsDecodeTheirOwnPayloadVersion() {
 		val payload = AttemptFeedbackPayload(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())
 		val stored = objectMapper.valueToTree<JsonNode>(payload)
 		assertThat(stored.fieldNames().asSequence().toList()).containsExactly("payloadVersion", "attemptId", "practiceSetId", "resumeId", "targetJobId")
-		assertThat(stored.path("payloadVersion").asInt()).isEqualTo(3).isNotEqualTo(FeedbackJobPayload.CURRENT_VERSION)
+		assertThat(stored.path("payloadVersion").asInt()).isEqualTo(3)
 
-		val decoded = decoder.decode(job(stored, JobType.ANSWER_FEEDBACK, AttemptFeedbackPayload.RESOURCE), UUID.randomUUID(), AnswerFeedbackJobPayload::class.java)
+		val decoded = decoder.decode(job(stored, JobType.ANSWER_FEEDBACK, AttemptFeedbackPayload.RESOURCE), AttemptFeedbackPayload::class.java)
 
 		assertThat(decoded).isEqualTo(payload)
-		Mockito.verifyNoInteractions(resolver)
-		Mockito.verify(jobStore, Mockito.never()).replaceRequestPayload(any(), any(), any())
 	}
 
 	@Test
-	fun anAttemptJobWithAnotherPayloadVersionIsRejectedInsteadOfReadAsLegacy() {
-		val legacyShaped = objectMapper.valueToTree<JsonNode>(FeedbackJobPayload(UUID.randomUUID(), null, "Backend", "Mid-level", "Q", "c", listOf("s"), "A"))
-		val unversioned = objectMapper.valueToTree<JsonNode>(AnswerFeedbackRequest("resume", "job", "Backend", "Mid-level", "Q", "c", listOf("s"), "A"))
+	fun feedbackJobsThatAreNotCurrentAttemptJobsAreRejected() {
+		val attempt = objectMapper.valueToTree<JsonNode>(AttemptFeedbackPayload(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()))
+		val oldVersion = objectMapper.readTree("""{"payloadVersion":2,"resumeId":"${UUID.randomUUID()}","answerText":"A"}""")
+		val unversioned = objectMapper.readTree("""{"resumeText":"resume","answerText":"A"}""")
 
-		for (payload in listOf(legacyShaped, unversioned)) {
-			assertThatThrownBy { decoder.decode(job(payload, JobType.ANSWER_FEEDBACK, AttemptFeedbackPayload.RESOURCE), UUID.randomUUID(), AnswerFeedbackJobPayload::class.java) }
+		val rejected = listOf(oldVersion to AttemptFeedbackPayload.RESOURCE, unversioned to AttemptFeedbackPayload.RESOURCE, attempt to "resume")
+		for ((payload, resourceType) in rejected) {
+			assertThatThrownBy { decoder.decode(job(payload, JobType.ANSWER_FEEDBACK, resourceType), AttemptFeedbackPayload::class.java) }
 				.isInstanceOf(IllegalArgumentException::class.java).hasMessageContaining("AttemptFeedbackPayload")
 		}
-		Mockito.verifyNoInteractions(resolver, jobStore)
 	}
 
-	@Test
-	fun legacyResumeBackedFeedbackJobsKeepTheirVersionTwoPath() {
-		val payload = FeedbackJobPayload(UUID.randomUUID(), UUID.randomUUID(), "Backend", "Mid-level", "Q", "c", listOf("s"), "A")
-
-		val decoded = decoder.decode(job(objectMapper.valueToTree(payload), JobType.ANSWER_FEEDBACK, "interview-answer"), UUID.randomUUID(), AnswerFeedbackJobPayload::class.java)
-
-		assertThat(decoded).isInstanceOf(FeedbackJobPayload::class.java).isEqualTo(payload)
-		Mockito.verifyNoInteractions(resolver, jobStore)
-	}
-
-	private fun job(payload: JsonNode, jobType: JobType = JobType.ANALYSIS, resourceType: String = "resume"): BackgroundJob {
+	private fun job(payload: JsonNode, jobType: JobType, resourceType: String?): BackgroundJob {
 		val now = Instant.now()
 		return BackgroundJob(UUID.randomUUID(), UUID.randomUUID(), jobType, resourceType, null, JobStatus.PROCESSING, JobStage.QUEUED, payload, null, "fingerprint", 1, 3, null, null, null, now, now, now, now, now, null, UUID.randomUUID(), now.plusSeconds(300))
 	}

@@ -10,7 +10,6 @@ import dev.jiaming.ai_interview.common.DeleteImpactService
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
 import dev.jiaming.ai_interview.common.RedisUsageProperties
-import dev.jiaming.ai_interview.interview.InterviewPersistenceService
 import dev.jiaming.ai_interview.jobs.BackgroundJobStore
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
 import dev.jiaming.ai_interview.jobs.JobEffectMaterializationService
@@ -231,7 +230,7 @@ class ResumeScoreServiceIntegrationTests {
                 ResumeStorageCleanupService(jdbc, Mockito.mock(ResumeStorageService::class.java)), DeleteImpactService(jdbc), mapper
             )
             jobs = BackgroundJobStore(jdbc, mapper)
-            materialization = JobEffectMaterializationService(jdbc, Mockito.mock(InterviewPersistenceService::class.java), mapper)
+            materialization = JobEffectMaterializationService(jdbc, mapper)
         }
     }
 }

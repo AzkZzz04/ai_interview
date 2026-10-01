@@ -6,8 +6,8 @@ import java.util.UUID
 @JvmRecord
 data class JobInputRefs(val resumeId: UUID?, val targetJobId: UUID?, val practiceSetId: UUID?, val attemptId: UUID?) {
     companion object {
-        // Resource types whose resource_id is a resume; legacy answer-feedback jobs stored the resume there too.
-        val RESUME_RESOURCE_TYPES = setOf("resume", "interview-answer")
+        // Resource types whose resource_id is a resume.
+        val RESUME_RESOURCE_TYPES = setOf("resume")
 
         @JvmStatic fun from(job: BackgroundJob): JobInputRefs = from(job.requestPayload, job.resourceId, job.resourceType)
 

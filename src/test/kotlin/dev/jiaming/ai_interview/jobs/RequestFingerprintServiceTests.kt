@@ -1,7 +1,7 @@
 package dev.jiaming.ai_interview.jobs
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import dev.jiaming.ai_interview.coach.AiAnalysisRequest
+import java.util.UUID
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
@@ -10,17 +10,18 @@ class RequestFingerprintServiceTests {
 
 	@Test
 	fun producesStableFingerprintForSameRequest() {
-		val request = AiAnalysisRequest("resume", "job", "Backend Engineer", "Mid-level")
-		assertThat(service.fingerprint("analysis", request))
-			.isEqualTo(service.fingerprint("analysis", request))
+		val request = JobFitPayload(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())
+		assertThat(service.fingerprint("JOB_FIT", request))
+			.isEqualTo(service.fingerprint("JOB_FIT", request))
 			.hasSize(64)
 	}
 
 	@Test
 	fun changesFingerprintWhenRequestInputsChange() {
-		val first = AiAnalysisRequest("resume", "job", "Backend Engineer", "Mid-level")
-		val second = AiAnalysisRequest("resume", "job", "Backend Engineer", "Senior")
-		assertThat(service.fingerprint("analysis", first))
-			.isNotEqualTo(service.fingerprint("analysis", second))
+		val resumeId = UUID.randomUUID()
+		val first = JobFitPayload(UUID.randomUUID(), resumeId, UUID.randomUUID())
+		val second = first.copy(targetJobId = UUID.randomUUID())
+		assertThat(service.fingerprint("JOB_FIT", first))
+			.isNotEqualTo(service.fingerprint("JOB_FIT", second))
 	}
 }

@@ -8,37 +8,13 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import dev.jiaming.ai_interview.coach.AnswerFeedbackResponse
-import dev.jiaming.ai_interview.coach.AssessmentResponse
-import dev.jiaming.ai_interview.coach.InterviewQuestionsResponse
 import com.fasterxml.jackson.databind.JsonNode
-import dev.jiaming.ai_interview.interview.AnalysisPersistenceInput
-import dev.jiaming.ai_interview.interview.FeedbackPersistenceInput
-import dev.jiaming.ai_interview.interview.InterviewPersistenceService
 import dev.jiaming.ai_interview.practice.AnswerFeedbackResult
 import dev.jiaming.ai_interview.practice.PracticeQuestionDraft
 import dev.jiaming.ai_interview.score.ResumeScoreResult
 
 @Service
-class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate,
-                                      private val interviewPersistenceService: InterviewPersistenceService,
-                                      private val objectMapper: ObjectMapper) {
-    @Transactional
-    fun materializeAssessment(job: BackgroundJob, leaseToken: UUID, input: AnalysisPersistenceInput, response: AssessmentResponse): UUID {
-        lockOwnedLease(job.id, leaseToken)
-        return materialize(job.id, JobEffectType.ASSESSMENT) { id -> interviewPersistenceService.saveAssessment(id, input, response) }
-    }
-    @Transactional
-    fun materializeQuestions(job: BackgroundJob, leaseToken: UUID, input: AnalysisPersistenceInput, response: InterviewQuestionsResponse): UUID {
-        lockOwnedLease(job.id, leaseToken)
-        val assessmentId = requireEffect(job.id, JobEffectType.ASSESSMENT)
-        return materialize(job.id, JobEffectType.QUESTIONS) { id -> interviewPersistenceService.saveQuestions(id, assessmentId, input, response) }
-    }
-    @Transactional
-    fun materializeFeedback(job: BackgroundJob, leaseToken: UUID, input: FeedbackPersistenceInput, response: AnswerFeedbackResponse): UUID {
-        lockOwnedLease(job.id, leaseToken)
-        return materialize(job.id, JobEffectType.ANSWER_FEEDBACK) { id -> interviewPersistenceService.saveAnswer(id, input, response) }
-    }
+class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate, private val objectMapper: ObjectMapper) {
     @Transactional
     fun materializeResumeScore(job: BackgroundJob, leaseToken: UUID, resumeId: UUID, response: ResumeScoreResult): UUID {
         lockOwnedLease(job.id, leaseToken)

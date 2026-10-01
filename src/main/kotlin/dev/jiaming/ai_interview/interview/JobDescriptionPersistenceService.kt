@@ -21,13 +21,6 @@ class JobDescriptionPersistenceService(
     private val contentHasher: ContentHasher,
 ) {
     @Transactional
-    fun save(userId: UUID, jobDescription: String?): Optional<UUID> {
-        if (jobDescription.isNullOrBlank()) return Optional.empty()
-        if (normalizer.normalize(jobDescription).isBlank()) return Optional.empty()
-        return Optional.of(findOrCreateDocument(userId, jobDescription).resourceId())
-    }
-
-    @Transactional
     fun findOrCreateTargetJob(userId: UUID, name: String, jobDescription: String): TargetJobDocumentSave {
         val saved = findOrCreate(userId, jobDescription, name)
         return TargetJobDocumentSave(saved.document, saved.created)
@@ -56,11 +49,6 @@ class JobDescriptionPersistenceService(
             contentHash,
             normalizedText,
         )
-
-    @Transactional
-    fun findOrCreateDocument(userId: UUID, jobDescription: String): ResolvedDocument {
-        return findOrCreate(userId, jobDescription, "Untitled job").document
-    }
 
     private fun findOrCreate(userId: UUID, jobDescription: String, name: String): DocumentSave {
         val normalizedText = normalizer.normalize(jobDescription)

@@ -91,7 +91,7 @@ class SupabaseMigrationIntegrationTests {
                     statement.execute("INSERT INTO ai_interview_app.app_users (id, email) VALUES ('$userId', 'migration-test@example.test')")
                     statement.execute("""INSERT INTO ai_interview_app.background_jobs
                         (id, user_id, job_type, resource_type, resource_id, status, stage, request_payload, max_attempts)
-                        VALUES ('$jobId', '$userId', 'ANALYSIS', 'resume', '$resumeId', 'QUEUED', 'QUEUED',
+                        VALUES ('$jobId', '$userId', 'RESUME_SCORE', 'resume', '$resumeId', 'QUEUED', 'QUEUED',
                         '{"resumeId":"$resumeId","jobDescriptionId":"$jobDescriptionId","targetJobId":"$targetJobId","practiceSetId":"$practiceSetId","attemptId":"$attemptId","prompt":"PRIVATE_PROMPT_MARKER","answerText":"PRIVATE_ANSWER_MARKER"}'::jsonb, 3)""")
                     statement.execute("CREATE SEQUENCE ai_interview_app.runtime_test_seq")
                 }
@@ -143,7 +143,7 @@ class SupabaseMigrationIntegrationTests {
                     buildList { while (result.next()) add(result.getString(1)) }
                 }
             }
-            assertThat(versions).containsExactly(*(1..17).map(Int::toString).toTypedArray())
+            assertThat(versions).containsExactly(*(1..18).map(Int::toString).toTypedArray())
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = 'public.vector_store'::regclass AND attname = 'embedding'").use { result ->
                     result.next(); assertThat(result.getString(1)).isEqualTo("vector(1024)")

@@ -10,9 +10,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
 class ContractFreezeTests {
-	@Test fun jobStatusValuesAreFrozen() = assertThat(JobStatus.entries.map { it.name }).containsExactly("QUEUED", "PROCESSING", "RETRYING", "SUCCEEDED", "PARTIAL", "FAILED")
-	@Test fun jobTypeValuesAreFrozen() = assertThat(JobType.entries.map { it.name }).containsExactly("RESUME_EXTRACTION", "RESUME_SCORE", "ANALYSIS", "ANSWER_FEEDBACK", "EXPERIENCE_SPLIT", "JOB_FIT", "EXPERIENCE_SUGGESTIONS", "PRACTICE_QUESTIONS")
-	@Test fun jobStageValuesAreFrozen() = assertThat(JobStage.entries.map { it.name }).containsExactly("QUEUED", "READING_FILE", "EXTRACTING_TEXT", "NORMALIZING_TEXT", "CHUNKING_TEXT", "SCORING_RESUME", "ASSESSING_RESUME", "GENERATING_QUESTIONS", "SPLITTING_EXPERIENCE", "SCORING_ANSWER", "MATCHING_JOB", "COMPLETED", "RETRIEVING_EXPERIENCE", "MATCHING_EXPERIENCE")
+	@Test fun jobStatusValuesAreFrozen() { assertThat(JobStatus.entries.map { it.name }).containsExactly("QUEUED", "PROCESSING", "RETRYING", "SUCCEEDED", "FAILED") }
+	@Test fun jobTypeValuesAreFrozen() { assertThat(JobType.entries.map { it.name }).containsExactly("RESUME_EXTRACTION", "RESUME_SCORE", "ANSWER_FEEDBACK", "EXPERIENCE_SPLIT", "JOB_FIT", "EXPERIENCE_SUGGESTIONS", "PRACTICE_QUESTIONS") }
+	@Test fun jobStageValuesAreFrozen() { assertThat(JobStage.entries.map { it.name }).containsExactly("QUEUED", "READING_FILE", "EXTRACTING_TEXT", "NORMALIZING_TEXT", "CHUNKING_TEXT", "SCORING_RESUME", "GENERATING_QUESTIONS", "SPLITTING_EXPERIENCE", "SCORING_ANSWER", "MATCHING_JOB", "COMPLETED", "RETRIEVING_EXPERIENCE", "MATCHING_EXPERIENCE") }
 	@Test fun assessmentScoreKeysAreFrozen() {
 		val mapper = ObjectMapper()
 		val fields = mapper.readTree(mapper.writeValueAsString(AssessmentScores(1, 2, 3, 4, 5))).fieldNames().asSequence().toList()

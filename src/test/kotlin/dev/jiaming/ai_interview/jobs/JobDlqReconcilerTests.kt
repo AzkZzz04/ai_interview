@@ -30,7 +30,7 @@ class JobDlqReconcilerTests {
 		Mockito.`when`(jobStore.findById(jobId)).thenReturn(Optional.of(job))
 		Mockito.`when`(jobStore.prepareDlqRecovery(jobId)).thenReturn(true)
 		reconciler.reconcile(message)
-		Mockito.verify(metrics).dlqArrival(JobType.ANALYSIS)
+		Mockito.verify(metrics).dlqArrival(JobType.JOB_FIT)
 		Mockito.verify(jobStore).prepareDlqRecovery(jobId)
 		Mockito.verify(queueService).deleteDeadLetter(message)
 	}
@@ -42,7 +42,7 @@ class JobDlqReconcilerTests {
 		Mockito.`when`(jobStore.markExhaustedFromDlq(jobId)).thenReturn(true)
 		reconciler.reconcile(message)
 		Mockito.verify(jobStore).markExhaustedFromDlq(jobId)
-		Mockito.verify(metrics).retriesExhausted(JobType.ANALYSIS)
+		Mockito.verify(metrics).retriesExhausted(JobType.JOB_FIT)
 		Mockito.verify(queueService).deleteDeadLetter(message)
 		Mockito.verify(jobStore, Mockito.never()).prepareDlqRecovery(jobId)
 	}
@@ -61,6 +61,6 @@ class JobDlqReconcilerTests {
 	private fun message() = Message.builder().messageId(UUID.randomUUID().toString()).receiptHandle("receipt").body("{}").build()
 	private fun job(id: UUID, status: JobStatus, attempts: Int, maxAttempts: Int): BackgroundJob {
 		val now = Instant.now()
-		return BackgroundJob(id, UUID.randomUUID(), JobType.ANALYSIS, "resume", UUID.randomUUID(), status, JobStage.QUEUED, ObjectMapper().createObjectNode(), null, "fingerprint", attempts, maxAttempts, null, null, null, now, now, now, now, now, if (status.terminal()) now else null, null, null)
+		return BackgroundJob(id, UUID.randomUUID(), JobType.JOB_FIT, "resume", UUID.randomUUID(), status, JobStage.QUEUED, ObjectMapper().createObjectNode(), null, "fingerprint", attempts, maxAttempts, null, null, null, now, now, now, now, now, if (status.terminal()) now else null, null, null)
 	}
 }

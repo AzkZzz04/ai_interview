@@ -83,13 +83,9 @@ class BackgroundJobStore(private val jdbcTemplate: JdbcTemplate, private val obj
         val updated = jdbcTemplate.update("UPDATE ai_interview_app.background_jobs SET result_payload = ?::jsonb, updated_at = now() WHERE id = ? AND status = 'PROCESSING' AND lease_token = ?", json(resultPayload), jobId, leaseToken)
         assertLeaseOwned(jobId, updated)
     }
-    fun replaceRequestPayload(jobId: UUID, leaseToken: UUID, requestPayload: JsonNode?) {
-        val updated = jdbcTemplate.update("UPDATE ai_interview_app.background_jobs SET request_payload = ?::jsonb, updated_at = now() WHERE id = ? AND status = 'PROCESSING' AND lease_token = ?", json(requestPayload), jobId, leaseToken)
-        assertLeaseOwned(jobId, updated)
-    }
     fun markSucceeded(jobId: UUID, leaseToken: UUID, resultPayload: JsonNode?) = markTerminal(jobId, leaseToken, JobStatus.SUCCEEDED, resultPayload, null, null, false)
-    fun markFailed(jobId: UUID, leaseToken: UUID, errorCode: String, errorMessage: String?, partial: Boolean) =
-        markTerminal(jobId, leaseToken, if (partial) JobStatus.PARTIAL else JobStatus.FAILED, null, errorCode, errorMessage, false)
+    fun markFailed(jobId: UUID, leaseToken: UUID, errorCode: String, errorMessage: String?) =
+        markTerminal(jobId, leaseToken, JobStatus.FAILED, null, errorCode, errorMessage, false)
     fun markRetrying(jobId: UUID, leaseToken: UUID, errorCode: String, errorMessage: String?, delay: Duration): Boolean = jdbcTemplate.update("""
         UPDATE ai_interview_app.background_jobs SET status = 'RETRYING', last_error = ?, error_code = ?, retryable = true,
             run_after = now() + (? * interval '1 second'), enqueued_at = NULL, lease_token = NULL, lease_expires_at = NULL, updated_at = now()
@@ -108,15 +104,13 @@ class BackgroundJobStore(private val jdbcTemplate: JdbcTemplate, private val obj
         WHERE id = ? AND attempts < max_attempts AND (status IN ('QUEUED', 'RETRYING') OR (status = 'PROCESSING' AND lease_expires_at < now()))
         """, jobId) == 1
     fun markExhaustedFromDlq(jobId: UUID): Boolean = jdbcTemplate.update("""
-        UPDATE ai_interview_app.background_jobs SET status = CASE WHEN job_type = 'ANALYSIS' AND jsonb_exists(result_payload, 'assessment') THEN 'PARTIAL' ELSE 'FAILED' END,
+        UPDATE ai_interview_app.background_jobs SET status = 'FAILED',
             last_error = 'SQS moved the job message to the dead-letter queue after retries were exhausted',
             error_code = 'RETRIES_EXHAUSTED_DLQ', retryable = false, completed_at = now(), lease_token = NULL, lease_expires_at = NULL, updated_at = now()
         WHERE id = ? AND attempts >= max_attempts AND status IN ('QUEUED', 'PROCESSING', 'RETRYING') AND (status <> 'PROCESSING' OR lease_expires_at < now())
         """, jobId) == 1
     fun reapExpiredLeases(): Int = jdbcTemplate.update("""
-        UPDATE ai_interview_app.background_jobs SET status = CASE
-            WHEN attempts >= max_attempts AND job_type = 'ANALYSIS' AND jsonb_exists(result_payload, 'assessment') THEN 'PARTIAL'
-            WHEN attempts >= max_attempts THEN 'FAILED' ELSE 'RETRYING' END,
+        UPDATE ai_interview_app.background_jobs SET status = CASE WHEN attempts >= max_attempts THEN 'FAILED' ELSE 'RETRYING' END,
             last_error = 'Worker lease expired before the job completed',
             error_code = CASE WHEN attempts >= max_attempts THEN 'RETRIES_EXHAUSTED_WORKER_LEASE_EXPIRED' ELSE 'WORKER_LEASE_EXPIRED' END,
             retryable = CASE WHEN attempts >= max_attempts THEN false ELSE true END, run_after = now(),
@@ -131,7 +125,7 @@ class BackgroundJobStore(private val jdbcTemplate: JdbcTemplate, private val obj
             'resumeId', COALESCE(request_payload -> 'resumeId', CASE WHEN resource_type IN ($RESUME_RESOURCE_TYPES) THEN to_jsonb(resource_id) END),
             'jobDescriptionId', request_payload -> 'jobDescriptionId', 'targetJobId', request_payload -> 'targetJobId',
             'practiceSetId', request_payload -> 'practiceSetId', 'attemptId', request_payload -> 'attemptId')), result_payload = NULL, updated_at = now()
-        WHERE status IN ('SUCCEEDED', 'PARTIAL', 'FAILED') AND completed_at < now() - (? * interval '1 day')
+        WHERE status IN ('SUCCEEDED', 'FAILED') AND completed_at < now() - (? * interval '1 day')
           AND (result_payload IS NOT NULL OR (request_payload - ARRAY['payloadVersion', 'resumeId', 'jobDescriptionId', 'targetJobId', 'practiceSetId', 'attemptId']) <> '{}'::jsonb)
         """, retentionDays)
 

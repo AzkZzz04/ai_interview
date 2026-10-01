@@ -10,8 +10,6 @@ import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
 import dev.jiaming.ai_interview.common.RedisUsageProperties
 import dev.jiaming.ai_interview.common.RuntimeModeProperties
-import dev.jiaming.ai_interview.document.DocumentReferenceResolver
-import dev.jiaming.ai_interview.interview.InterviewPersistenceService
 import dev.jiaming.ai_interview.interview.JobDescriptionPersistenceService
 import dev.jiaming.ai_interview.jobs.BackgroundJobStore
 import dev.jiaming.ai_interview.jobs.JobDispatcher
@@ -193,7 +191,7 @@ class JobFitIntegrationTests {
             ), mapper)
             val submissions = JobSubmissionService(
                 jobs, Mockito.mock(JobDispatcher::class.java), RequestFingerprintService(mapper), local, guard,
-                Mockito.mock(DocumentReferenceResolver::class.java), PROPERTIES, RuntimeModeProperties("all"), JobMetrics(SimpleMeterRegistry()), mapper
+                PROPERTIES, RuntimeModeProperties("all"), JobMetrics(SimpleMeterRegistry()), mapper
             )
             fits = JobFitService(jdbc, local, submissions, guard, jobs, mapper, transactions)
             val normalizer = ResumeTextNormalizer()
@@ -203,7 +201,7 @@ class JobFitIntegrationTests {
                 ResumeStorageCleanupService(jdbc, Mockito.mock(ResumeStorageService::class.java)), DeleteImpactService(jdbc), mapper
             )
             targetJobs = TargetJobService(jdbc, local, JobDescriptionPersistenceService(jdbc, normalizer, SectionAwareTextChunker(), ContentHasher()))
-            materialization = JobEffectMaterializationService(jdbc, Mockito.mock(InterviewPersistenceService::class.java), mapper)
+            materialization = JobEffectMaterializationService(jdbc, mapper)
         }
     }
 }

@@ -11,7 +11,7 @@ class CoachResumeScorePromptTests {
         val prompt = CoachPromptBuilder().buildResumeScorePrompt(resumeText, "Backend Engineer")
 
         assertThat(prompt).contains(resumeText, "Backend Engineer", "[X%]")
-        assertThat(prompt).doesNotContain("job description", "seniority", "retrieved context")
+        assertThat(prompt).doesNotContain("job description", "retrieved context")
     }
 
     @Test

@@ -7,32 +7,25 @@ import org.junit.jupiter.api.Test
 
 class JobHandlerRegistryTests {
 	@Test
-	fun requiresExactlyOneHandlerForEveryJobType() {
-		val resume = handler(JobType.RESUME_EXTRACTION)
-		val score = handler(JobType.RESUME_SCORE)
-		val analysis = handler(JobType.ANALYSIS)
-		val feedback = handler(JobType.ANSWER_FEEDBACK)
-		val experienceSplit = handler(JobType.EXPERIENCE_SPLIT)
-		val fit = handler(JobType.JOB_FIT)
-		val suggestions = handler(JobType.EXPERIENCE_SUGGESTIONS)
-		val practice = handler(JobType.PRACTICE_QUESTIONS)
-		val registry = JobHandlerRegistry(listOf(resume, score, analysis, feedback, experienceSplit, fit, suggestions, practice))
-		assertThat(registry.require(JobType.ANALYSIS)).isSameAs(analysis)
-		assertThat(registry.require(JobType.RESUME_SCORE)).isSameAs(score)
-		assertThat(registry.require(JobType.EXPERIENCE_SPLIT)).isSameAs(experienceSplit)
-		assertThat(registry.require(JobType.PRACTICE_QUESTIONS)).isSameAs(practice)
+	fun startsWithExactlyTheSevenContractJobTypes() {
+		val types = listOf("RESUME_EXTRACTION", "RESUME_SCORE", "JOB_FIT", "EXPERIENCE_SUGGESTIONS", "PRACTICE_QUESTIONS",
+			"EXPERIENCE_SPLIT", "ANSWER_FEEDBACK").map(JobType::valueOf)
+		val handlers = types.map(::handler)
+		val registry = JobHandlerRegistry(handlers)
+		types.zip(handlers).forEach { (type, handler) -> assertThat(registry.require(type)).isSameAs(handler) }
+		assertThat(JobType.entries).containsExactlyInAnyOrderElementsOf(types)
 	}
 
 	@Test
 	fun rejectsDuplicateHandlers() {
 		assertThatThrownBy {
-			JobHandlerRegistry(listOf(handler(JobType.RESUME_EXTRACTION), handler(JobType.ANALYSIS), handler(JobType.ANALYSIS), handler(JobType.ANSWER_FEEDBACK), handler(JobType.EXPERIENCE_SPLIT)))
+			JobHandlerRegistry(listOf(handler(JobType.RESUME_EXTRACTION), handler(JobType.JOB_FIT), handler(JobType.JOB_FIT), handler(JobType.ANSWER_FEEDBACK), handler(JobType.EXPERIENCE_SPLIT)))
 		}.isInstanceOf(IllegalStateException::class.java).hasMessageContaining("Multiple job handlers")
 	}
 
 	@Test
 	fun rejectsMissingHandlers() {
-		assertThatThrownBy { JobHandlerRegistry(listOf(handler(JobType.ANALYSIS))) }
+		assertThatThrownBy { JobHandlerRegistry(listOf(handler(JobType.JOB_FIT))) }
 			.isInstanceOf(IllegalStateException::class.java)
 			.hasMessageContaining("Missing job handlers")
 	}

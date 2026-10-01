@@ -23,19 +23,18 @@ class AiResumeCoachServiceTests {
 
 	@Test fun repairsInvalidJsonExactlyOnce() {
 		val input = input()
-		Mockito.`when`(contextService.assessmentContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
-		Mockito.`when`(client.generateJson(anyString())).thenReturn("not-json").thenReturn(assessmentJson())
-		val response = service.assess(input)
-		assertThat(response.overallScore).isEqualTo(80)
-		assertThat(response.sourceContextIds).containsExactly("resume:experience:0")
+		Mockito.`when`(contextService.jobFitContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(client.generateJson(anyString())).thenReturn("not-json").thenReturn(jobFitJson())
+		val response = service.assessJobFit(input)
+		assertThat(response.fitScore).isEqualTo(80)
 		Mockito.verify(client, Mockito.times(2)).generateJson(anyString())
 	}
 
 	@Test fun rejectsSecondInvalidResponseWithoutThirdGeneration() {
 		val input = input()
-		Mockito.`when`(contextService.assessmentContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(contextService.jobFitContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn("not-json")
-		assertThatThrownBy { service.assess(input) }.isInstanceOfSatisfying(GeminiException::class.java) { exception ->
+		assertThatThrownBy { service.assessJobFit(input) }.isInstanceOfSatisfying(GeminiException::class.java) { exception ->
 			assertThat(exception.code()).isEqualTo(GeminiErrorCode.INVALID_RESPONSE)
 			assertThat(exception.retryable()).isFalse()
 			assertThat(exception.message).doesNotContain("not-json")
@@ -45,9 +44,9 @@ class AiResumeCoachServiceTests {
 
 	@Test fun doesNotRepairMaxTokensFailure() {
 		val input = input()
-		Mockito.`when`(contextService.assessmentContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(contextService.jobFitContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
 		Mockito.`when`(client.generateJson(anyString())).thenThrow(GeminiException(GeminiErrorCode.MAX_TOKENS, "token limit", false))
-		assertThatThrownBy { service.assess(input) }.isInstanceOfSatisfying(GeminiException::class.java) { exception -> assertThat(exception.code()).isEqualTo(GeminiErrorCode.MAX_TOKENS) }
+		assertThatThrownBy { service.assessJobFit(input) }.isInstanceOfSatisfying(GeminiException::class.java) { exception -> assertThat(exception.code()).isEqualTo(GeminiErrorCode.MAX_TOKENS) }
 		Mockito.verify(client).generateJson(anyString())
 	}
 
@@ -87,7 +86,7 @@ class AiResumeCoachServiceTests {
 	}
 
 	@Test fun practiceQuestionsBelowTheMinimumGoThroughTheSingleRepairAttempt() {
-		val input = CoachAnalysisInput(input().resume(), Optional.empty(), null, null)
+		val input = CoachAnalysisInput(input().resume(), Optional.empty(), null)
 		Mockito.`when`(contextService.practiceQuestionContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn(practiceJson(2)).thenReturn(practiceJson(4))
 
@@ -97,11 +96,10 @@ class AiResumeCoachServiceTests {
 		val prompts = org.mockito.kotlin.argumentCaptor<String>()
 		Mockito.verify(client, Mockito.times(2)).generateJson(prompts.capture())
 		assertThat(prompts.allValues[1]).contains("You repair a JSON response", "at least 3")
-		Mockito.verify(contextService, Mockito.never()).questionContext(input)
 	}
 
-	@Test fun practiceAnswerFeedbackUsesTheSeniorityFreePromptAndReturnsTheContractShape() {
-		val input = CoachFeedbackInput(input().resume(), Optional.empty(), null, null, "Why Kafka?", null, emptyList(), "Because ordering.")
+	@Test fun practiceAnswerFeedbackUsesThePracticePromptAndReturnsTheContractShape() {
+		val input = CoachFeedbackInput(input().resume(), Optional.empty(), "Why Kafka?", null, emptyList(), "Because ordering.")
 		Mockito.`when`(contextService.feedbackContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn(
 			"""{"score":140,"summary":"Clear.","nextStep":"Add numbers.","strengths":["Ownership"],"gaps":["Metrics"],"betterAnswerOutline":["Context"],"followUpQuestion":" ","sourceContextIds":["resume:experience:0"]}"""
@@ -112,7 +110,7 @@ class AiResumeCoachServiceTests {
 		assertThat(feedback).isEqualTo(dev.jiaming.ai_interview.practice.AnswerFeedbackResult(100, "Clear.", "Add numbers.", listOf("Ownership"), listOf("Metrics"), listOf("Context"), null))
 		val prompt = org.mockito.kotlin.argumentCaptor<String>()
 		Mockito.verify(client).generateJson(prompt.capture())
-		assertThat(prompt.firstValue).contains("scoring one practice answer").doesNotContain("Seniority")
+		assertThat(prompt.firstValue).contains("scoring one practice answer")
 	}
 
 	private fun practiceJson(count: Int) = (1..count).joinToString(",", """{"questions":[""", "]}") {
@@ -121,9 +119,9 @@ class AiResumeCoachServiceTests {
 
 	private fun input(): CoachAnalysisInput {
 		val resume = ResolvedDocument(DocumentSourceType.RESUME, UUID.randomUUID(), "hash", "EXPERIENCE\nBuilt APIs", listOf(DocumentChunk(0, "Experience", "Built APIs", "resume:experience:0")))
-		return CoachAnalysisInput(resume, Optional.empty(), "Backend Engineer", "Mid-level")
+		return CoachAnalysisInput(resume, Optional.empty(), "Backend Engineer")
 	}
 
-	private fun assessmentJson() = """{"overallScore":80,"scores":{"technicalDepth":80,"impact":80,"clarity":80,"relevance":80,"ats":80},"strengths":["Clear impact"],"weaknesses":["More scale detail needed"],"recommendations":[{"section":"Experience","priority":"high","message":"Add scale"}],"sourceContextIds":["resume:experience:0"]}"""
+	private fun jobFitJson() = """{"fitScore":80,"summary":"Good match.","matchedRequirements":[{"requirement":"APIs","evidence":"Built APIs"}],"missingRequirements":[],"feedback":[]}"""
 	private fun scoreJson() = """{"overall":82,"scores":{"technicalDepth":82,"impact":80,"clarity":84,"relevance":81,"ats":83},"summary":"Strong backend work.","fixes":[{"section":"Experience","priority":"HIGH","message":"Add scope."}],"rewrites":[{"section":"Experience","original":"Built API.","rewritten":"Built API serving [N] services."}]}"""
 }

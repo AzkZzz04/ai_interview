@@ -121,25 +121,24 @@ class JobWorker internal constructor(
 
     private fun handleFailure(message: Message, job: BackgroundJob, leaseToken: UUID, started: Instant, exception: RuntimeException) {
         val failure = failureClassifier.classify(exception)
-        val partial = job.jobType == JobType.ANALYSIS && hasAssessmentCheckpoint(job.id)
         if (!failure.retryable) {
-            if (!jobStore.markFailed(job.id, leaseToken, failure.code, failure.message, partial)) { log.warn("job_failure_ignored_after_lease_loss jobId={}", job.id); return }
+            if (!jobStore.markFailed(job.id, leaseToken, failure.code, failure.message)) { log.warn("job_failure_ignored_after_lease_loss jobId={}", job.id); return }
             notifyTerminalFailure(job, failure)
             metrics.failed(job.jobType, false)
-            metrics.completed(job.jobType, if (partial) JobStatus.PARTIAL else JobStatus.FAILED, Duration.between(started, Instant.now()))
+            metrics.completed(job.jobType, JobStatus.FAILED, Duration.between(started, Instant.now()))
             queueService.delete(message)
-            log.warn("job_failed jobId={} type={} retryable=false code={} partial={} reason={}", job.id, job.jobType, failure.code, partial, failure.message)
+            log.warn("job_failed jobId={} type={} retryable=false code={} reason={}", job.id, job.jobType, failure.code, failure.message)
             return
         }
         if (job.attempts >= job.maxAttempts) {
             val code = "RETRIES_EXHAUSTED_${failure.code}"
             val exhausted = JobFailure(code, failure.message, false)
-            if (!jobStore.markFailed(job.id, leaseToken, code, failure.message, partial)) { log.warn("job_failure_ignored_after_lease_loss jobId={}", job.id); return }
+            if (!jobStore.markFailed(job.id, leaseToken, code, failure.message)) { log.warn("job_failure_ignored_after_lease_loss jobId={}", job.id); return }
             notifyTerminalFailure(job, exhausted)
             metrics.failed(job.jobType, true); metrics.retriesExhausted(job.jobType)
-            metrics.completed(job.jobType, if (partial) JobStatus.PARTIAL else JobStatus.FAILED, Duration.between(started, Instant.now()))
+            metrics.completed(job.jobType, JobStatus.FAILED, Duration.between(started, Instant.now()))
             deadLetterExhausted(message, job)
-            log.error("job_retries_exhausted jobId={} type={} attempts={} partial={} reason={}", job.id, job.jobType, job.attempts, partial, failure.message)
+            log.error("job_retries_exhausted jobId={} type={} attempts={} reason={}", job.id, job.jobType, job.attempts, failure.message)
             return
         }
         val delay = retryDelayStrategy.delay(job.attempts, properties.retryBaseSeconds)
@@ -195,7 +194,6 @@ class JobWorker internal constructor(
             catch (exception: RuntimeException) { log.error("job_terminal_cleanup_failed jobId={} type={} reason={}", job.id, job.jobType, exception.message) }
         }
     }
-    private fun hasAssessmentCheckpoint(jobId: UUID) = jobStore.findById(jobId).orElse(null)?.resultPayload?.hasNonNull("assessment") == true
     private fun daemonThread(runnable: Runnable, name: String) = Thread(runnable, name).apply { isDaemon = true }
     private fun shutdownNow(executor: ExecutorService?, timeoutSeconds: Int) {
         if (executor == null) return

@@ -27,7 +27,7 @@ class PracticeQuestionsJobHandler(
             val jobDescription = documents.jobDescription().orElseThrow {
                 IllegalStateException("Practice set ${payload.practiceSetId} has no target job description")
             }
-            coachService.generatePracticeQuestions(CoachAnalysisInput(documents.resume(), Optional.of(jobDescription), null, null))
+            coachService.generatePracticeQuestions(CoachAnalysisInput(documents.resume(), Optional.of(jobDescription), null))
                 .also { context.saveRootCheckpoint(it, "practice-questions") }
         }
         context.materializePracticeQuestions(payload.practiceSetId, drafts.drafts)

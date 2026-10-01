@@ -38,9 +38,6 @@ class ExperienceSplitJobHandlerTests {
 		Mockito.verify(context).stage(JobStage.SPLITTING_EXPERIENCE)
 		Mockito.verify(context).saveCheckpoint("result", reviewed)
 		Mockito.verify(context).saveCheckpoint("split", generated)
-		Mockito.verify(context, Mockito.never()).materializeAssessment(any(), any())
-		Mockito.verify(context, Mockito.never()).materializeQuestions(any(), any())
-		Mockito.verify(context, Mockito.never()).materializeFeedback(any(), any())
 	}
 
 	@Test

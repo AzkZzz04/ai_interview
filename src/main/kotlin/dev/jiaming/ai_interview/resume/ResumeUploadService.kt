@@ -5,7 +5,6 @@ import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 import java.time.Instant
 import java.util.HexFormat
-import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
@@ -90,8 +89,6 @@ class ResumeUploadService private constructor(
             elapsedMillis(startedAt), chunks.size, rawText.length, normalizedText.length)
         return response
     }
-
-    fun current(): Optional<ResumeUploadResponse> = resumePersistenceService?.findLatest() ?: Optional.empty()
 
     fun chunksFor(normalizedText: String): List<ResumeChunkResponse> = chunker.chunk(normalizedText).map {
         ResumeChunkResponse(it.index, it.section, it.content, it.content.length)

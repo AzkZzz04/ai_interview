@@ -18,7 +18,6 @@ import dev.jiaming.ai_interview.common.RuntimeModeProperties
 import dev.jiaming.ai_interview.document.DocumentReferenceResolver
 import dev.jiaming.ai_interview.document.ResolvedDocument
 import dev.jiaming.ai_interview.experience.ExperienceService
-import dev.jiaming.ai_interview.interview.InterviewPersistenceService
 import dev.jiaming.ai_interview.interview.JobDescriptionPersistenceService
 import dev.jiaming.ai_interview.jobs.BackgroundJobStore
 import dev.jiaming.ai_interview.jobs.JobDispatcher
@@ -356,10 +355,10 @@ class SuggestionsIntegrationTests {
             val normalizer = ResumeTextNormalizer()
             val persistence = ResumePersistenceService(jdbc, local, normalizer, SectionAwareTextChunker(), ContentHasher())
             val jobDescriptions = JobDescriptionPersistenceService(jdbc, normalizer, SectionAwareTextChunker(), ContentHasher())
-            val resolver = DocumentReferenceResolver(persistence, jobDescriptions, normalizer, ContentHasher())
+            val resolver = DocumentReferenceResolver(persistence, jobDescriptions)
             val submissions = JobSubmissionService(
                 jobs, Mockito.mock(JobDispatcher::class.java), RequestFingerprintService(mapper), local, guard,
-                resolver, PROPERTIES, RuntimeModeProperties("all"), JobMetrics(SimpleMeterRegistry()), mapper
+                PROPERTIES, RuntimeModeProperties("all"), JobMetrics(SimpleMeterRegistry()), mapper
             )
             suggestions = SuggestionsService(jdbc, local, submissions, guard, jobs, mapper, transactions, persistence)
             library = ResumeLibraryService(
@@ -376,8 +375,8 @@ class SuggestionsIntegrationTests {
                 Mockito.mock(JobHandler::class.java).also { whenever(it.type()).thenReturn(type) }
             }
             processor = JobProcessor(
-                JobPayloadDecoder(mapper, jobs, resolver), JobHandlerRegistry(otherHandlers + handler), jobs,
-                JobEffectMaterializationService(jdbc, Mockito.mock(InterviewPersistenceService::class.java), mapper),
+                JobPayloadDecoder(mapper), JobHandlerRegistry(otherHandlers + handler), jobs,
+                JobEffectMaterializationService(jdbc, mapper),
                 JobMetrics(SimpleMeterRegistry()), mapper
             )
         }

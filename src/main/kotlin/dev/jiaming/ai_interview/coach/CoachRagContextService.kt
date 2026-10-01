@@ -27,13 +27,9 @@ class CoachRagContextService @Autowired constructor(
         retrievalService: RagRetrievalService, meterRegistry: MeterRegistry) :
         this(chunker, indexingService, retrievalService, meterRegistry, RagProperties(1024, 8, "gemini-embedding-001", "section-block-v3"))
 
-    fun assessmentContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), assessmentQueries(input),
-        SelectionProfile("assessment", properties.assessmentContextBudget(), properties.assessmentJobDescriptionMinimum()))
     fun jobFitContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), jobFitQueries(input),
         SelectionProfile("job-fit", properties.assessmentContextBudget(), properties.assessmentJobDescriptionMinimum()))
-    fun questionContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), questionQueries(input, withSeniority = true),
-        SelectionProfile("questions", properties.questionContextBudget(), properties.questionJobDescriptionMinimum()))
-    fun practiceQuestionContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), questionQueries(input, withSeniority = false),
+    fun practiceQuestionContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), questionQueries(input),
         SelectionProfile("practice-questions", properties.questionContextBudget(), properties.questionJobDescriptionMinimum()))
     fun feedbackContext(input: CoachFeedbackInput) = ragContext(input.resume(), input.jobDescription(), feedbackQueries(input),
         SelectionProfile("feedback", properties.feedbackContextBudget(), properties.feedbackJobDescriptionMinimum()))
@@ -143,14 +139,6 @@ class CoachRagContextService @Autowired constructor(
         CoachRagContext(key, formatSnippets(snippets, maxSnippets, truncateContent),
             snippets.map { it.sourceContextId() }.filter { !blank(it) }.distinct(), vectorBacked)
 
-    private fun assessmentQueries(input: CoachAnalysisInput): List<String> {
-        val role = fallback(input.targetRole(), "Software Engineer"); val seniority = fallback(input.seniority(), "Mid-level")
-        val terms = SenioritySettings.forValue(input.seniority()).retrievalTerms
-        val jd = jobDescriptionQueryExcerpt(input.jobDescription())
-        return listOf("technical depth systems ownership architecture complexity $role $seniority $terms",
-            "measurable impact metrics scale latency reliability cost adoption outcomes", "role alignment required skills must have requirements $role $jd",
-            "resume gaps missing evidence weak bullets seniority signal $role $seniority")
-    }
     private fun jobFitQueries(input: CoachAnalysisInput): List<String> {
         val role = fallback(input.targetRole(), "target job")
         val jd = jobDescriptionQueryExcerpt(input.jobDescription())
@@ -167,16 +155,14 @@ class CoachRagContextService @Autowired constructor(
             "accomplishments projects tools and measurable impact relevant to $jd",
         )
     }
-    private fun questionQueries(input: CoachAnalysisInput, withSeniority: Boolean): List<String> {
+    private fun questionQueries(input: CoachAnalysisInput): List<String> {
         val role = fallback(input.targetRole(), "Software Engineer"); val jd = jobDescriptionQueryExcerpt(input.jobDescription())
-        val level = if (!withSeniority) "" else " ${fallback(input.seniority(), "Mid-level")} ${SenioritySettings.forValue(input.seniority()).retrievalTerms}"
-        return listOf("strongest projects ownership technical complexity $role$level", "weakest resume areas missing detail interview probe $role",
+        return listOf("strongest projects ownership technical complexity $role", "weakest resume areas missing detail interview probe $role",
             "system design architecture scaling data flow production tradeoffs", "debugging incident response observability database cache production",
             "collaboration leadership stakeholder tradeoff communication", "job description requirements role specific tooling $jd")
     }
     private fun feedbackQueries(input: CoachFeedbackInput) = listOf(fallback(input.questionText(), ""), input.expectedSignals().joinToString(" "),
-        fallback(input.category(), "") + " " + fallback(input.targetRole(), ""),
-        "source experience and project context expected evidence answer evaluation " + SenioritySettings.forValue(input.seniority()).retrievalTerms)
+        fallback(input.category(), ""), "source experience and project context expected evidence answer evaluation")
 
     private fun localSnippets(document: ResolvedDocument): List<RagContextSnippet> {
         val chunks = if (document.persistedChunks().isEmpty()) chunker.chunk(document.normalizedText()).map {

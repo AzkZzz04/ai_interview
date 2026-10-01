@@ -12,7 +12,6 @@ import dev.jiaming.ai_interview.jobs.JobStatus
 import dev.jiaming.ai_interview.jobs.JobType
 import java.nio.charset.StandardCharsets
 import java.time.Instant
-import java.util.Optional
 import java.util.UUID
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -32,13 +31,12 @@ import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
 
 class ResumeControllerTests {
-	private val service = Mockito.mock(ResumeUploadService::class.java)
 	private val submissionService = Mockito.mock(ResumeJobSubmissionService::class.java)
 	private val libraryService = Mockito.mock(ResumeLibraryService::class.java)
 	private val scoreService = Mockito.mock(ResumeScoreService::class.java)
 	private val guard = RedisRequestGuard(StringRedisTemplate(), RedisUsageProperties("resume-controller-test:",
 		RedisUsageProperties.RateLimit(false, 60, 12, 20), RedisUsageProperties.Idempotency(false, 86_400)), ObjectMapper())
-	private val mockMvc = standaloneSetup(ResumeController(service, submissionService, libraryService, scoreService, guard)).build()
+	private val mockMvc = standaloneSetup(ResumeController(submissionService, libraryService, scoreService, guard)).build()
 
 	@Test
 	fun uploadsResumeAndReturnsAcceptedJob() {
@@ -88,21 +86,5 @@ class ResumeControllerTests {
 			.andExpect(status().isAccepted)
 			.andExpect(jsonPath("$.jobType").value("RESUME_SCORE"))
 			.andExpect(jsonPath("$.inputRefs.resumeId").value(resumeId.toString()))
-	}
-
-	@Test
-	fun returnsCurrentCompletedResume() {
-		Mockito.`when`(service.current()).thenReturn(Optional.of(ResumeUploadResponse(UUID.randomUUID().toString(), "resume.txt", "text/plain", "text/plain", 24, 24, 24, "SKILLS\nJava Spring Boot", listOf(ResumeChunkResponse(0, "Skills", "Java Spring Boot", 16)), Instant.now())))
-		mockMvc.perform(get("/api/resumes/current"))
-			.andExpect(status().isOk)
-			.andExpect(jsonPath("$.originalFilename").value("resume.txt"))
-	}
-
-	@Test
-	fun returnsNotFoundWhenNoResumeHasBeenUploaded() {
-		val emptyService = Mockito.mock(ResumeUploadService::class.java)
-		Mockito.`when`(emptyService.current()).thenReturn(Optional.empty())
-		val emptyMockMvc = standaloneSetup(ResumeController(emptyService, submissionService, libraryService, scoreService, guard)).build()
-		emptyMockMvc.perform(get("/api/resumes/current")).andExpect(status().isNotFound)
 	}
 }

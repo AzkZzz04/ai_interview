@@ -79,7 +79,7 @@ class SupabaseJobStatusReaderTests {
         val localJob = BackgroundJob(
             id = jobId,
             userId = userId,
-            jobType = JobType.ANALYSIS,
+            jobType = JobType.RESUME_SCORE,
             resourceType = "resource",
             resourceId = resourceId,
             status = JobStatus.QUEUED,
@@ -245,7 +245,7 @@ class SupabaseJobStatusReaderTests {
     }
 
     @Test
-    fun `maps attempt feedback jobs to their attempt set and pair refs while legacy feedback keeps its resume ref`() = runBlocking {
+    fun `maps attempt feedback jobs to their attempt set and pair refs`() = runBlocking {
         val attemptId = UUID.randomUUID()
         val practiceSetId = UUID.randomUUID()
         val resumeId = UUID.randomUUID()
@@ -268,20 +268,6 @@ class SupabaseJobStatusReaderTests {
             assertEquals(74, (status.result as Map<*, *>)["score"])
             assertNull((status.result as Map<*, *>)["followUpQuestion"])
         } finally { client.close() }
-
-        val (legacyClient, legacyReader) = reader(row(
-            jobType = "ANSWER_FEEDBACK",
-            stage = "SCORING_ANSWER",
-            requestPayload = """{"payloadVersion":2,"jobDescriptionId":"$jobDescriptionId","answerText":"PRIVATE_ANSWER"}""",
-            resourceType = "\"interview-answer\""
-        ))
-        try {
-            val refs = legacyReader.findForUser(jobId, userId)!!.inputRefs
-            assertEquals(resourceId, refs.resumeId)
-            assertEquals(jobDescriptionId, refs.targetJobId)
-            assertNull(refs.practiceSetId)
-            assertNull(refs.attemptId)
-        } finally { legacyClient.close() }
     }
 
     @Test
@@ -375,7 +361,7 @@ class SupabaseJobStatusReaderTests {
         lastError: String = "null",
         errorCode: String = "\"STALE_CODE\"",
         retryable: String = "true",
-        jobType: String = "ANALYSIS",
+        jobType: String = "RESUME_SCORE",
         stage: String = "QUEUED"
     ) = """[{"id":"$job","user_id":"$user","job_type":"$jobType","status":"QUEUED","stage":"$stage","attempts":2,"result_payload":$resultPayload,"last_error":$lastError,"error_code":$errorCode,"retryable":$retryable,"created_at":$createdAt,"started_at":null,"completed_at":null,"resource_id":"$resourceId","request_payload":$requestPayload,"max_attempts":$maxAttempts,"resource_type":$resourceType}]"""
 

@@ -30,7 +30,6 @@ class ResumeUploadServiceTests {
 		assertThat(response.detectedContentType).startsWith("text/plain")
 		assertThat(response.normalizedText).contains("Java, Spring Boot, PostgreSQL")
 		assertThat(response.chunks.map { it.section }).contains("Skills", "Experience")
-		assertThat(service.current()).isEmpty()
 	}
 
 	@Test

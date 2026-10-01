@@ -97,7 +97,7 @@ class TargetJobIntegrationTests {
             """
                 INSERT INTO ai_interview_app.background_jobs
                     (id, user_id, job_type, resource_type, resource_id, status, stage, request_payload, max_attempts)
-                VALUES (?, ?, 'ANALYSIS', 'resume', ?, 'QUEUED', 'QUEUED', ?::jsonb, 3)
+                VALUES (?, ?, 'RESUME_SCORE', 'resume', ?, 'QUEUED', 'QUEUED', ?::jsonb, 3)
             """.trimIndent(),
             jobId,
             userId,
@@ -109,7 +109,7 @@ class TargetJobIntegrationTests {
             """
                 INSERT INTO ai_interview_app.background_jobs
                     (id, user_id, job_type, resource_type, resource_id, status, stage, request_payload, max_attempts)
-                VALUES (?, ?, 'ANALYSIS', 'target-job', ?, 'QUEUED', 'QUEUED', '{}'::jsonb, 3)
+                VALUES (?, ?, 'JOB_FIT', 'target-job', ?, 'QUEUED', 'QUEUED', '{}'::jsonb, 3)
             """.trimIndent(),
             directJobId,
             userId,

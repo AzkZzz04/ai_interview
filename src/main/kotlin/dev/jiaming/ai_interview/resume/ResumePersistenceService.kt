@@ -236,23 +236,6 @@ class ResumePersistenceService(
             """.trimIndent(), resumeId, expectedStorageKey
     ) == 1
 
-    fun findLatest(): Optional<ResumeUploadResponse> {
-        val userId = localUserService.localUserId()
-        val resumes = jdbcTemplate.query(
-            """
-                SELECT id, original_filename, content_type, detected_content_type, size_bytes,
-                       raw_text, normalized_text, created_at
-                FROM ai_interview_app.resumes
-                WHERE user_id = ? AND processing_status = 'READY'
-                  AND normalized_text IS NOT NULL AND btrim(normalized_text) <> ''
-                ORDER BY created_at DESC
-                LIMIT 1
-                """.trimIndent(),
-            RowMapper { rs, _ -> toUploadResponse(rs) }, userId
-        )
-        return resumes.stream().findFirst()
-    }
-
     fun findProcessingStatus(userId: UUID, resumeId: UUID): Optional<String> = jdbcTemplate.query(
         "SELECT processing_status FROM ai_interview_app.resumes WHERE id = ? AND user_id = ?",
         RowMapper { rs, _ -> rs.getString("processing_status") }, resumeId, userId
@@ -266,48 +249,6 @@ class ResumePersistenceService(
               AND normalized_text IS NOT NULL AND btrim(normalized_text) <> ''
             """.trimIndent(), resumeId, userId
     )
-
-    fun findLatestReadyDocument(userId: UUID): Optional<ResolvedDocument> = queryDocument(
-        """
-            SELECT id, normalized_text, content_hash
-            FROM ai_interview_app.resumes
-            WHERE user_id = ? AND processing_status = 'READY'
-              AND normalized_text IS NOT NULL AND btrim(normalized_text) <> ''
-            ORDER BY created_at DESC LIMIT 1
-            """.trimIndent(), userId
-    )
-
-    fun findReadyDocumentByContent(userId: UUID, contentHash: String, normalizedText: String): Optional<ResolvedDocument> = queryDocument(
-        """
-            SELECT id, normalized_text, content_hash
-            FROM ai_interview_app.resumes
-            WHERE user_id = ? AND processing_status = 'READY' AND content_hash = ? AND normalized_text = ?
-            ORDER BY created_at DESC LIMIT 1
-            """.trimIndent(), userId, contentHash, normalizedText
-    )
-
-    @Transactional
-    fun findOrCreateDocument(userId: UUID, rawText: String): ResolvedDocument {
-        val normalizedText = normalizer.normalize(rawText)
-        val contentHash = contentHasher.sha256(normalizedText)
-        lockOwner(userId)
-        val existing = findReadyDocumentByContent(userId, contentHash, normalizedText)
-        if (existing.isPresent) return existing.get()
-        val resumeId = UUID.randomUUID()
-        jdbcTemplate.update(
-            """
-                INSERT INTO ai_interview_app.resumes (
-                    id, user_id, original_filename, content_type, detected_content_type,
-                    size_bytes, raw_text, normalized_text, content_hash, parsed_skills,
-                    processing_status, name, source, updated_at
-                )
-                VALUES (?, ?, 'pasted-resume.txt', 'text/plain', 'text/plain', ?, ?, ?, ?, '[]'::jsonb, 'READY', 'Pasted resume', 'PASTE', now())
-                """.trimIndent(),
-            resumeId, userId, normalizedText.toByteArray(StandardCharsets.UTF_8).size, rawText, normalizedText, contentHash
-        )
-        insertChunks(resumeId, normalizedText)
-        return findReadyDocument(userId, resumeId).orElseThrow()
-    }
 
     private fun findById(resumeId: UUID): Optional<ResumeUploadResponse> = jdbcTemplate.query(
         """
