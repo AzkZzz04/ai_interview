@@ -10,6 +10,7 @@ import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest
 import dev.jiaming.ai_interview.document.DocumentReferenceResolver
 import dev.jiaming.ai_interview.document.ResolvedJobInputs
 import dev.jiaming.ai_interview.experience.ExperienceSplitJobPayload
+import dev.jiaming.ai_interview.practice.PracticeQuestionsPayload
 import dev.jiaming.ai_interview.resume.ResumeExtractionJobPayload
 import dev.jiaming.ai_interview.score.ResumeScorePayload
 
@@ -56,6 +57,10 @@ class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobS
             JobType.ANSWER_FEEDBACK -> feedback(job, leaseToken)
             JobType.EXPERIENCE_SPLIT -> convert(job.requestPayload, ExperienceSplitJobPayload::class.java)
             JobType.JOB_FIT -> jobFit(job)
+            JobType.PRACTICE_QUESTIONS -> {
+                require(isCurrent(job.requestPayload, PracticeQuestionsPayload.CURRENT_VERSION)) { "Invalid PracticeQuestionsPayload job payload" }
+                convert(job.requestPayload, PracticeQuestionsPayload::class.java)
+            }
         }
         require(payloadType.isInstance(payload)) { "Decoded payload for ${job.jobType} is not ${payloadType.simpleName}" }
         return payload

@@ -14,10 +14,12 @@ class JobHandlerRegistryTests {
 		val feedback = handler(JobType.ANSWER_FEEDBACK)
 		val experienceSplit = handler(JobType.EXPERIENCE_SPLIT)
 		val fit = handler(JobType.JOB_FIT)
-		val registry = JobHandlerRegistry(listOf(resume, score, analysis, feedback, experienceSplit, fit))
+		val practice = handler(JobType.PRACTICE_QUESTIONS)
+		val registry = JobHandlerRegistry(listOf(resume, score, analysis, feedback, experienceSplit, fit, practice))
 		assertThat(registry.require(JobType.ANALYSIS)).isSameAs(analysis)
 		assertThat(registry.require(JobType.RESUME_SCORE)).isSameAs(score)
 		assertThat(registry.require(JobType.EXPERIENCE_SPLIT)).isSameAs(experienceSplit)
+		assertThat(registry.require(JobType.PRACTICE_QUESTIONS)).isSameAs(practice)
 	}
 
 	@Test

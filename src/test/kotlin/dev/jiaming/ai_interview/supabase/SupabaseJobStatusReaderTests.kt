@@ -197,6 +197,31 @@ class SupabaseJobStatusReaderTests {
     }
 
     @Test
+    fun `maps practice question jobs to their set and pair refs`() = runBlocking {
+        val practiceSetId = UUID.randomUUID()
+        val resumeId = UUID.randomUUID()
+        val targetJobId = UUID.randomUUID()
+        val (client, reader) = reader(row(
+            jobType = "PRACTICE_QUESTIONS",
+            stage = "GENERATING_QUESTIONS",
+            requestPayload = """{"practiceSetId":"$practiceSetId","resumeId":"$resumeId","targetJobId":"$targetJobId"}""",
+            resultPayload = """{"questions":[{"id":"$jobId","order":1,"origin":"AI","text":"Why Kafka?","rationale":"The job needs it.","category":null,"expectedSignals":[],"attempts":[]}]}""",
+            resourceType = "\"practice-set\""
+        ))
+        try {
+            val status = reader.findForUser(jobId, userId)!!
+            assertEquals(JobType.PRACTICE_QUESTIONS, status.jobType)
+            assertEquals(JobStage.GENERATING_QUESTIONS, status.stage)
+            assertEquals(practiceSetId, status.inputRefs.practiceSetId)
+            assertEquals(resumeId, status.inputRefs.resumeId)
+            assertEquals(targetJobId, status.inputRefs.targetJobId)
+            val question = ((status.result as Map<*, *>)["questions"] as List<*>).single() as Map<*, *>
+            assertEquals("The job needs it.", question["rationale"])
+            assertEquals(emptyList<Any>(), question["attempts"])
+        } finally { client.close() }
+    }
+
+    @Test
     fun `resume fallback is resource aware and malformed reference UUIDs stay null`() = runBlocking {
         val invalidRefs = """{"resumeId":"invalid","jobDescriptionId":"invalid","practiceSetId":"invalid","attemptId":"invalid"}"""
         val (resumeClient, resumeReader) = reader(row(requestPayload = invalidRefs, resourceType = "\"resume\""))

@@ -3,6 +3,7 @@ package dev.jiaming.ai_interview.coach
 import dev.jiaming.ai_interview.experience.ExperienceSplitResult
 import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.gemini.GeminiException
+import dev.jiaming.ai_interview.practice.PracticeQuestionDrafts
 import dev.jiaming.ai_interview.score.ResumeScoreResult
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.http.HttpStatus
@@ -30,6 +31,12 @@ class AiResumeCoachService(
     fun generateQuestions(input: CoachAnalysisInput): InterviewQuestionsResponse {
         val context = ragContextService.questionContext(input)
         return responseMapper.normalizeQuestions(generateStructured(promptBuilder.buildQuestionPrompt(input, context), InterviewQuestionsResponse::class.java), context.sourceContextIds)
+    }
+
+    fun generatePracticeQuestions(input: CoachAnalysisInput): PracticeQuestionDrafts {
+        val context = ragContextService.practiceQuestionContext(input)
+        return generateStructured(promptBuilder.buildPracticeQuestionPrompt(input, context), PracticeQuestionsResponse::class.java,
+            responseMapper::normalizePracticeQuestions)
     }
 
     fun scoreAnswer(input: CoachFeedbackInput): AnswerFeedbackResponse {

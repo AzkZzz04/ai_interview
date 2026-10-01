@@ -31,8 +31,10 @@ class CoachRagContextService @Autowired constructor(
         SelectionProfile("assessment", properties.assessmentContextBudget(), properties.assessmentJobDescriptionMinimum()))
     fun jobFitContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), jobFitQueries(input),
         SelectionProfile("job-fit", properties.assessmentContextBudget(), properties.assessmentJobDescriptionMinimum()))
-    fun questionContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), questionQueries(input),
+    fun questionContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), questionQueries(input, withSeniority = true),
         SelectionProfile("questions", properties.questionContextBudget(), properties.questionJobDescriptionMinimum()))
+    fun practiceQuestionContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), questionQueries(input, withSeniority = false),
+        SelectionProfile("practice-questions", properties.questionContextBudget(), properties.questionJobDescriptionMinimum()))
     fun feedbackContext(input: CoachFeedbackInput) = ragContext(input.resume(), input.jobDescription(), feedbackQueries(input),
         SelectionProfile("feedback", properties.feedbackContextBudget(), properties.feedbackJobDescriptionMinimum()))
 
@@ -152,10 +154,10 @@ class CoachRagContextService @Autowired constructor(
             "job description requirements missing candidate evidence and role alignment $jd",
         )
     }
-    private fun questionQueries(input: CoachAnalysisInput): List<String> {
-        val role = fallback(input.targetRole(), "Software Engineer"); val seniority = fallback(input.seniority(), "Mid-level")
-        val terms = SenioritySettings.forValue(input.seniority()).retrievalTerms; val jd = jobDescriptionQueryExcerpt(input.jobDescription())
-        return listOf("strongest projects ownership technical complexity $role $seniority $terms", "weakest resume areas missing detail interview probe $role",
+    private fun questionQueries(input: CoachAnalysisInput, withSeniority: Boolean): List<String> {
+        val role = fallback(input.targetRole(), "Software Engineer"); val jd = jobDescriptionQueryExcerpt(input.jobDescription())
+        val level = if (!withSeniority) "" else " ${fallback(input.seniority(), "Mid-level")} ${SenioritySettings.forValue(input.seniority()).retrievalTerms}"
+        return listOf("strongest projects ownership technical complexity $role$level", "weakest resume areas missing detail interview probe $role",
             "system design architecture scaling data flow production tradeoffs", "debugging incident response observability database cache production",
             "collaboration leadership stakeholder tradeoff communication", "job description requirements role specific tooling $jd")
     }

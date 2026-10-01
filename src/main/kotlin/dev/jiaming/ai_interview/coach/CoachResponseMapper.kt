@@ -12,6 +12,8 @@ import dev.jiaming.ai_interview.fit.FitFeedback
 import dev.jiaming.ai_interview.fit.JobFitResult
 import dev.jiaming.ai_interview.fit.MatchedRequirement
 import dev.jiaming.ai_interview.fit.MissingRequirement
+import dev.jiaming.ai_interview.practice.PracticeQuestionDraft
+import dev.jiaming.ai_interview.practice.PracticeQuestionDrafts
 import org.springframework.stereotype.Component
 import java.io.IOException
 import java.time.Instant
@@ -108,6 +110,25 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
             .map { FitFeedback(normalizeFitPriority(it.priority), it.message!!.trim()) },
     )
 
+    /** Keeps 3 to 8 questions that have both text and a rationale. Fewer than 3 is invalid, so the caller's repair attempt runs. */
+    fun normalizePracticeQuestions(response: PracticeQuestionsResponse): PracticeQuestionDrafts {
+        val drafts = response.questions.orEmpty().filterNotNull()
+            .filter { !it.questionText.isNullOrBlank() && !it.rationale.isNullOrBlank() }
+            .take(MAX_PRACTICE_QUESTIONS)
+            .map { question ->
+                PracticeQuestionDraft(
+                    question.questionText!!.trim(), question.rationale!!.trim(), question.category?.trim()?.ifEmpty { null },
+                    question.expectedSignals.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).take(6),
+                )
+            }
+        if (drafts.size < MIN_PRACTICE_QUESTIONS) throw GeminiException(
+            GeminiErrorCode.INVALID_RESPONSE,
+            "Gemini returned ${drafts.size} practice questions with a rationale; at least $MIN_PRACTICE_QUESTIONS are required",
+            false
+        )
+        return PracticeQuestionDrafts(drafts)
+    }
+
     private fun nonEmpty(values: List<String>?): List<String> = values.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).take(6)
         .ifEmpty { listOf("No specific evidence returned") }
     private fun sourceContextIds(responseIds: List<String>?, fallbackIds: List<String>): List<String> {
@@ -155,5 +176,7 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
 
     private companion object {
         val PLACEHOLDER = Regex("""\[[^\]\r\n]+\]""")
+        const val MIN_PRACTICE_QUESTIONS = 3
+        const val MAX_PRACTICE_QUESTIONS = 8
     }
 }

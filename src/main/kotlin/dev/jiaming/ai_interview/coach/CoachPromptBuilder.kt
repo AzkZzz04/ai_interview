@@ -143,6 +143,31 @@ class CoachPromptBuilder {
         """.trimIndent().format(fallback(input.targetRole(), "Software Engineer"), fallback(input.seniority(), "Mid-level"), settings.questionGuidance, context.context)
     }
 
+    fun buildPracticeQuestionPrompt(input: CoachAnalysisInput, context: CoachRagContext): String = """
+        You are generating interview practice questions for one candidate and one target job.
+        Use only the retrieved resume and job-description context below.
+        Create questions that test the candidate's actual claimed experience against the target job's requirements.
+        Do not assume facts outside the retrieved context.
+        Choose between 3 and 8 questions, as many as the job description's distinct requirements justify.
+        Give every question a one-sentence rationale naming the job requirement or resume claim it tests.
+        Return only valid JSON matching this shape:
+        {
+          "questions": [
+            {
+              "category": "Technical depth",
+              "questionText": "question",
+              "rationale": "why this question matters for this job",
+              "expectedSignals": ["signal 1", "signal 2", "signal 3"]
+            }
+          ]
+        }
+
+        Target role: %s
+
+        Retrieved context:
+        %s
+    """.trimIndent().format(fallback(input.targetRole(), "target job"), context.context)
+
     fun buildFeedbackPrompt(input: CoachFeedbackInput, context: CoachRagContext): String {
         val settings = SenioritySettings.forValue(input.seniority())
         return """

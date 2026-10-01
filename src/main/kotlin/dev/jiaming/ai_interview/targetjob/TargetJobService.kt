@@ -62,11 +62,16 @@ class TargetJobService(
 
     fun deleteImpact(targetJobId: UUID): TargetJobDeleteImpact {
         requireOwned(targetJobId)
+        val userId = localUserService.localUserId()
         val fits = jdbcTemplate.queryForObject(
             "SELECT count(*) FROM ai_interview_app.job_fits WHERE target_job_id = ? AND user_id = ? AND result_payload IS NOT NULL",
-            Int::class.java, targetJobId, localUserService.localUserId()
+            Int::class.java, targetJobId, userId
         ) ?: 0
-        return TargetJobDeleteImpact(fits = fits)
+        val practiceSets = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM ai_interview_app.practice_sets WHERE target_job_id = ? AND user_id = ?",
+            Int::class.java, targetJobId, userId
+        ) ?: 0
+        return TargetJobDeleteImpact(fits = fits, practiceSets = practiceSets)
     }
 
     @Transactional

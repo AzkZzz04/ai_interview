@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import dev.jiaming.ai_interview.interview.AnalysisPersistenceInput
 import dev.jiaming.ai_interview.interview.FeedbackPersistenceInput
 import dev.jiaming.ai_interview.interview.InterviewPersistenceService
+import dev.jiaming.ai_interview.practice.PracticeQuestionDraft
 import dev.jiaming.ai_interview.score.ResumeScoreResult
 
 @Service
@@ -78,6 +79,29 @@ class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate,
             WHERE id = ? AND user_id = ?
             """, response.toString(), fitId, userId)
         if (updated != 1) throw IllegalStateException("Job fit $fitId was not found for job owner $userId")
+    }
+    @Transactional
+    fun materializePracticeQuestions(job: BackgroundJob, leaseToken: UUID, practiceSetId: UUID, drafts: List<PracticeQuestionDraft>): UUID {
+        lockOwnedLease(job.id, leaseToken)
+        val userId = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+        return materialize(job.id, JobEffectType.PRACTICE_QUESTIONS) { _ ->
+            // Takes the set's row lock first, so user-question adds wait for the AI questions instead of interleaving.
+            val updated = jdbcTemplate.update(
+                "UPDATE ai_interview_app.practice_sets SET updated_at = now() WHERE id = ? AND user_id = ?", practiceSetId, userId
+            )
+            if (updated != 1) throw IllegalStateException("Practice set $practiceSetId was not found for job owner $userId")
+            drafts.forEachIndexed { index, draft ->
+                jdbcTemplate.update(
+                    """
+                        INSERT INTO ai_interview_app.practice_questions
+                            (practice_set_id, user_id, origin, order_index, text, rationale, category, expected_signals)
+                        VALUES (?, ?, 'AI', ?, ?, ?, ?, ?::jsonb)
+                    """.trimIndent(),
+                    practiceSetId, userId, index + 1, draft.text, draft.rationale, draft.category,
+                    objectMapper.writeValueAsString(draft.expectedSignals)
+                )
+            }
+        }
     }
     @Transactional
     fun <T> withOwnedLease(job: BackgroundJob, leaseToken: UUID, work: Supplier<T>): T {

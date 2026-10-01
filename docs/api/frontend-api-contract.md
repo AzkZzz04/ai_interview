@@ -130,10 +130,10 @@ kept and marked stale (section 6), not deleted.
 | 6.2 | `POST /api/resumes/{resumeId}/target-jobs/{targetJobId}/fit` | existing | Fit page |
 | 6.3 | `GET /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | new | Fit page |
 | 6.4 | `POST /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | new | Fit page |
-| 7.1 | `POST /api/practice-sets` | new | Mode chooser |
-| 7.2 | `GET /api/practice-sets/{setId}` | new | Practice page |
-| 7.3 | `POST /api/practice-sets/{setId}/retry` | new | Practice page (generation failed) |
-| 7.4 | `POST /api/practice-sets/{setId}/questions` | new | Practice page (add your own question) |
+| 7.1 | `POST /api/practice-sets` | existing | Mode chooser |
+| 7.2 | `GET /api/practice-sets/{setId}` | existing | Practice page |
+| 7.3 | `POST /api/practice-sets/{setId}/retry` | existing | Practice page (generation failed) |
+| 7.4 | `POST /api/practice-sets/{setId}/questions` | existing | Practice page (add your own question) |
 | 7.5 | `POST /api/practice-sets/{setId}/questions/{questionId}/attempts` | new | Practice page |
 | 7.6 | `POST /api/attempts/{attemptId}/retry` | new | Practice page |
 | 8.1 | `GET /api/jobs/{jobId}` | existing | Every AI step |

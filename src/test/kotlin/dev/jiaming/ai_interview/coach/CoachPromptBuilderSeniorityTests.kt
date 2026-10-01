@@ -44,6 +44,18 @@ class CoachPromptBuilderSeniorityTests {
 		assertThat(prompt).doesNotContain("Seniority")
 	}
 
+	@Test
+	fun practiceQuestionPromptAsksForThreeToEightRationalesWithoutSeniority() {
+		val jobDescription = ResolvedDocument(DocumentSourceType.JOB_DESCRIPTION, UUID.randomUUID(), "job-hash", "REQUIREMENTS\nKafka", emptyList())
+		val prompt = promptBuilder.buildPracticeQuestionPrompt(
+			CoachAnalysisInput(resume(), Optional.of(jobDescription), null, null),
+			CoachRagContext("questions", "Job: Kafka required", listOf("job_description:requirements:0"), false),
+		)
+
+		assertThat(prompt).contains("between 3 and 8 questions", "rationale", "questionText", "expectedSignals", "Kafka required")
+		assertThat(prompt).doesNotContain("Seniority", "Mid-level", "exactly 8")
+	}
+
 	private fun analysisInput() = CoachAnalysisInput(resume(), Optional.empty(), "Software Engineer", "Intern")
 	private fun resume() = ResolvedDocument(DocumentSourceType.RESUME, UUID.randomUUID(), "hash", "PROJECTS\nBuilt a project", listOf(DocumentChunk(0, "Projects", "Built a project", "resume:projects:0")))
 }

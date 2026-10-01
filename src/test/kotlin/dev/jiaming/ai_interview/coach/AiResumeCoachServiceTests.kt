@@ -86,6 +86,24 @@ class AiResumeCoachServiceTests {
 		Mockito.verifyNoInteractions(contextService)
 	}
 
+	@Test fun practiceQuestionsBelowTheMinimumGoThroughTheSingleRepairAttempt() {
+		val input = CoachAnalysisInput(input().resume(), Optional.empty(), null, null)
+		Mockito.`when`(contextService.practiceQuestionContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(client.generateJson(anyString())).thenReturn(practiceJson(2)).thenReturn(practiceJson(4))
+
+		val drafts = service.generatePracticeQuestions(input).drafts
+
+		assertThat(drafts).hasSize(4)
+		val prompts = org.mockito.kotlin.argumentCaptor<String>()
+		Mockito.verify(client, Mockito.times(2)).generateJson(prompts.capture())
+		assertThat(prompts.allValues[1]).contains("Repair the JSON response", "at least 3")
+		Mockito.verify(contextService, Mockito.never()).questionContext(input)
+	}
+
+	private fun practiceJson(count: Int) = (1..count).joinToString(",", """{"questions":[""", "]}") {
+		"""{"category":"Depth","questionText":"Question $it?","rationale":"Reason $it","expectedSignals":["signal"]}"""
+	}
+
 	private fun input(): CoachAnalysisInput {
 		val resume = ResolvedDocument(DocumentSourceType.RESUME, UUID.randomUUID(), "hash", "EXPERIENCE\nBuilt APIs", listOf(DocumentChunk(0, "Experience", "Built APIs", "resume:experience:0")))
 		return CoachAnalysisInput(resume, Optional.empty(), "Backend Engineer", "Mid-level")

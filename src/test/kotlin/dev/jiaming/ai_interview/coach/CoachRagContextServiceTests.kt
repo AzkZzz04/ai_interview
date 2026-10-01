@@ -64,6 +64,26 @@ class CoachRagContextServiceTests {
     }
 
     @Test
+    fun practiceQuestionRetrievalReusesTheQuestionQueriesWithoutSeniority() {
+        val indexingService = Mockito.mock(RagIndexingService::class.java)
+        val retrievalService = Mockito.mock(RagRetrievalService::class.java)
+        val service = service(indexingService, retrievalService)
+        val resume = document(DocumentSourceType.RESUME, "resume-hash", "R".repeat(6_100), listOf(
+            DocumentChunk(0, "Experience", "Resume experience", "resume:experience:0")
+        ))
+        val handle = RagDocumentIndexHandle(UUID.randomUUID(), 1L)
+        Mockito.`when`(indexingService.ensureIndexed(resume)).thenReturn(Optional.of(handle))
+        Mockito.`when`(retrievalService.retrieve(anyString(), any<RagDocumentIndexHandle>(), eq(6))).thenReturn(emptyList())
+
+        service.practiceQuestionContext(CoachAnalysisInput(resume, Optional.empty(), null, null))
+
+        val queries = org.mockito.kotlin.argumentCaptor<String>()
+        Mockito.verify(retrievalService, Mockito.times(6)).retrieve(queries.capture(), any<RagDocumentIndexHandle>(), eq(6))
+        assertThat(queries.allValues.first()).startsWith("strongest projects ownership technical complexity")
+        assertThat(queries.allValues).noneMatch { it.contains("Mid-level") }
+    }
+
+    @Test
     fun localDocumentContextIsReservedWhenAnotherDocumentUsesVectorRetrieval() {
         val indexingService = Mockito.mock(RagIndexingService::class.java)
         val retrievalService = Mockito.mock(RagRetrievalService::class.java)

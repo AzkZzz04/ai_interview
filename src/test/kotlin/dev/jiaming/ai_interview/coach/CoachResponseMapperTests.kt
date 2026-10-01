@@ -1,6 +1,7 @@
 package dev.jiaming.ai_interview.coach
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.gemini.GeminiException
 import dev.jiaming.ai_interview.experience.ExperienceSplitResult
 import dev.jiaming.ai_interview.experience.ExperienceSplitItem
@@ -112,5 +113,39 @@ class CoachResponseMapperTests {
 		assertThat(normalized.matchedRequirements).isEmpty()
 		assertThat(normalized.missingRequirements).isEmpty()
 		assertThat(normalized.feedback).isEmpty()
+	}
+
+	@Test
+	fun fewerThanThreeUsablePracticeQuestionsIsAnInvalidResponseSoTheRepairPathRuns() {
+		val response = mapper.parse(practiceQuestionsJson(2), PracticeQuestionsResponse::class.java)
+
+		assertThatThrownBy { mapper.normalizePracticeQuestions(response) }
+			.isInstanceOfSatisfying(GeminiException::class.java) { assertThat(it.code()).isEqualTo(GeminiErrorCode.INVALID_RESPONSE) }
+	}
+
+	@Test
+	fun practiceQuestionsWithoutARationaleDoNotCountTowardTheMinimum() {
+		val response = mapper.parse(
+			"""{"questions":[{"questionText":"Q1?","rationale":"R1"},{"questionText":"Q2?","rationale":"R2"},{"questionText":"Q3?","rationale":"  "}]}""",
+			PracticeQuestionsResponse::class.java,
+		)
+
+		assertThatThrownBy { mapper.normalizePracticeQuestions(response) }.isInstanceOf(GeminiException::class.java)
+	}
+
+	@Test
+	fun twelvePracticeQuestionsAreTrimmedToEightEachWithARationale() {
+		val response = mapper.parse(practiceQuestionsJson(12), PracticeQuestionsResponse::class.java)
+
+		val drafts = mapper.normalizePracticeQuestions(response).drafts
+
+		assertThat(drafts).hasSize(8)
+		assertThat(drafts.map { it.text }).containsExactly("Question 1?", "Question 2?", "Question 3?", "Question 4?", "Question 5?", "Question 6?", "Question 7?", "Question 8?")
+		assertThat(drafts).allSatisfy { assertThat(it.rationale).isNotBlank() }
+		assertThat(drafts.first()).isEqualTo(dev.jiaming.ai_interview.practice.PracticeQuestionDraft("Question 1?", "Reason 1", "Technical depth", listOf("signal")))
+	}
+
+	private fun practiceQuestionsJson(count: Int) = (1..count).joinToString(",", """{"questions":[""", "]}") {
+		""" {"category":" Technical depth ","questionText":" Question $it? ","rationale":" Reason $it ","expectedSignals":[" signal ",""]}"""
 	}
 }
