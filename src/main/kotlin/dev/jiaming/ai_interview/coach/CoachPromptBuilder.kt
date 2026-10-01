@@ -205,6 +205,38 @@ class CoachPromptBuilder {
             fallback(input.category(), "Interview"), fallback(input.questionText(), ""), input.expectedSignals().joinToString(", "), context.context, truncate(input.answerText(), ANSWER_PROMPT_LIMIT))
     }
 
+    /** Scores one practice attempt against its question and the pair's resume and job description, without seniority. */
+    fun buildPracticeFeedbackPrompt(input: CoachFeedbackInput, context: CoachRagContext): String = """
+        You are coaching a candidate after one practice interview answer for one target job.
+        Score the answer against the question, its expected signals, and the retrieved resume and job-description context. Be specific and actionable.
+        Do not reward claims that are not supported by the answer.
+        Do not invent resume details beyond the retrieved context.
+        For sourceContextIds, copy only exact contextId values shown in the retrieved context.
+        Return only valid JSON matching this shape:
+        {
+          "score": 0,
+          "summary": "one sentence",
+          "nextStep": "one concrete next practice step",
+          "strengths": ["1-3 strengths"],
+          "gaps": ["1-3 gaps"],
+          "betterAnswerOutline": ["context", "action", "tradeoff", "result"],
+          "followUpQuestion": "one follow-up question",
+          "sourceContextIds": ["resume:experience:0"]
+        }
+        Score must be an integer from 0 to 100.
+
+        Question category: %s
+        Question: %s
+        Expected signals: %s
+
+        Retrieved context:
+        %s
+
+        Candidate answer:
+        %s
+    """.trimIndent().format(fallback(input.category(), "Interview"), fallback(input.questionText(), ""),
+        input.expectedSignals().joinToString(", ").ifEmpty { "none listed" }, context.context, truncate(input.answerText(), ANSWER_PROMPT_LIMIT))
+
     fun buildRepairPrompt(originalPrompt: String, invalidOutput: String, parseError: String?): String = """
         Repair the JSON response below so it satisfies the original request exactly.
         Return only corrected JSON. Do not add markdown or commentary.

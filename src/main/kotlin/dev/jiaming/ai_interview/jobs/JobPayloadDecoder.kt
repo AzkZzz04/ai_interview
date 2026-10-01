@@ -26,7 +26,12 @@ class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobS
         return upgraded
     }
 
-    fun feedback(job: BackgroundJob, leaseToken: UUID): FeedbackJobPayload {
+    fun feedback(job: BackgroundJob, leaseToken: UUID): AnswerFeedbackJobPayload {
+        // Attempt jobs are recognised by their resource type, so a legacy resume-backed job never takes this path.
+        if (job.resourceType == AttemptFeedbackPayload.RESOURCE) {
+            require(isCurrent(job.requestPayload, AttemptFeedbackPayload.CURRENT_VERSION)) { "Invalid AttemptFeedbackPayload job payload" }
+            return convert(job.requestPayload, AttemptFeedbackPayload::class.java)
+        }
         if (isCurrent(job.requestPayload, FeedbackJobPayload.CURRENT_VERSION)) return convert(job.requestPayload, FeedbackJobPayload::class.java)
         val legacy = convert(job.requestPayload, AnswerFeedbackRequest::class.java)
         val inputs = documentResolver.resolveLegacy(requireUser(job), legacy.resumeId, legacy.resumeText, legacy.jobDescriptionId, legacy.jobDescription)

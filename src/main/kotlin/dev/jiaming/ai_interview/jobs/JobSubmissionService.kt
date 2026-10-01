@@ -14,7 +14,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionOperations
 import org.springframework.web.server.ResponseStatusException
 import dev.jiaming.ai_interview.coach.AiAnalysisRequest
-import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
 import dev.jiaming.ai_interview.common.RuntimeModeProperties
@@ -54,25 +53,6 @@ class JobSubmissionService @Autowired constructor(
         val source = AnalysisFingerprint(inputs.resume().contentHash(), inputs.jobDescription().map { it.contentHash() }.orElse(""), normalizeLabel(request.targetRole), normalizeLabel(request.seniority))
         return createOrReuse(JobType.ANALYSIS, "resume", inputs.resume().resourceId(), payload, fingerprint("analysis", source))
     }
-    fun submitFeedback(request: AnswerFeedbackRequest): JobAcceptedResponse {
-        assertApiAvailable()
-        val answerText = request.answerText?.takeIf { it.isNotBlank() }
-            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer text is required")
-        return submitWithHttpProtection("answer-feedback", request) {
-            requestGuard.assertAiAllowed(AI_JOB_ACTION)
-            inTransaction { submitFeedbackTransaction(request, answerText.trim()) }
-        }
-    }
-    private fun submitFeedbackTransaction(request: AnswerFeedbackRequest, answerText: String): JobAcceptedResponse {
-        val userId = localUserService.localUserId()
-        val inputs = documentResolver.resolveForSubmission(userId, request.resumeId, request.resumeText, request.jobDescriptionId, request.jobDescription)
-        val payload = FeedbackJobPayload(inputs.resume().resourceId(), inputs.jobDescription().map { it.resourceId() }.orElse(null),
-            trim(request.targetRole), trim(request.seniority), trim(request.questionText), trim(request.category), request.expectedSignals, answerText)
-        val signals = request.expectedSignals?.toList() ?: emptyList()
-        val source = FeedbackFingerprint(inputs.resume().contentHash(), inputs.jobDescription().map { it.contentHash() }.orElse(""),
-            normalizeLabel(request.targetRole), normalizeLabel(request.seniority), trim(request.questionText), normalizeLabel(request.category), signals, answerText)
-        return createOrReuse(JobType.ANSWER_FEEDBACK, "interview-answer", inputs.resume().resourceId(), payload, fingerprint("answer-feedback", source))
-    }
     fun fingerprint(action: String, source: Any): String = fingerprintService.fingerprint(action, source)
     fun assertApiAvailable() {
         if (!properties.enabled || !runtimeMode.apiEnabled()) throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
@@ -108,8 +88,6 @@ class JobSubmissionService @Autowired constructor(
     private fun normalizeLabel(value: String?) = trim(value).replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
     private fun trim(value: String?) = value?.trim() ?: ""
     private data class AnalysisFingerprint(val resumeHash: String, val jobDescriptionHash: String, val targetRole: String, val seniority: String)
-    private data class FeedbackFingerprint(val resumeHash: String, val jobDescriptionHash: String, val targetRole: String,
-        val seniority: String, val question: String, val category: String, val expectedSignals: List<String>, val answer: String)
     companion object {
         const val AI_JOB_ACTION = "ai-job"
         private val log = LoggerFactory.getLogger(JobSubmissionService::class.java)

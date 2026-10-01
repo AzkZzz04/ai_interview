@@ -1,7 +1,6 @@
 package dev.jiaming.ai_interview.web
 
 import dev.jiaming.ai_interview.coach.AiAnalysisRequest
-import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest
 import dev.jiaming.ai_interview.assessment.AssessmentController
 import dev.jiaming.ai_interview.common.ApiExceptionHandler
 import dev.jiaming.ai_interview.common.ApiRequestException
@@ -56,50 +55,27 @@ class WebApiContractTests {
 	}
 
 	@Test
-	fun interviewFeedbackBindsExpectedSignalsAndReturnsAcceptedJob() {
-		Mockito.`when`(submissionService.submitFeedback(any())).thenReturn(accepted(JobType.ANSWER_FEEDBACK, null))
+	fun legacyInterviewFeedbackEndpointIsRemoved() {
 		val mockMvc = standaloneSetup(InterviewController(submissionService)).build()
 		mockMvc.perform(post("/api/interview/feedback").contentType(MediaType.APPLICATION_JSON).content(FEEDBACK_BODY))
-			.andExpect(status().isAccepted)
-			.andExpect(jsonPath("$.jobType").value("ANSWER_FEEDBACK"))
-
-		Mockito.verify(submissionService).submitFeedback(
-			AnswerFeedbackRequest(null, "Java", null, "Spring", "Backend Engineer", "Mid-level", "How did you improve reliability?", "ownership", listOf("clear reasoning", "specific example"), "I added retries.")
-		)
-	}
-
-	@Test
-	fun interviewFeedbackRejectsNullExpectedSignal() {
-		// Enforced by jackson-module-kotlin 3.x StrictNullChecks (on by default): List<String> items are non-null.
-		val mockMvc = standaloneSetup(InterviewController(submissionService)).setControllerAdvice(ApiExceptionHandler()).build()
-		mockMvc.perform(post("/api/interview/feedback").contentType(MediaType.APPLICATION_JSON)
-			.content(FEEDBACK_BODY.replace("\"specific example\"", "null")))
-			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(status().isNotFound)
 
 		Mockito.verifyNoInteractions(submissionService)
 	}
 
 	@Test
-	fun documentReferencesBindForAnalysisAndFeedback() {
+	fun documentReferencesBindForAnalysis() {
 		val resumeId = UUID.randomUUID()
 		val jobDescriptionId = UUID.randomUUID()
 		val refs = """"resumeId":"$resumeId","jobDescriptionId":"$jobDescriptionId","targetRole":"Backend Engineer","seniority":"Mid-level""""
 		Mockito.`when`(submissionService.submitAnalysis(any())).thenReturn(accepted(JobType.ANALYSIS, resumeId))
-		Mockito.`when`(submissionService.submitFeedback(any())).thenReturn(accepted(JobType.ANSWER_FEEDBACK, resumeId))
-		val mockMvc = standaloneSetup(AssessmentController(submissionService), InterviewController(submissionService)).build()
+		val mockMvc = standaloneSetup(AssessmentController(submissionService)).build()
 
 		mockMvc.perform(post("/api/assessments").contentType(MediaType.APPLICATION_JSON).content("{$refs}"))
-			.andExpect(status().isAccepted)
-		mockMvc.perform(post("/api/interview/feedback").contentType(MediaType.APPLICATION_JSON)
-			.content("""{$refs,"questionText":"Q","category":"c","expectedSignals":["s"],"answerText":"A"}"""))
 			.andExpect(status().isAccepted)
 
 		Mockito.verify(submissionService).submitAnalysis(
 			AiAnalysisRequest(resumeId, null, jobDescriptionId, null, "Backend Engineer", "Mid-level")
-		)
-		Mockito.verify(submissionService).submitFeedback(
-			AnswerFeedbackRequest(resumeId, null, jobDescriptionId, null, "Backend Engineer", "Mid-level", "Q", "c", listOf("s"), "A")
 		)
 	}
 

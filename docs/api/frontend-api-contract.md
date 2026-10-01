@@ -134,8 +134,8 @@ kept and marked stale (section 6), not deleted.
 | 7.2 | `GET /api/practice-sets/{setId}` | existing | Practice page |
 | 7.3 | `POST /api/practice-sets/{setId}/retry` | existing | Practice page (generation failed) |
 | 7.4 | `POST /api/practice-sets/{setId}/questions` | existing | Practice page (add your own question) |
-| 7.5 | `POST /api/practice-sets/{setId}/questions/{questionId}/attempts` | new | Practice page |
-| 7.6 | `POST /api/attempts/{attemptId}/retry` | new | Practice page |
+| 7.5 | `POST /api/practice-sets/{setId}/questions/{questionId}/attempts` | existing | Practice page |
+| 7.6 | `POST /api/attempts/{attemptId}/retry` | existing | Practice page |
 | 8.1 | `GET /api/jobs/{jobId}` | existing | Every AI step |
 | 9.1 | `GET /api/history` | new | History |
 

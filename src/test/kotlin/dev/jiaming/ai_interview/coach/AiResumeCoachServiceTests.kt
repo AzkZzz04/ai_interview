@@ -100,6 +100,21 @@ class AiResumeCoachServiceTests {
 		Mockito.verify(contextService, Mockito.never()).questionContext(input)
 	}
 
+	@Test fun practiceAnswerFeedbackUsesTheSeniorityFreePromptAndReturnsTheContractShape() {
+		val input = CoachFeedbackInput(input().resume(), Optional.empty(), null, null, "Why Kafka?", null, emptyList(), "Because ordering.")
+		Mockito.`when`(contextService.feedbackContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(client.generateJson(anyString())).thenReturn(
+			"""{"score":140,"summary":"Clear.","nextStep":"Add numbers.","strengths":["Ownership"],"gaps":["Metrics"],"betterAnswerOutline":["Context"],"followUpQuestion":" ","sourceContextIds":["resume:experience:0"]}"""
+		)
+
+		val feedback = service.scorePracticeAnswer(input)
+
+		assertThat(feedback).isEqualTo(dev.jiaming.ai_interview.practice.AnswerFeedbackResult(100, "Clear.", "Add numbers.", listOf("Ownership"), listOf("Metrics"), listOf("Context"), null))
+		val prompt = org.mockito.kotlin.argumentCaptor<String>()
+		Mockito.verify(client).generateJson(prompt.capture())
+		assertThat(prompt.firstValue).contains("practice interview answer").doesNotContain("Seniority")
+	}
+
 	private fun practiceJson(count: Int) = (1..count).joinToString(",", """{"questions":[""", "]}") {
 		"""{"category":"Depth","questionText":"Question $it?","rationale":"Reason $it","expectedSignals":["signal"]}"""
 	}

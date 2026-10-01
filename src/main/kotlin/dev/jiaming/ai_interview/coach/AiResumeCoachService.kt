@@ -3,6 +3,7 @@ package dev.jiaming.ai_interview.coach
 import dev.jiaming.ai_interview.experience.ExperienceSplitResult
 import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.gemini.GeminiException
+import dev.jiaming.ai_interview.practice.AnswerFeedbackResult
 import dev.jiaming.ai_interview.practice.PracticeQuestionDrafts
 import dev.jiaming.ai_interview.score.ResumeScoreResult
 import io.micrometer.core.instrument.MeterRegistry
@@ -43,6 +44,16 @@ class AiResumeCoachService(
         if (input.answerText().isNullOrBlank()) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer text is required")
         val context = ragContextService.feedbackContext(input)
         return responseMapper.normalizeFeedback(generateStructured(promptBuilder.buildFeedbackPrompt(input, context), AnswerFeedbackResponse::class.java), context.sourceContextIds)
+    }
+
+    /** Scores a practice attempt. The input carries no target role or seniority, so retrieval adds no seniority terms (KTD7). */
+    fun scorePracticeAnswer(input: CoachFeedbackInput): AnswerFeedbackResult {
+        val context = ragContextService.feedbackContext(input)
+        val feedback = responseMapper.normalizeFeedback(
+            generateStructured(promptBuilder.buildPracticeFeedbackPrompt(input, context), AnswerFeedbackResponse::class.java), context.sourceContextIds
+        )
+        return AnswerFeedbackResult(feedback.score, feedback.summary.orEmpty(), feedback.nextStep, feedback.strengths.orEmpty(), feedback.gaps.orEmpty(),
+            feedback.betterAnswerOutline.orEmpty(), feedback.followUpQuestion?.ifBlank { null })
     }
 
     fun scoreResume(resumeText: String, jobTitle: String?): ResumeScoreResult = responseMapper.normalizeResumeScore(

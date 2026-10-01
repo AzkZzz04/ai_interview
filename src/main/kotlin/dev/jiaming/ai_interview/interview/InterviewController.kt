@@ -1,7 +1,6 @@
 package dev.jiaming.ai_interview.interview
 
 import dev.jiaming.ai_interview.coach.AiAnalysisRequest
-import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
 import dev.jiaming.ai_interview.jobs.JobSubmissionService
 import org.springframework.http.HttpStatus
@@ -18,9 +17,4 @@ class InterviewController(private val jobSubmissionService: JobSubmissionService
     @ResponseStatus(HttpStatus.ACCEPTED)
     fun questions(@RequestBody request: AiAnalysisRequest): JobAcceptedResponse =
         jobSubmissionService.submitAnalysis(request)
-
-    @PostMapping("/feedback")
-    @ResponseStatus(HttpStatus.ACCEPTED)
-    fun feedback(@RequestBody request: AnswerFeedbackRequest): JobAcceptedResponse =
-        jobSubmissionService.submitFeedback(request)
 }

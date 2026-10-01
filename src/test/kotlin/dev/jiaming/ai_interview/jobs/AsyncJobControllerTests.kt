@@ -3,7 +3,6 @@ package dev.jiaming.ai_interview.jobs
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.jiaming.ai_interview.common.ApiExceptionHandler
 import dev.jiaming.ai_interview.common.LocalUserService
-import dev.jiaming.ai_interview.interview.InterviewController
 import java.time.Instant
 import java.util.UUID
 import org.junit.jupiter.api.Test
@@ -29,17 +28,6 @@ class AsyncJobControllerTests {
 			.andExpect(status().isAccepted)
 			.andExpect(jsonPath("$.jobType").value("ANALYSIS"))
 			.andExpect(jsonPath("$.status").value("QUEUED"))
-	}
-
-	@Test
-	fun feedbackSubmissionReturnsAcceptedJob() {
-		val accepted = accepted(JobType.ANSWER_FEEDBACK)
-		Mockito.`when`(submissionService.submitFeedback(any())).thenReturn(accepted)
-		val mockMvc = standaloneSetup(InterviewController(submissionService)).build()
-
-		mockMvc.perform(post("/api/interview/feedback").contentType(MediaType.APPLICATION_JSON).content("""{"resumeText":"Java","jobDescription":"Spring","targetRole":"Backend Engineer","seniority":"Mid-level","questionText":"Explain a service","category":"Technical","expectedSignals":["trade-offs"],"answerText":"I built it with Spring Boot."}"""))
-			.andExpect(status().isAccepted)
-			.andExpect(jsonPath("$.jobType").value("ANSWER_FEEDBACK"))
 	}
 
 	@Test

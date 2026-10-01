@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import dev.jiaming.ai_interview.interview.AnalysisPersistenceInput
 import dev.jiaming.ai_interview.interview.FeedbackPersistenceInput
 import dev.jiaming.ai_interview.interview.InterviewPersistenceService
+import dev.jiaming.ai_interview.practice.AnswerFeedbackResult
 import dev.jiaming.ai_interview.practice.PracticeQuestionDraft
 import dev.jiaming.ai_interview.score.ResumeScoreResult
 
@@ -101,6 +102,18 @@ class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate,
                     objectMapper.writeValueAsString(draft.expectedSignals)
                 )
             }
+        }
+    }
+    @Transactional
+    fun materializeAttemptFeedback(job: BackgroundJob, leaseToken: UUID, attemptId: UUID, feedback: AnswerFeedbackResult): UUID {
+        lockOwnedLease(job.id, leaseToken)
+        val userId = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+        return materialize(job.id, JobEffectType.ANSWER_FEEDBACK) { _ ->
+            val updated = jdbcTemplate.update(
+                "UPDATE ai_interview_app.answer_attempts SET feedback = ?::jsonb, score = ? WHERE id = ? AND user_id = ?",
+                objectMapper.writeValueAsString(feedback), feedback.score, attemptId, userId
+            )
+            if (updated != 1) throw IllegalStateException("Attempt $attemptId was not found for job owner $userId")
         }
     }
     @Transactional
