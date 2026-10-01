@@ -3,7 +3,10 @@ package dev.jiaming.ai_interview.coach
 import dev.jiaming.ai_interview.experience.ExperienceSplitResult
 import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.gemini.GeminiException
+import dev.jiaming.ai_interview.document.ResolvedDocument
 import dev.jiaming.ai_interview.score.ResumeScoreResult
+import dev.jiaming.ai_interview.suggestions.ExperienceSuggestionsResult
+import dev.jiaming.ai_interview.suggestions.SuggestionSourceInput
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -25,6 +28,22 @@ class AiResumeCoachService(
     fun assessJobFit(input: CoachAnalysisInput): dev.jiaming.ai_interview.fit.JobFitResult {
         val context = ragContextService.jobFitContext(input)
         return responseMapper.normalizeJobFit(generateStructured(promptBuilder.buildJobFitPrompt(input, context), JobFitResponse::class.java))
+    }
+
+    // ponytail: per-source budget only (KTD7); add a total prompt cap if users keep hundreds of sources.
+    fun suggestExperiences(resume: ResolvedDocument, jobDescription: ResolvedDocument, sources: List<SuggestionSourceInput>): ExperienceSuggestionsResult {
+        val texts = sources.map { input ->
+            input.source to when (input) {
+                is SuggestionSourceInput.Resume -> ragContextService.suggestionSourceText(input.document, jobDescription)
+                is SuggestionSourceInput.Experience -> input.text
+            }
+        }
+        val prompt = promptBuilder.buildExperienceSuggestionsPrompt(
+            ragContextService.suggestionSourceText(resume, jobDescription), jobDescription.normalizedText(), texts
+        )
+        return generateStructured(prompt, ExperienceSuggestionsResponse::class.java) {
+            responseMapper.normalizeExperienceSuggestions(it, sources.map(SuggestionSourceInput::source))
+        }
     }
 
     fun generateQuestions(input: CoachAnalysisInput): InterviewQuestionsResponse {

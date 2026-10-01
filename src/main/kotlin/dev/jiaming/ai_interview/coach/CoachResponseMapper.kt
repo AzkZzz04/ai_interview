@@ -12,6 +12,9 @@ import dev.jiaming.ai_interview.fit.FitFeedback
 import dev.jiaming.ai_interview.fit.JobFitResult
 import dev.jiaming.ai_interview.fit.MatchedRequirement
 import dev.jiaming.ai_interview.fit.MissingRequirement
+import dev.jiaming.ai_interview.suggestions.ExperienceSuggestionItem
+import dev.jiaming.ai_interview.suggestions.ExperienceSuggestionsResult
+import dev.jiaming.ai_interview.suggestions.SuggestionSource
 import org.springframework.stereotype.Component
 import java.io.IOException
 import java.time.Instant
@@ -107,6 +110,16 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
             .filter { !it.message.isNullOrBlank() }.take(8)
             .map { FitFeedback(normalizeFitPriority(it.priority), it.message!!.trim()) },
     )
+
+    // Items must cite a source the model was given; the source's type and name come from our data, not the model.
+    fun normalizeExperienceSuggestions(response: ExperienceSuggestionsResponse, sources: List<SuggestionSource>): ExperienceSuggestionsResult {
+        val provided = sources.associateBy { it.id.toString() }
+        return ExperienceSuggestionsResult(response.items.orEmpty().filterNotNull().mapNotNull { item ->
+            val source = provided[item.sourceId?.trim()?.lowercase(Locale.ROOT)] ?: return@mapNotNull null
+            val fields = listOf(item.requirement, item.match, item.whyItFits, item.guidance).map { it?.trim().orEmpty() }
+            if (fields.any(String::isEmpty)) null else ExperienceSuggestionItem(fields[0], source, fields[1], fields[2], fields[3])
+        }.take(8))
+    }
 
     private fun nonEmpty(values: List<String>?): List<String> = values.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).take(6)
         .ifEmpty { listOf("No specific evidence returned") }

@@ -12,6 +12,7 @@ import dev.jiaming.ai_interview.document.ResolvedJobInputs
 import dev.jiaming.ai_interview.experience.ExperienceSplitJobPayload
 import dev.jiaming.ai_interview.resume.ResumeExtractionJobPayload
 import dev.jiaming.ai_interview.score.ResumeScorePayload
+import dev.jiaming.ai_interview.suggestions.ExperienceSuggestionsPayload
 
 @Component
 class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobStore: BackgroundJobStore,
@@ -48,6 +49,13 @@ class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobS
         return convert(job.requestPayload, JobFitPayload::class.java)
     }
 
+    fun experienceSuggestions(job: BackgroundJob): ExperienceSuggestionsPayload {
+        if (!isCurrent(job.requestPayload, ExperienceSuggestionsPayload.CURRENT_VERSION)) {
+            throw IllegalArgumentException("Invalid ${ExperienceSuggestionsPayload::class.java.simpleName} job payload")
+        }
+        return convert(job.requestPayload, ExperienceSuggestionsPayload::class.java)
+    }
+
     fun decode(job: BackgroundJob, leaseToken: UUID, payloadType: Class<*>): Any {
         val payload: Any = when (job.jobType) {
             JobType.RESUME_EXTRACTION -> convert(job.requestPayload, ResumeExtractionJobPayload::class.java)
@@ -56,6 +64,7 @@ class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobS
             JobType.ANSWER_FEEDBACK -> feedback(job, leaseToken)
             JobType.EXPERIENCE_SPLIT -> convert(job.requestPayload, ExperienceSplitJobPayload::class.java)
             JobType.JOB_FIT -> jobFit(job)
+            JobType.EXPERIENCE_SUGGESTIONS -> experienceSuggestions(job)
         }
         require(payloadType.isInstance(payload)) { "Decoded payload for ${job.jobType} is not ${payloadType.simpleName}" }
         return payload

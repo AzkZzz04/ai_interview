@@ -36,6 +36,12 @@ class CoachRagContextService @Autowired constructor(
     fun feedbackContext(input: CoachFeedbackInput) = ragContext(input.resume(), input.jobDescription(), feedbackQueries(input),
         SelectionProfile("feedback", properties.feedbackContextBudget(), properties.feedbackJobDescriptionMinimum()))
 
+    // Suggestions send a resume whole within the direct-context budget; a longer one is narrowed to what retrieval finds for the job.
+    fun suggestionSourceText(resume: ResolvedDocument, jobDescription: ResolvedDocument): String =
+        if (safe(resume.normalizedText()).length <= DIRECT_CONTEXT_LIMIT) resume.normalizedText()
+        else ragContext(resume, Optional.empty(), suggestionQueries(jobDescription),
+            SelectionProfile("suggestions", properties.assessmentContextBudget(), 0)).context
+
     private fun ragContext(resume: ResolvedDocument, jobDescription: Optional<ResolvedDocument>, queries: List<String>, profile: SelectionProfile): CoachRagContext {
         val documents = mutableListOf(resume)
         jobDescription.ifPresent(documents::add)
@@ -150,6 +156,13 @@ class CoachRagContextService @Autowired constructor(
             "required qualifications must-have skills experience and responsibilities $role $jd",
             "resume evidence accomplishments projects skills tools and measurable impact $role",
             "job description requirements missing candidate evidence and role alignment $jd",
+        )
+    }
+    private fun suggestionQueries(jobDescription: ResolvedDocument): List<String> {
+        val jd = jobDescriptionQueryExcerpt(Optional.of(jobDescription))
+        return listOf(
+            "required qualifications skills and responsibilities $jd",
+            "accomplishments projects tools and measurable impact relevant to $jd",
         )
     }
     private fun questionQueries(input: CoachAnalysisInput): List<String> {

@@ -66,7 +66,11 @@ class TargetJobService(
             "SELECT count(*) FROM ai_interview_app.job_fits WHERE target_job_id = ? AND user_id = ? AND result_payload IS NOT NULL",
             Int::class.java, targetJobId, localUserService.localUserId()
         ) ?: 0
-        return TargetJobDeleteImpact(fits = fits)
+        val suggestionSets = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM ai_interview_app.experience_suggestions WHERE target_job_id = ? AND user_id = ? AND result_payload IS NOT NULL",
+            Int::class.java, targetJobId, localUserService.localUserId()
+        ) ?: 0
+        return TargetJobDeleteImpact(fits = fits, suggestionSets = suggestionSets)
     }
 
     @Transactional

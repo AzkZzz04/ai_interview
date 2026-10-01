@@ -2,6 +2,7 @@ package dev.jiaming.ai_interview.experience
 
 import dev.jiaming.ai_interview.common.ContentHasher
 import dev.jiaming.ai_interview.common.ApiRequestException
+import dev.jiaming.ai_interview.common.DeleteImpact
 import dev.jiaming.ai_interview.common.RequestValidation
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
 import dev.jiaming.ai_interview.jobs.JobSubmissionService
@@ -51,6 +52,24 @@ class ExperienceService(
         } catch (exception: DuplicateKeyException) {
             throw duplicateExperienceConflict()
         }
+    }
+
+    // Only suggestion sets that used the experience are affected; they are kept and read as stale.
+    fun deleteImpact(userId: UUID, experienceId: UUID): DeleteImpact {
+        jdbcTemplate.query(
+            "SELECT id FROM ai_interview_app.experiences WHERE user_id = ? AND id = ?",
+            RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId, experienceId
+        ).firstOrNull() ?: throw experienceNotFound()
+        val stale = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM ai_interview_app.experience_suggestions WHERE user_id = ? AND source_ids @> jsonb_build_array(?::text)",
+            Int::class.java, userId, experienceId.toString()
+        ) ?: 0
+        return DeleteImpact(0, 0, 0, 0, 0, stale)
+    }
+
+    fun delete(userId: UUID, experienceId: UUID) {
+        val deleted = jdbcTemplate.update("DELETE FROM ai_interview_app.experiences WHERE user_id = ? AND id = ?", userId, experienceId)
+        if (deleted != 1) throw experienceNotFound()
     }
 
     @Transactional

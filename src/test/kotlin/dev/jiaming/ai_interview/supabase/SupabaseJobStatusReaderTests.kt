@@ -197,6 +197,29 @@ class SupabaseJobStatusReaderTests {
     }
 
     @Test
+    fun `maps experience suggestion refs from the payload and keeps nested source items`() = runBlocking {
+        val resumeId = UUID.randomUUID()
+        val targetJobId = UUID.randomUUID()
+        val experienceId = UUID.randomUUID()
+        val (client, reader) = reader(row(
+            jobType = "EXPERIENCE_SUGGESTIONS",
+            stage = "MATCHING_EXPERIENCE",
+            requestPayload = """{"payloadVersion":1,"suggestionsId":"$resourceId","resumeId":"$resumeId","targetJobId":"$targetJobId"}""",
+            resultPayload = """{"items":[{"requirement":"Kafka","source":{"type":"EXPERIENCE","id":"$experienceId","name":"Ledger"},"match":"m","whyItFits":"w","guidance":"g"}]}""",
+            resourceType = "\"experience-suggestions\""
+        ))
+        try {
+            val status = reader.findForUser(jobId, userId)!!
+            assertEquals(JobType.EXPERIENCE_SUGGESTIONS, status.jobType)
+            assertEquals(JobStage.MATCHING_EXPERIENCE, status.stage)
+            assertEquals(resumeId, status.inputRefs.resumeId)
+            assertEquals(targetJobId, status.inputRefs.targetJobId)
+            val item = ((status.result as Map<*, *>)["items"] as List<*>).single() as Map<*, *>
+            assertEquals(experienceId.toString(), (item["source"] as Map<*, *>)["id"])
+        } finally { client.close() }
+    }
+
+    @Test
     fun `resume fallback is resource aware and malformed reference UUIDs stay null`() = runBlocking {
         val invalidRefs = """{"resumeId":"invalid","jobDescriptionId":"invalid","practiceSetId":"invalid","attemptId":"invalid"}"""
         val (resumeClient, resumeReader) = reader(row(requestPayload = invalidRefs, resourceType = "\"resume\""))

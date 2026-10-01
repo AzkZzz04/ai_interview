@@ -1,11 +1,13 @@
 package dev.jiaming.ai_interview.experience
 
+import dev.jiaming.ai_interview.common.DeleteImpact
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -30,6 +32,16 @@ class ExperienceController(
         @PathVariable experienceId: UUID,
         @RequestBody request: ExperienceRenameRequest
     ): Experience = experienceService.rename(localUserService.localUserId(), experienceId, request)
+
+    @GetMapping("/{experienceId}/delete-impact")
+    fun deleteImpact(@PathVariable experienceId: UUID): DeleteImpact =
+        experienceService.deleteImpact(localUserService.localUserId(), experienceId)
+
+    @DeleteMapping("/{experienceId}")
+    fun delete(@PathVariable experienceId: UUID): ResponseEntity<Void> {
+        experienceService.delete(localUserService.localUserId(), experienceId)
+        return ResponseEntity.noContent().build()
+    }
 
     @PostMapping
     fun create(@RequestBody input: ExperienceInput): ResponseEntity<ExperienceCreatedResponse> =
