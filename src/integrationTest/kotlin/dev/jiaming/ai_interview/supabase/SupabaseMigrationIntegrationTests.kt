@@ -143,9 +143,7 @@ class SupabaseMigrationIntegrationTests {
                     buildList { while (result.next()) add(result.getString(1)) }
                 }
             }
-            assertThat(versions).startsWith("1", "2", "3", "4", "5", "6", "7", "8", "9")
-            assertThat(versions).contains("11")
-            assertThat(versions).contains("14")
+            assertThat(versions).containsExactly(*(1..17).map(Int::toString).toTypedArray())
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = 'public.vector_store'::regclass AND attname = 'embedding'").use { result ->
                     result.next(); assertThat(result.getString(1)).isEqualTo("vector(1024)")
@@ -222,6 +220,7 @@ class SupabaseMigrationIntegrationTests {
                 assertDenied(connection, "SELECT id FROM ai_interview_api.job_status")
                 assertDenied(connection, "SELECT id FROM ai_interview_app.background_jobs")
                 assertDenied(connection, "SELECT id FROM ai_interview_app.experiences")
+                FRONTEND_TABLES.forEach { assertDenied(connection, "SELECT 1 FROM ai_interview_app.$it") }
                 assertDenied(connection, "SELECT id FROM public.vector_store")
             }
         }
@@ -257,6 +256,9 @@ class SupabaseMigrationIntegrationTests {
             }
             connection.createStatement().use {
                 it.executeQuery("SELECT nextval('ai_interview_app.runtime_test_seq')").use { result -> assertThat(result.next()).isTrue() }
+            }
+            FRONTEND_TABLES.forEach { table ->
+                connection.createStatement().use { it.executeQuery("SELECT count(*) FROM ai_interview_app.$table").use { result -> assertThat(result.next()).isTrue() } }
             }
             connection.createStatement().use {
                 it.executeUpdate("INSERT INTO public.vector_store (content, metadata) VALUES ('runtime test', '{}'::json)")
@@ -356,5 +358,9 @@ class SupabaseMigrationIntegrationTests {
             .withDatabaseName("ai_interview_migration_test")
             .withUsername("ai_interview")
             .withPassword("ai_interview")
+
+        // Private tables added for the frontend contract (V10-V17): runtime-only, never Data API readable.
+        val FRONTEND_TABLES = listOf("storage_cleanup", "resume_scores", "job_fits", "experience_suggestions",
+            "practice_sets", "practice_questions", "answer_attempts")
     }
 }
