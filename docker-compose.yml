@@ -12,6 +12,10 @@ x-backend: &backend
     DATABASE_URL: jdbc:postgresql://postgres:5432/ai_interview
     DATABASE_USERNAME: ai_interview
     DATABASE_PASSWORD: ai_interview
+    # Bootstrap credentials are only read by SupabaseMigrationMain, never by serving containers.
+    SUPABASE_MIGRATION_URL: ""
+    SUPABASE_MIGRATION_USERNAME: ""
+    SUPABASE_MIGRATION_PASSWORD: ""
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     S3_ENDPOINT: http://localstack:4566
@@ -91,6 +95,7 @@ services:
     environment:
       <<: *backend-env
       JOB_RUNTIME_MODE: api
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
 
   worker:
     <<: *backend
@@ -98,6 +103,7 @@ services:
     environment:
       <<: *backend-env
       JOB_RUNTIME_MODE: worker
+      SUPABASE_SECRET_KEY: ""
 
   web:
     build: apps/web

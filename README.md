@@ -154,6 +154,8 @@ docker compose --profile app up --build
 
 The API and worker read `.env` for `GEMINI_API_KEY` and the Gemini settings from step 1; Compose points them at its own PostgreSQL, Redis and LocalStack, so the address settings in `.env` are ignored here. Open `http://127.0.0.1:3000`; nginx forwards `/api` to the API, so the API and worker publish no ports. Every published port (web `3000`, PostgreSQL `55432`, Redis `6380`, LocalStack `4566`) binds to `127.0.0.1` only. Stop with `docker compose --profile app down`.
 
+For the isolated Supabase-backed full stack, use the separate Compose project and ports in [the migration runbook](docs/supabase-migration.md). It keeps the bundled PostgreSQL volume available for the local stack.
+
 ## Container images
 
 The backend image accepts the same environment variables as a local Spring Boot
@@ -307,19 +309,20 @@ imagePullSecrets:
 The initial `:local` image references remain in the values file until the first
 successful GitHub Actions run writes the real image SHAs.
 
-## Optional Supabase SDK
+## Supabase runtime
 
-The backend includes a PostgREST-only Supabase client. To enable it, put
-`SUPABASE_SDK_ENABLED=true`, `SUPABASE_URL`, and `SUPABASE_SECRET_KEY` in the
-ignored `.env.supabase` file or process environment. File entries use unquoted
-Java properties values. Use a server `sb_secret_…` key; never put it in frontend
-variables or source control.
+The Supabase profile keeps application writes, transactions, jobs, and vectors on
+JDBC; only job-status polling uses the PostgREST client. The client is enabled by
+the `supabase` profile and disabled in worker-only mode. It uses a five-second
+timeout, no retries or redirects, and closes at application shutdown.
 
-The client is disabled by default and in worker-only mode. It uses a five-second
-request timeout, no automatic retries or redirects, and closes at application
-shutdown. Enabling it does not require the `supabase` Spring profile, change the
-JDBC database, migrate schemas, or route existing endpoints through Supabase.
-The database migration and job-status integration are deferred.
+Keep `.env.supabase` private for the standalone migration/bootstrap command.
+Spring serving processes do not import it. The Compose Supabase profile maps an
+explicit runtime allowlist, gives the SDK key only to the API, and never sends
+migration credentials to API, worker, or web. Keep Gemini settings in the
+separate ignored `.env.ai-serving` file; never copy the general `.env` into this
+stack. Use the full [Supabase migration runbook](docs/supabase-migration.md) for
+startup and credential handling.
 
 ## Runtime modes
 

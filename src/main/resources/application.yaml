@@ -1,6 +1,7 @@
 spring:
   config:
-    import: optional:file:.env[.properties],optional:file:.env.supabase[.properties]
+    # The private .env.supabase file is bootstrap-only; serving processes must not import it.
+    import: optional:file:.env[.properties]
   application:
     name: ai_interview
   datasource:
