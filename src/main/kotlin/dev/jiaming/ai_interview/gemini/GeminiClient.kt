@@ -68,7 +68,12 @@ class GeminiClient(
                 .header("Content-Type", "application/json").header("x-goog-api-key", apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody(prompt))).build()
             val response = transport.send(request)
-            if (response.statusCode !in 200..299) throw httpFailure(response.statusCode)
+            if (response.statusCode !in 200..299) {
+                // Google's error status (e.g. UNAVAILABLE, RESOURCE_EXHAUSTED) only; never the prompt or the full body.
+                val reason = runCatching { objectMapper.readTree(response.body).path("error").path("status").asText("") }.getOrDefault("")
+                log.warn("gemini_request_rejected model={} status={} reason={}", model, response.statusCode, reason)
+                throw httpFailure(response.statusCode)
+            }
             val result = extractText(response.body)
             recordCall("success", startedAt)
             return result
