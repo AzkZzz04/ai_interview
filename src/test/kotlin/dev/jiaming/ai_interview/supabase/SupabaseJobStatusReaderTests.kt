@@ -133,6 +133,28 @@ class SupabaseJobStatusReaderTests {
     }
 
     @Test
+    fun `maps resource-less experience split jobs and their review-only result`() = runBlocking {
+        val resultPayload = """{"items":[{"title":"Engineer","organization":null,"startDate":"2023-01","endDate":null,"description":"Built a durable service.","duplicateOf":null}]}"""
+        val (client, reader) = reader(row(
+            jobType = "EXPERIENCE_SPLIT",
+            stage = "SPLITTING_EXPERIENCE",
+            requestPayload = """{"payloadVersion":1}""",
+            resultPayload = resultPayload,
+            resourceType = "null"
+        ))
+        try {
+            val status = reader.findForUser(jobId, userId)!!
+            assertEquals(JobType.EXPERIENCE_SPLIT, status.jobType)
+            assertEquals(JobStage.SPLITTING_EXPERIENCE, status.stage)
+            assertNull(status.inputRefs.resumeId)
+            assertNull(status.inputRefs.targetJobId)
+            val item = ((status.result as Map<*, *>) ["items"] as List<*>).single() as Map<*, *>
+            assertEquals("Engineer", item["title"])
+            assertNull(item["duplicateOf"])
+        } finally { client.close() }
+    }
+
+    @Test
     fun `resume fallback is resource aware and malformed reference UUIDs stay null`() = runBlocking {
         val invalidRefs = """{"resumeId":"invalid","jobDescriptionId":"invalid","practiceSetId":"invalid","attemptId":"invalid"}"""
         val (resumeClient, resumeReader) = reader(row(requestPayload = invalidRefs, resourceType = "\"resume\""))
@@ -222,8 +244,10 @@ class SupabaseJobStatusReaderTests {
         resourceType: String = "\"resume\"",
         lastError: String = "null",
         errorCode: String = "\"STALE_CODE\"",
-        retryable: String = "true"
-    ) = """[{"id":"$job","user_id":"$user","job_type":"ANALYSIS","status":"QUEUED","stage":"QUEUED","attempts":2,"result_payload":$resultPayload,"last_error":$lastError,"error_code":$errorCode,"retryable":$retryable,"created_at":$createdAt,"started_at":null,"completed_at":null,"resource_id":"$resourceId","request_payload":$requestPayload,"max_attempts":$maxAttempts,"resource_type":$resourceType}]"""
+        retryable: String = "true",
+        jobType: String = "ANALYSIS",
+        stage: String = "QUEUED"
+    ) = """[{"id":"$job","user_id":"$user","job_type":"$jobType","status":"QUEUED","stage":"$stage","attempts":2,"result_payload":$resultPayload,"last_error":$lastError,"error_code":$errorCode,"retryable":$retryable,"created_at":$createdAt,"started_at":null,"completed_at":null,"resource_id":"$resourceId","request_payload":$requestPayload,"max_attempts":$maxAttempts,"resource_type":$resourceType}]"""
 
     private fun assertUnavailable(action: () -> Any?) {
         val exception = assertFailsWith<ApiRequestException> { action() }

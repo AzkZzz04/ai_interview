@@ -119,11 +119,11 @@ kept and marked stale (section 6), not deleted.
 | 4.4 | `PATCH /api/target-jobs/{targetJobId}` | existing | Rename |
 | 4.5 | `GET /api/target-jobs/{targetJobId}/delete-impact` | existing | Delete dialog |
 | 4.6 | `DELETE /api/target-jobs/{targetJobId}` | existing | Library |
-| 5.1 | `POST /api/experiences` | new | Experience library (project form) |
-| 5.2 | `POST /api/experiences/linkedin-split` | new | Experience library (LinkedIn paste) |
-| 5.3 | `POST /api/experiences/batch` | new | Experience library (save reviewed items) |
-| 5.4 | `GET /api/experiences` | new | Experience library |
-| 5.5 | `PATCH /api/experiences/{experienceId}` | new | Rename |
+| 5.1 | `POST /api/experiences` | existing | Experience library (project form) |
+| 5.2 | `POST /api/experiences/linkedin-split` | existing | Experience library (LinkedIn paste) |
+| 5.3 | `POST /api/experiences/batch` | existing | Experience library (save reviewed items) |
+| 5.4 | `GET /api/experiences` | existing | Experience library |
+| 5.5 | `PATCH /api/experiences/{experienceId}` | existing | Rename |
 | 5.6 | `GET /api/experiences/{experienceId}/delete-impact` | new | Delete dialog |
 | 5.7 | `DELETE /api/experiences/{experienceId}` | new | Experience library |
 | 6.1 | `GET /api/resumes/{resumeId}/target-jobs/{targetJobId}/fit` | new | Fit page |
@@ -329,23 +329,28 @@ this job, and cancels their in-flight jobs.
 
 **`ExperienceInput`**: the same fields without `id`, `source` and `createdAt`.
 
-### 5.1 `POST /api/experiences` — new
+### 5.1 `POST /api/experiences` — existing
 
 Body: `ExperienceInput`. Returns `201` with `{ "experience": Experience, "duplicate": boolean }`.
 
 - A duplicate (same normalized title and description) returns `200` with `duplicate: true`.
 - Errors: `400 INVALID_REQUEST`.
 
-### 5.2 `POST /api/experiences/linkedin-split` — new
+### 5.2 `POST /api/experiences/linkedin-split` — existing
 
 Body: `{ "text": string }`, 50–20,000 chars. Starts an `EXPERIENCE_SPLIT` job and returns `202` with
 `JobAccepted`.
 
 The job result is `ExperienceSplitResult` (section 8.2). Nothing is saved until the user confirms with 5.3.
 
+The split and review are browser-assisted: the dialog keeps the pasted text, job ID and removed-item choices in
+localStorage scoped to the current app/API environment. Closing the dialog preserves recovery data. Explicit
+discard or successful save clears it. If the job is missing or expired, the dialog keeps the text and offers an
+explicit resplit; it never resubmits automatically.
+
 Errors: `400 INVALID_REQUEST`, `429 RATE_LIMITED`.
 
-### 5.3 `POST /api/experiences/batch` — new
+### 5.3 `POST /api/experiences/batch` — existing
 
 Body: `{ "items": ExperienceInput[] }`, 1–30 items, with `source` recorded as `LINKEDIN`. Returns `201`:
 
@@ -359,13 +364,20 @@ Body: `{ "items": ExperienceInput[] }`, 1–30 items, with `source` recorded as 
 `created` holds full `Experience` objects (shortened above). Items already saved are skipped, not duplicated
 (R3). The UI shows each skipped item with a note.
 
-### 5.4 `GET /api/experiences` — new
+A list outside 1–30 items returns `400 INVALID_REQUEST` with a message naming `items`. Duplicate matching is
+per user and uses whitespace-collapsed, case-insensitive title and description; organization and dates do not
+participate. The batch checks again when saving, so changes after review cannot create a duplicate.
+
+### 5.4 `GET /api/experiences` — existing
 
 Returns `200` with `{ "items": Experience[] }`.
 
-### 5.5 `PATCH /api/experiences/{experienceId}` — new
+### 5.5 `PATCH /api/experiences/{experienceId}` — existing
 
-Body: `{ "title": string }`. Returns `200` with `Experience`. Errors: `404 EXPERIENCE_NOT_FOUND`.
+Body: `{ "title": string }`. Returns `200` with the updated `Experience`. Renaming recomputes the duplicate
+hash from the normalized title and unchanged description. Errors: `400 INVALID_REQUEST` for an invalid title,
+`404 EXPERIENCE_NOT_FOUND` for a missing or other user's experience, and `409 CONFLICT` if another owned
+experience already has the same normalized title and description.
 
 ### 5.6 `GET /api/experiences/{experienceId}/delete-impact` — new
 
@@ -593,8 +605,9 @@ references, nested result JSON, nullable timestamps and error values:
 ```
 
 - Job types and stages are extended as in the table below.
-- `result` is set only on `SUCCEEDED` or `PARTIAL`. It equals what the owning resource then returns, so the UI
-  may read either.
+- `result` is set only on `SUCCEEDED` or `PARTIAL`. For resource-backed jobs it equals what the owning resource
+  then returns, so the UI may read either. `EXPERIENCE_SPLIT` is review-only and its result exists only on the
+  job until the user saves items through 5.3.
 - The new job types end `SUCCEEDED` or `FAILED`, never `PARTIAL`.
 - Errors: `404 JOB_NOT_FOUND`, which covers unknown IDs, other users' jobs and jobs of deleted resources.
 
@@ -605,7 +618,7 @@ references, nested result JSON, nullable timestamps and error values:
 | `JOB_FIT` | new | 6.2 | `MATCHING_JOB` | `JobFitResult` |
 | `EXPERIENCE_SUGGESTIONS` | new | 6.4 | `RETRIEVING_EXPERIENCE`, `MATCHING_EXPERIENCE` | `ExperienceSuggestionsResult` |
 | `PRACTICE_QUESTIONS` | new | 7.1, 7.3 | `GENERATING_QUESTIONS` (existing stage) | `{ questions: Question[] }` |
-| `EXPERIENCE_SPLIT` | new | 5.2 | `SPLITTING_EXPERIENCE` | `ExperienceSplitResult` |
+| `EXPERIENCE_SPLIT` | existing | 5.2 | `SPLITTING_EXPERIENCE` | `ExperienceSplitResult` |
 | `ANSWER_FEEDBACK` | changed (attempt-based input) | 7.5, 7.6 | `SCORING_ANSWER` (existing stage) | `AnswerFeedbackResult` |
 
 A `SUCCEEDED` job ends at stage `COMPLETED`; a `FAILED` job keeps the stage it failed in. `ANALYSIS` and stage `ASSESSING_RESUME` are no longer used by the UI.
@@ -754,7 +767,7 @@ the UI never shows the code or the provider name.
 | `QUESTION_NOT_FOUND` | 404 | new | |
 | `ATTEMPT_NOT_FOUND` | 404 | new | |
 | `JOB_NOT_FOUND` | 404 | existing | |
-| `CONFLICT` | 409 | existing | An idempotency key was reused with a different body. |
+| `CONFLICT` | 409 | existing | An idempotency key was reused with a different body, or an experience rename would duplicate another owned item. |
 | `RESUME_NOT_READY` | 409 | existing code, new use | |
 | `NO_EXPERIENCE_SOURCES` | 409 | new | |
 | `PRACTICE_SET_NOT_READY` | 409 | new | |

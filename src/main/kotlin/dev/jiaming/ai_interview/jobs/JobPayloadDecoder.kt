@@ -9,6 +9,7 @@ import dev.jiaming.ai_interview.coach.AiAnalysisRequest
 import dev.jiaming.ai_interview.coach.AnswerFeedbackRequest
 import dev.jiaming.ai_interview.document.DocumentReferenceResolver
 import dev.jiaming.ai_interview.document.ResolvedJobInputs
+import dev.jiaming.ai_interview.experience.ExperienceSplitJobPayload
 import dev.jiaming.ai_interview.resume.ResumeExtractionJobPayload
 
 @Component
@@ -38,6 +39,7 @@ class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobS
             JobType.RESUME_EXTRACTION -> convert(job.requestPayload, ResumeExtractionJobPayload::class.java)
             JobType.ANALYSIS -> analysis(job, leaseToken)
             JobType.ANSWER_FEEDBACK -> feedback(job, leaseToken)
+            JobType.EXPERIENCE_SPLIT -> convert(job.requestPayload, ExperienceSplitJobPayload::class.java)
         }
         require(payloadType.isInstance(payload)) { "Decoded payload for ${job.jobType} is not ${payloadType.simpleName}" }
         return payload

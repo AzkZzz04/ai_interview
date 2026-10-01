@@ -11,14 +11,16 @@ class JobHandlerRegistryTests {
 		val resume = handler(JobType.RESUME_EXTRACTION)
 		val analysis = handler(JobType.ANALYSIS)
 		val feedback = handler(JobType.ANSWER_FEEDBACK)
-		val registry = JobHandlerRegistry(listOf(resume, analysis, feedback))
+		val experienceSplit = handler(JobType.EXPERIENCE_SPLIT)
+		val registry = JobHandlerRegistry(listOf(resume, analysis, feedback, experienceSplit))
 		assertThat(registry.require(JobType.ANALYSIS)).isSameAs(analysis)
+		assertThat(registry.require(JobType.EXPERIENCE_SPLIT)).isSameAs(experienceSplit)
 	}
 
 	@Test
 	fun rejectsDuplicateHandlers() {
 		assertThatThrownBy {
-			JobHandlerRegistry(listOf(handler(JobType.RESUME_EXTRACTION), handler(JobType.ANALYSIS), handler(JobType.ANALYSIS), handler(JobType.ANSWER_FEEDBACK)))
+			JobHandlerRegistry(listOf(handler(JobType.RESUME_EXTRACTION), handler(JobType.ANALYSIS), handler(JobType.ANALYSIS), handler(JobType.ANSWER_FEEDBACK), handler(JobType.EXPERIENCE_SPLIT)))
 		}.isInstanceOf(IllegalStateException::class.java).hasMessageContaining("Multiple job handlers")
 	}
 

@@ -2,6 +2,8 @@ package dev.jiaming.ai_interview.coach
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.jiaming.ai_interview.gemini.GeminiException
+import dev.jiaming.ai_interview.experience.ExperienceSplitResult
+import dev.jiaming.ai_interview.experience.ExperienceSplitItem
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
@@ -32,5 +34,28 @@ class CoachResponseMapperTests {
 		val response = InterviewQuestionsResponse(listOf(InterviewQuestionResponse("question-id", "Projects", "Core", "How did you design this project?", listOf("Architecture decisions"), listOf("resume:4", "invented:source:9"))), "gemini")
 		val normalized = mapper.normalizeQuestions(response, listOf("resume:projects:4", "resume:skills:5"))
 		assertThat(requireNotNull(normalized.questions).first().sourceContextIds).containsExactly("resume:projects:4", "resume:skills:5")
+	}
+
+	@Test
+	fun normalizesExperienceSplitFieldsAndLeavesDuplicateChecksForTheOwnerScopedService() {
+		val response = ExperienceSplitResponse(listOf(
+			ExperienceSplitResponseItem("  Senior   Engineer ", " Acme ", "2021-03", null, " Built a reliable service. ")
+		))
+
+		val result: ExperienceSplitResult = mapper.normalizeExperienceSplit(response)
+
+		assertThat(result.items).containsExactly(ExperienceSplitItem("Senior Engineer", "Acme", "2021-03", null,
+			"Built a reliable service.", null))
+	}
+
+	@Test
+	fun rejectsExperienceSplitItemsThatCannotBeSaved() {
+		val response = ExperienceSplitResponse(listOf(
+			ExperienceSplitResponseItem("Engineer", null, "2023-1", null, "Built a service.")
+		))
+
+		assertThatThrownBy { mapper.normalizeExperienceSplit(response) }
+			.isInstanceOf(GeminiException::class.java)
+			.hasMessageContaining("experience")
 	}
 }

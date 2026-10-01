@@ -4,13 +4,15 @@ import dev.jiaming.ai_interview.coach.AssessmentScores
 import dev.jiaming.ai_interview.gemini.GeminiErrorCode
 import dev.jiaming.ai_interview.jobs.JobStage
 import dev.jiaming.ai_interview.jobs.JobStatus
+import dev.jiaming.ai_interview.jobs.JobType
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
 class ContractFreezeTests {
 	@Test fun jobStatusValuesAreFrozen() = assertThat(JobStatus.entries.map { it.name }).containsExactly("QUEUED", "PROCESSING", "RETRYING", "SUCCEEDED", "PARTIAL", "FAILED")
-	@Test fun jobStageValuesAreFrozen() = assertThat(JobStage.entries.map { it.name }).containsExactly("QUEUED", "READING_FILE", "EXTRACTING_TEXT", "NORMALIZING_TEXT", "CHUNKING_TEXT", "ASSESSING_RESUME", "GENERATING_QUESTIONS", "SCORING_ANSWER", "COMPLETED")
+	@Test fun jobTypeValuesAreFrozen() = assertThat(JobType.entries.map { it.name }).containsExactly("RESUME_EXTRACTION", "ANALYSIS", "ANSWER_FEEDBACK", "EXPERIENCE_SPLIT")
+	@Test fun jobStageValuesAreFrozen() = assertThat(JobStage.entries.map { it.name }).containsExactly("QUEUED", "READING_FILE", "EXTRACTING_TEXT", "NORMALIZING_TEXT", "CHUNKING_TEXT", "ASSESSING_RESUME", "GENERATING_QUESTIONS", "SPLITTING_EXPERIENCE", "SCORING_ANSWER", "COMPLETED")
 	@Test fun assessmentScoreKeysAreFrozen() {
 		val mapper = ObjectMapper()
 		val fields = mapper.readTree(mapper.writeValueAsString(AssessmentScores(1, 2, 3, 4, 5))).fieldNames().asSequence().toList()

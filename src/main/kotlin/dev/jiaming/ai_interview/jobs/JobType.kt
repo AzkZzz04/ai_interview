@@ -1,3 +1,3 @@
 package dev.jiaming.ai_interview.jobs
 
-enum class JobType { RESUME_EXTRACTION, ANALYSIS, ANSWER_FEEDBACK }
+enum class JobType { RESUME_EXTRACTION, ANALYSIS, ANSWER_FEEDBACK, EXPERIENCE_SPLIT }
