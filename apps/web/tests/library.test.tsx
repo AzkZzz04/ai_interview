@@ -126,6 +126,60 @@ describe("LinkedIn experience recovery", () => {
 		expect(readLinkedInRecovery()?.removed).toEqual([]);
 	});
 
+	it("keeps an accepted split active after a transient first poll error", async () => {
+		clearLinkedInRecovery();
+		let splitRequests = 0;
+		let pollRequests = 0;
+		server.use(
+			http.post("*/api/experiences/linkedin-split", () => {
+				splitRequests += 1;
+				return HttpResponse.json({
+					jobId: "linkedin-job",
+					jobType: "EXPERIENCE_SPLIT",
+					status: "QUEUED",
+					stage: "SPLITTING_EXPERIENCE",
+					statusUrl: "/api/jobs/linkedin-job",
+					reused: false,
+					inputRefs: { resumeId: null, targetJobId: null, practiceSetId: null, attemptId: null }
+				}, { status: 202 });
+			}),
+			http.get("*/api/jobs/linkedin-job", () => {
+				if (pollRequests++ < 3) return HttpResponse.error();
+				return HttpResponse.json({
+					jobId: "linkedin-job",
+					jobType: "EXPERIENCE_SPLIT",
+					status: "PROCESSING",
+					stage: "SPLITTING_EXPERIENCE",
+					attempts: 1,
+					maxAttempts: 3,
+					result: null,
+					error: null,
+					createdAt: "2026-09-30T00:00:00Z",
+					startedAt: "2026-09-30T00:00:00Z",
+					completedAt: null,
+					inputRefs: { resumeId: null, targetJobId: null, practiceSetId: null, attemptId: null }
+				});
+			})
+		);
+
+		const user = userEvent.setup();
+		renderRoute("/library/experiences");
+		await openDialog(user);
+		await user.type(screen.getByLabelText("Experience text"), LINKEDIN_TEXT);
+		await user.click(screen.getByRole("button", { name: "Split into items" }));
+
+		const splitButton = screen.getByRole("button", { name: "Split into items" });
+		await screen.findByRole("alert", {}, { timeout: 5_000 });
+		expect(readLinkedInRecovery()?.jobId).toBe("linkedin-job");
+		expect(splitRequests).toBe(1);
+		expect(splitButton).toBeDisabled();
+
+		await waitFor(() => expect(pollRequests).toBe(4), { timeout: 5_000 });
+		await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+		expect(splitButton).toBeDisabled();
+		expect(splitRequests).toBe(1);
+	});
+
 	it("clears the recovery draft after save or an explicit discard", async () => {
 		clearLinkedInRecovery();
 		const user = userEvent.setup();

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { STAGE_LABELS } from "@/lib/api/jobLabels";
 import type { ExperienceDraft, ExperienceSplitResult } from "@/lib/api/types";
+import { ApiError } from "@/lib/api/client";
 import { errorCode, friendlyError } from "@/lib/errorMessages";
 import { clearLinkedInRecovery, readLinkedInRecovery, writeLinkedInRecovery } from "@/lib/linkedInRecovery";
 import { useSaveExperiences, useSplitLinkedIn } from "@/lib/query/library";
@@ -26,7 +27,7 @@ export function LinkedInDialog({ onSaved, trigger }: { onSaved?: () => void; tri
   const kept = items.filter((item, index) => !item.duplicateOf && !removed.includes(index));
   const failed = job?.status === "FAILED";
   const lostJob = jobId !== null && ["JOB_NOT_FOUND", "NOT_FOUND"].includes(errorCode(pollError) ?? "");
-  const working = split.isPending || (jobId !== null && !job?.status && !pollError) || (job && !["SUCCEEDED", "FAILED"].includes(job.status));
+  const working = split.isPending || (jobId !== null && !job?.status && (!pollError || pollError instanceof ApiError && pollError.retryable)) || (job && !["SUCCEEDED", "FAILED"].includes(job.status));
   const tooShort = text.trim().length < 50;
 
   useEffect(() => writeLinkedInRecovery({ jobId, text, removed }), [jobId, text, removed]);
