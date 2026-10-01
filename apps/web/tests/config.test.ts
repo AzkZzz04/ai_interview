@@ -9,8 +9,12 @@ describe("parseMockMode", () => {
   });
 
   it("honors an explicit mode in any build", () => {
-    expect(parseMockMode("new-only", true)).toBe("new-only");
-    expect(parseMockMode("new-only", false)).toBe("new-only");
+    expect(parseMockMode("all", true)).toBe("all");
     expect(parseMockMode("off", false)).toBe("off");
+  });
+
+  it("treats the removed new-only mode as unknown", () => {
+    expect(parseMockMode("new-only", false)).toBe("all");
+    expect(parseMockMode("new-only", true)).toBe("off");
   });
 });

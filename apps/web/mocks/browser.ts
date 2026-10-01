@@ -6,16 +6,16 @@ import { createMockStore } from "./store";
 let started: Promise<void> | null = null;
 
 /** Idempotent: React strict mode runs the starting effect twice. */
-export function startMockWorker(mode: "all" | "new-only") {
+export function startMockWorker() {
   // A failed start is forgotten so Retry can try again.
-  started ??= start(mode).catch((error: unknown) => {
+  started ??= start().catch((error: unknown) => {
     started = null;
     throw error;
   });
   return started;
 }
 
-async function start(mode: "all" | "new-only") {
+async function start() {
   const store = createMockStore({ storage: window.localStorage });
   // Console controls for manual testing, e.g. __mockApi.failNext("JOB_FIT", { retryable: false }).
   Object.assign(window, {
@@ -24,5 +24,5 @@ async function start(mode: "all" | "new-only") {
       reset: () => store.reset()
     }
   });
-  await setupWorker(...createHandlers(store, mode)).start({ onUnhandledFrame: "bypass", quiet: true });
+  await setupWorker(...createHandlers(store)).start({ onUnhandledFrame: "bypass", quiet: true });
 }
