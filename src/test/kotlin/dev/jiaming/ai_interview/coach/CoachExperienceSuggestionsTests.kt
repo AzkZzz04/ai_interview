@@ -51,7 +51,7 @@ class CoachExperienceSuggestionsTests {
 
         assertThat(prompt).contains("sourceId=${experience.id} type=EXPERIENCE name=Ledger rewrite", "Built an outbox")
         assertThat(prompt).contains("sourceId=${resume.id} type=RESUME name=Platform resume", "Ran Kafka")
-        assertThat(prompt).contains("Kafka is required", "Selected resume text", "Do not write resume bullets", "\"items\": []")
+        assertThat(prompt).contains("Kafka is required", "Selected resume text", "Give guidance, not finished resume bullets", "\"items\": []")
     }
 
     @Test

@@ -63,11 +63,12 @@ class CoachPromptBuilderSeniorityTests {
 
 		val prompt = promptBuilder.buildPracticeFeedbackPrompt(input, CoachRagContext("feedback", "Job: Kafka required", emptyList(), false))
 
-		assertThat(prompt).contains("Question: Why Kafka?", "Question category: Technical depth", "Expected signals: ordering, trade-offs", "Job: Kafka required", "Because ordering.")
+		assertThat(prompt).contains("<question>\nWhy Kafka?\n</question>", "<question_category>\nTechnical depth\n</question_category>",
+			"<expected_signals>\nordering, trade-offs\n</expected_signals>", "Job: Kafka required", "<answer>\nBecause ordering.\n</answer>")
 		assertThat(prompt).doesNotContain("Seniority", "Mid-level", "calibration", "Target role")
 		assertThat(promptBuilder.buildPracticeFeedbackPrompt(
 			CoachFeedbackInput(resume(), Optional.empty(), null, null, "My own question?", null, emptyList(), "Answer"), context
-		)).contains("Expected signals: none listed")
+		)).contains("<expected_signals>\nnone listed\n</expected_signals>")
 	}
 
 	private fun analysisInput() = CoachAnalysisInput(resume(), Optional.empty(), "Software Engineer", "Intern")

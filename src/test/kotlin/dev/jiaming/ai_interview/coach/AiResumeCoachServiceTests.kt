@@ -96,7 +96,7 @@ class AiResumeCoachServiceTests {
 		assertThat(drafts).hasSize(4)
 		val prompts = org.mockito.kotlin.argumentCaptor<String>()
 		Mockito.verify(client, Mockito.times(2)).generateJson(prompts.capture())
-		assertThat(prompts.allValues[1]).contains("Repair the JSON response", "at least 3")
+		assertThat(prompts.allValues[1]).contains("You repair a JSON response", "at least 3")
 		Mockito.verify(contextService, Mockito.never()).questionContext(input)
 	}
 
@@ -112,7 +112,7 @@ class AiResumeCoachServiceTests {
 		assertThat(feedback).isEqualTo(dev.jiaming.ai_interview.practice.AnswerFeedbackResult(100, "Clear.", "Add numbers.", listOf("Ownership"), listOf("Metrics"), listOf("Context"), null))
 		val prompt = org.mockito.kotlin.argumentCaptor<String>()
 		Mockito.verify(client).generateJson(prompt.capture())
-		assertThat(prompt.firstValue).contains("practice interview answer").doesNotContain("Seniority")
+		assertThat(prompt.firstValue).contains("scoring one practice answer").doesNotContain("Seniority")
 	}
 
 	private fun practiceJson(count: Int) = (1..count).joinToString(",", """{"questions":[""", "]}") {
