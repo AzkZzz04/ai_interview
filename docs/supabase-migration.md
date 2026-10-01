@@ -46,7 +46,7 @@ For host-run startup, set `SPRING_PROFILES_ACTIVE=supabase` and provide the shar
 
 Workers require JDBC and CA settings but no SDK secret key. Preserve the 1,024-dimensional vector column, HNSW cosine index and gemini-embedding-001 model.
 
-For Supabase Compose, keep the six serving-time AI settings in a separate file. Copy the API key, Gemini model IDs and embedding dimension from `.env` without displaying them, then explicitly select the Gemini provider; the local `.env` may set both AI selectors to `none`:
+For Supabase Compose, keep the serving-time AI settings in a separate file. To generate results with OpenAI instead, also set `AI_CHAT_PROVIDER=openai` and `OPENAI_API_KEY` there (model `OPENAI_CHAT_MODEL`, default gpt-4.1-mini); embeddings stay on Gemini. Copy the API key, Gemini model IDs and embedding dimension from `.env` without displaying them, then explicitly select the Gemini provider; the local `.env` may set both AI selectors to `none`:
 
 ~~~sh
 if [ ! -e .env.ai-serving ]; then

@@ -7,6 +7,7 @@ import dev.jiaming.ai_interview.coach.StructuredGenerationClient
 import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
 import java.io.IOException
@@ -22,6 +23,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 @Component
+@ConditionalOnProperty(prefix = "app.ai", name = ["chat-provider"], havingValue = "gemini", matchIfMissing = true)
 class GeminiClient(
     private val objectMapper: ObjectMapper,
     private val transport: GeminiTransport,
@@ -160,7 +162,7 @@ class GeminiClient(
     companion object {
         private val log = LoggerFactory.getLogger(GeminiClient::class.java)
         private const val DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
-        private fun jdkTransport(): GeminiTransport {
+        internal fun jdkTransport(): GeminiTransport {
             val httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
             return GeminiTransport { request ->
                 val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
