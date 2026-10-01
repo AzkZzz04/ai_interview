@@ -137,7 +137,7 @@ kept and marked stale (section 6), not deleted.
 | 7.5 | `POST /api/practice-sets/{setId}/questions/{questionId}/attempts` | existing | Practice page |
 | 7.6 | `POST /api/attempts/{attemptId}/retry` | existing | Practice page |
 | 8.1 | `GET /api/jobs/{jobId}` | existing | Every AI step |
-| 9.1 | `GET /api/history` | new | History |
+| 9.1 | `GET /api/history` | existing | History |
 
 ## 3. Resumes
 
