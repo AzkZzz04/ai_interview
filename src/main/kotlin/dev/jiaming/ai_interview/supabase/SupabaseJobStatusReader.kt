@@ -49,20 +49,29 @@ class SupabaseJobStatusReader(private val client: SupabaseClient, private val ob
         val errorCode = nullableString(row, "error_code")
         val retryable = nullableBoolean(row, "retryable")
         val error = lastError?.let { JobErrorResponse(errorCode, it, retryable) }
+        val attempts = requiredInt(row, "attempts")
+        val maxAttempts = requiredInt(row, "max_attempts")
         return JobStatusResponse(
             jobId,
             JobType.valueOf(requiredString(row, "job_type")),
             JobStatus.valueOf(requiredString(row, "status")),
             JobStage.valueOf(requiredString(row, "stage")),
-            requiredNode(row, "attempts").takeIf { it.isIntegralNumber && it.canConvertToInt() }?.intValue() ?: invalidResponse(),
-            JobStatusResponse.jsonValue(resultPayload), error, nullableInstant(row, "created_at"),
-            nullableInstant(row, "started_at"), nullableInstant(row, "completed_at"), JobInputRefs.from(requestPayload, nullableUuid(row, "resource_id"))
+            attempts,
+            maxAttempts,
+            JobStatusResponse.jsonValue(resultPayload),
+            error,
+            nullableInstant(row, "created_at"),
+            nullableInstant(row, "started_at"),
+            nullableInstant(row, "completed_at"),
+            JobInputRefs.from(requestPayload, nullableUuid(row, "resource_id"), nullableString(row, "resource_type"))
         )
     }
 
     private fun requiredNode(row: JsonNode, field: String): JsonNode = row.get(field) ?: invalidResponse()
     private fun requiredString(row: JsonNode, field: String): String =
         requiredNode(row, field).takeIf { it.isTextual }?.textValue() ?: invalidResponse()
+    private fun requiredInt(row: JsonNode, field: String): Int =
+        requiredNode(row, field).takeIf { it.isIntegralNumber && it.canConvertToInt() }?.intValue() ?: invalidResponse()
     private fun nullableString(row: JsonNode, field: String): String? = requiredNode(row, field).let {
         if (it.isNull) null else it.takeIf { node -> node.isTextual }?.textValue() ?: invalidResponse()
     }
@@ -85,7 +94,7 @@ class SupabaseJobStatusReader(private val client: SupabaseClient, private val ob
     private companion object {
         const val SCHEMA = "ai_interview_api"
         const val TABLE = "job_status"
-        const val COLUMNS = "id,user_id,job_type,status,stage,attempts,result_payload,last_error,error_code,retryable,created_at,started_at,completed_at,resource_id,request_payload"
+        const val COLUMNS = "id,user_id,job_type,status,stage,attempts,result_payload,last_error,error_code,retryable,created_at,started_at,completed_at,resource_id,request_payload,max_attempts,resource_type"
         const val UNAVAILABLE_MESSAGE = "Job status is temporarily unavailable"
     }
 }

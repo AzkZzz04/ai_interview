@@ -37,7 +37,6 @@ data:
   JOB_HEARTBEAT_SECONDS: {{ .Values.app.jobHeartbeatSeconds | quote }}
   JOB_MAX_ATTEMPTS: {{ .Values.app.jobMaxAttempts | quote }}
   JOB_RETRY_BASE_SECONDS: {{ .Values.app.jobRetryBaseSeconds | quote }}
-  JOB_REUSE_WINDOW_SECONDS: {{ .Values.app.jobReuseWindowSeconds | quote }}
   JOB_SHUTDOWN_GRACE_SECONDS: {{ .Values.app.shutdownGraceSeconds | quote }}
   AI_CHAT_MODEL: google-genai
   AI_EMBEDDING_MODEL: google-genai

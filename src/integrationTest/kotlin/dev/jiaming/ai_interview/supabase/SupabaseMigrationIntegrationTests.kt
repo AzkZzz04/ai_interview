@@ -2,6 +2,8 @@ package dev.jiaming.ai_interview.supabase
 
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.MigrationVersion
 import org.junit.jupiter.api.Test
 import org.springframework.jdbc.datasource.DriverManagerDataSource
 import org.testcontainers.junit.jupiter.Container
@@ -17,7 +19,7 @@ import java.util.UUID
 @Testcontainers
 class SupabaseMigrationIntegrationTests {
     @Test
-    fun `empty database runs V1 through V8 without a baseline or Supabase roles`() {
+    fun `empty database runs V1 through V9 without a baseline or Supabase roles`() {
         dropApiRoles()
         val database = createDatabase()
         try {
@@ -32,6 +34,7 @@ class SupabaseMigrationIntegrationTests {
             SupabaseMigrationRunner(dataSource).migrate()
 
             assertHistory(dataSource, baseline = false)
+            assertViewShape(dataSource)
             dataSource.connection.use { connection ->
                 assertThat(roleExists(connection, "anon")).isFalse()
                 assertThat(roleExists(connection, "authenticated")).isFalse()
@@ -65,26 +68,35 @@ class SupabaseMigrationIntegrationTests {
                 }
             }
 
+            migrateThroughV8(dataSource)
+            assertViewShape(dataSource, includeV9Columns = false)
+            val v1ToV8Checksums = migrationChecksums(dataSource)
+            assertThat(v1ToV8Checksums.keys).containsExactly("1", "2", "3", "4", "5", "6", "7", "8")
+
             val runner = SupabaseMigrationRunner(dataSource)
             runner.migrate()
 
             assertHistory(dataSource, baseline = true)
             assertViewShape(dataSource)
+            assertThat(migrationChecksums(dataSource).filterKeys { it != "9" }).isEqualTo(v1ToV8Checksums)
             val userId = UUID.randomUUID()
             val jobId = UUID.randomUUID()
             val resumeId = UUID.randomUUID()
             val jobDescriptionId = UUID.randomUUID()
+            val targetJobId = UUID.randomUUID()
+            val practiceSetId = UUID.randomUUID()
+            val attemptId = UUID.randomUUID()
             dataSource.connection.use { connection ->
                 connection.createStatement().use { statement ->
                     statement.execute("INSERT INTO ai_interview_app.app_users (id, email) VALUES ('$userId', 'migration-test@example.test')")
                     statement.execute("""INSERT INTO ai_interview_app.background_jobs
-                        (id, user_id, job_type, resource_id, status, stage, request_payload)
-                        VALUES ('$jobId', '$userId', 'ANALYSIS', '$resumeId', 'QUEUED', 'QUEUED',
-                        '{"resumeId":"$resumeId","jobDescriptionId":"$jobDescriptionId","prompt":"PRIVATE_PROMPT_MARKER"}'::jsonb)""")
+                        (id, user_id, job_type, resource_type, resource_id, status, stage, request_payload, max_attempts)
+                        VALUES ('$jobId', '$userId', 'ANALYSIS', 'resume', '$resumeId', 'QUEUED', 'QUEUED',
+                        '{"resumeId":"$resumeId","jobDescriptionId":"$jobDescriptionId","targetJobId":"$targetJobId","practiceSetId":"$practiceSetId","attemptId":"$attemptId","prompt":"PRIVATE_PROMPT_MARKER","answerText":"PRIVATE_ANSWER_MARKER"}'::jsonb, 3)""")
                     statement.execute("CREATE SEQUENCE ai_interview_app.runtime_test_seq")
                 }
             }
-            assertServiceRoleCanReadSanitizedView(database, jobId, resumeId, jobDescriptionId)
+            assertServiceRoleCanReadSanitizedView(database, jobId, resumeId, jobDescriptionId, targetJobId, practiceSetId, attemptId)
             assertApiRolesCannotReadApplicationData(database)
             assertProviderObjectStillAccessible(database)
 
@@ -100,6 +112,7 @@ class SupabaseMigrationIntegrationTests {
             }
             runner.migrate()
             assertHistory(dataSource, baseline = true)
+            assertThat(migrationChecksums(dataSource).filterKeys { it != "9" }).isEqualTo(v1ToV8Checksums)
         } finally {
             dropDatabase(database)
             dropApiRoles()
@@ -130,7 +143,7 @@ class SupabaseMigrationIntegrationTests {
                     buildList { while (result.next()) add(result.getString(1)) }
                 }
             }
-            assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8")
+            assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9")
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = 'public.vector_store'::regclass AND attname = 'embedding'").use { result ->
                     result.next(); assertThat(result.getString(1)).isEqualTo("vector(1024)")
@@ -148,16 +161,19 @@ class SupabaseMigrationIntegrationTests {
         }
     }
 
-    private fun assertViewShape(dataSource: DriverManagerDataSource) {
+    private fun assertViewShape(dataSource: DriverManagerDataSource, includeV9Columns: Boolean = true) {
         dataSource.connection.use { connection ->
             val columns = connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT column_name FROM information_schema.columns WHERE table_schema = 'ai_interview_api' AND table_name = 'job_status' ORDER BY ordinal_position").use { result ->
                     buildList { while (result.next()) add(result.getString(1)) }
                 }
             }
-            assertThat(columns).containsExactly(
+            val v1ToV8Columns = listOf(
                 "id", "user_id", "job_type", "status", "stage", "attempts", "result_payload", "last_error",
                 "error_code", "retryable", "created_at", "started_at", "completed_at", "resource_id", "request_payload"
+            )
+            assertThat(columns).containsExactlyElementsOf(
+                if (includeV9Columns) v1ToV8Columns + listOf("max_attempts", "resource_type") else v1ToV8Columns
             )
             val options = connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT reloptions::text FROM pg_class WHERE oid = 'ai_interview_api.job_status'::regclass").use { result ->
@@ -172,16 +188,21 @@ class SupabaseMigrationIntegrationTests {
         database: String,
         jobId: UUID,
         resumeId: UUID,
-        jobDescriptionId: UUID
+        jobDescriptionId: UUID,
+        targetJobId: UUID,
+        practiceSetId: UUID,
+        attemptId: UUID
     ) {
         dataSource(database, "service_role", "service_role_test").connection.use { connection ->
-            connection.prepareStatement("SELECT request_payload::text FROM ai_interview_api.job_status WHERE id = ?").use { statement ->
+            connection.prepareStatement("SELECT request_payload::text, max_attempts, resource_type FROM ai_interview_api.job_status WHERE id = ?").use { statement ->
                 statement.setObject(1, jobId)
                 statement.executeQuery().use { result ->
                     assertThat(result.next()).isTrue()
                     val payload = result.getString(1)
-                    assertThat(payload).contains(resumeId.toString(), jobDescriptionId.toString())
-                    assertThat(payload).doesNotContain("PRIVATE_PROMPT_MARKER", "prompt")
+                    assertThat(payload).contains(resumeId.toString(), jobDescriptionId.toString(), targetJobId.toString(), practiceSetId.toString(), attemptId.toString())
+                    assertThat(payload).doesNotContain("PRIVATE_PROMPT_MARKER", "PRIVATE_ANSWER_MARKER", "prompt", "answerText")
+                    assertThat(result.getInt(2)).isEqualTo(3)
+                    assertThat(result.getString(3)).isEqualTo("resume")
                 }
             }
             assertThatThrownBy {
@@ -272,6 +293,31 @@ class SupabaseMigrationIntegrationTests {
             connection.createStatement().use { it.execute("CREATE DATABASE \"$name\"") }
         }
         return name
+    }
+
+    private fun migrateThroughV8(dataSource: DriverManagerDataSource) {
+        val flyway = Flyway.configure()
+            .dataSource(dataSource)
+            .locations("classpath:db/migration")
+            .schemas("public")
+            .defaultSchema("public")
+            .baselineVersion(MigrationVersion.fromVersion("0"))
+            .baselineDescription("Supabase provider objects")
+            .initSql("SET search_path TO public, extensions")
+            .ignoreMigrationPatterns("*:pending")
+            .cleanDisabled(true)
+            .target(MigrationVersion.fromVersion("8"))
+            .load()
+        flyway.baseline()
+        flyway.migrate()
+    }
+
+    private fun migrationChecksums(dataSource: DriverManagerDataSource): Map<String, Int> = dataSource.connection.use { connection ->
+        connection.createStatement().use { statement ->
+            statement.executeQuery("SELECT version, checksum FROM public.flyway_schema_history WHERE type = 'SQL' AND success ORDER BY installed_rank").use { result ->
+                buildMap<String, Int> { while (result.next()) put(result.getString(1), result.getInt(2)) }
+            }
+        }
     }
 
     private fun dropDatabase(name: String) {

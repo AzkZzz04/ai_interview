@@ -110,7 +110,7 @@ class JobWorkerTests {
     }
 
     private fun worker(properties: JobProperties, handlers: List<JobTerminalFailureHandler>) = JobWorker(properties, queueService, jobStore, processor, JobFailureClassifier(), metrics, RuntimeModeProperties("all"), JobRetryDelayStrategy { it - 1 }, handlers).also { if (::heartbeatExecutor.isInitialized) ReflectionTestUtils.setField(it, "heartbeatExecutor", heartbeatExecutor) }
-    private fun properties(heartbeatSeconds: Int = 60, shutdownGraceSeconds: Int = 120) = JobProperties(true, "http://localhost:4566", "us-east-1", "test", "test", "jobs", "jobs-dlq", 3, 2, if (heartbeatSeconds == 60) 20 else 1, if (heartbeatSeconds == 60) 300 else 30, heartbeatSeconds, 3, 15, 300, 5_000, 30_000, 3_600_000, shutdownGraceSeconds, 7)
+    private fun properties(heartbeatSeconds: Int = 60, shutdownGraceSeconds: Int = 120) = JobProperties(true, "http://localhost:4566", "us-east-1", "test", "test", "jobs", "jobs-dlq", 3, 2, if (heartbeatSeconds == 60) 20 else 1, if (heartbeatSeconds == 60) 300 else 30, heartbeatSeconds, 3, 15, 5_000, 30_000, 3_600_000, shutdownGraceSeconds, 7)
     private fun message() = Message.builder().messageId(UUID.randomUUID().toString()).receiptHandle("receipt").body("{}").build()
     private fun job(id: UUID, type: JobType, status: JobStatus, attempts: Int, errorCode: String? = null): BackgroundJob { val now = Instant.now(); return BackgroundJob(id, UUID.randomUUID(), type, "resource", null, status, JobStage.QUEUED, ObjectMapper().createObjectNode(), null, "fingerprint", attempts, 3, errorCode, null, null, now, now, now, now, now, if (status.terminal()) now else null, UUID.randomUUID(), now.plusSeconds(300)) }
 }

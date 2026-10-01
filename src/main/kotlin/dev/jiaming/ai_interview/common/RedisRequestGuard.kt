@@ -1,6 +1,7 @@
 package dev.jiaming.ai_interview.common
 
 import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -13,6 +14,7 @@ import java.util.function.Supplier
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Service
 import org.springframework.web.context.request.RequestContextHolder
 import org.springframework.web.context.request.ServletRequestAttributes
@@ -54,6 +56,21 @@ class RedisRequestGuard(
         val response = work.get()
         storeResponse(action, fingerprintKey, responseKey, requestFingerprint, response, ttl)
         return response
+    }
+
+    /** Like [withIdempotentRetryCache], but a replay also returns the first response's HTTP status. */
+    fun <T : Any> withIdempotentHttpCache(
+        action: String,
+        requestFingerprintSource: Any?,
+        bodyType: Class<T>,
+        work: Supplier<ResponseEntity<T>>
+    ): ResponseEntity<T> {
+        var fresh: ResponseEntity<T>? = null
+        val cached = withIdempotentRetryCache(action, requestFingerprintSource, CachedHttpResponse::class.java) {
+            val response = work.get().also { fresh = it }
+            CachedHttpResponse(response.statusCode.value(), objectMapper.valueToTree(response.body))
+        }
+        return fresh ?: ResponseEntity.status(cached.status).body(cached.body?.let { objectMapper.treeToValue(it, bodyType) })
     }
 
     private fun assertAllowed(action: String, limit: Int) {
@@ -148,6 +165,9 @@ class RedisRequestGuard(
     }
 
     private fun key(suffix: String) = properties.keyPrefix + suffix
+
+    @JvmRecord
+    private data class CachedHttpResponse(val status: Int, val body: JsonNode?)
 
     private companion object {
         val log = LoggerFactory.getLogger(RedisRequestGuard::class.java)

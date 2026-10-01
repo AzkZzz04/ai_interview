@@ -98,7 +98,7 @@ class JobQueueServiceLocalStackTests {
 
             val properties = JobProperties(
                 true, endpoint, "us-east-1", "test", "test", queueName, dlqName, 2,
-                1, 1, 30, 10, 3, 1, 300, 5_000, 30_000, 3_600_000, 120, 7
+                1, 1, 30, 10, 3, 1, 5_000, 30_000, 3_600_000, 120, 7
             )
             queueService = JobQueueService(
                 sqsClient,

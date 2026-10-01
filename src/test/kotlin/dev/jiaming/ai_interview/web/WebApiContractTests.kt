@@ -152,7 +152,7 @@ class WebApiContractTests {
 
 	private fun accepted(type: JobType, resumeId: UUID?): JobAcceptedResponse {
 		val id = UUID.randomUUID()
-		return JobAcceptedResponse(id, type, JobStatus.QUEUED, JobStage.QUEUED, "/api/jobs/$id", false, JobInputRefs(resumeId, null))
+		return JobAcceptedResponse(id, type, JobStatus.QUEUED, JobStage.QUEUED, "/api/jobs/$id", false, JobInputRefs(resumeId, null, null, null))
 	}
 
 	private companion object {

@@ -85,7 +85,6 @@ app:
   jobHeartbeatSeconds: 60
   jobMaxAttempts: 3
   jobRetryBaseSeconds: 15
-  jobReuseWindowSeconds: 300
   shutdownGraceSeconds: 120
 
 # External credentials contain only DATABASE_URL, DATABASE_USERNAME, DATABASE_PASSWORD.

@@ -50,6 +50,11 @@ spring:
         schema-name: public
         table-name: vector_store
 
+server:
+  # Tomcat takes the client address from X-Forwarded-For sent by private-network proxies (nginx, the Vite dev proxy),
+  # so RedisRequestGuard rate-limits the real client. nginx overwrites the header, so clients cannot forge it.
+  forward-headers-strategy: native
+
 management:
   endpoints:
     web:
@@ -126,7 +131,6 @@ app:
     heartbeat-seconds: ${JOB_HEARTBEAT_SECONDS:60}
     max-attempts: ${JOB_MAX_ATTEMPTS:3}
     retry-base-seconds: ${JOB_RETRY_BASE_SECONDS:15}
-    reuse-window-seconds: ${JOB_REUSE_WINDOW_SECONDS:300}
     dispatch-interval-ms: ${JOB_DISPATCH_INTERVAL_MS:5000}
     lease-reaper-interval-ms: ${JOB_LEASE_REAPER_INTERVAL_MS:30000}
     cleanup-interval-ms: ${JOB_CLEANUP_INTERVAL_MS:3600000}

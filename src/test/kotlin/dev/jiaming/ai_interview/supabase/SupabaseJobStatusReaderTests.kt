@@ -2,8 +2,13 @@ package dev.jiaming.ai_interview.supabase
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.jiaming.ai_interview.common.ApiRequestException
+import dev.jiaming.ai_interview.jobs.BackgroundJob
+import dev.jiaming.ai_interview.jobs.BackgroundJobStore
 import dev.jiaming.ai_interview.jobs.JobErrorResponse
+import dev.jiaming.ai_interview.jobs.JobStage
 import dev.jiaming.ai_interview.jobs.JobStatus
+import dev.jiaming.ai_interview.jobs.JobStatusReaderConfiguration
+import dev.jiaming.ai_interview.jobs.JobType
 import io.github.jan.supabase.SupabaseClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -12,12 +17,15 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.mockito.Mockito
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import java.time.Instant
+import java.util.Optional
 import java.util.UUID
 
 class SupabaseJobStatusReaderTests {
@@ -25,6 +33,7 @@ class SupabaseJobStatusReaderTests {
     private val userId = UUID.fromString("20000000-0000-0000-0000-000000000002")
     private val resourceId = UUID.fromString("30000000-0000-0000-0000-000000000003")
     private val jobDescriptionId = UUID.fromString("40000000-0000-0000-0000-000000000004")
+    private val mapper = ObjectMapper()
 
     @Test
     fun `queries owner scoped custom schema and maps raw JSON without inventing timestamps`() = runBlocking {
@@ -38,7 +47,7 @@ class SupabaseJobStatusReaderTests {
             assertEquals("eq.$jobId", request.url.parameters["id"])
             assertEquals("eq.$userId", request.url.parameters["user_id"])
             assertEquals("1", request.url.parameters["limit"])
-            assertEquals("id,user_id,job_type,status,stage,attempts,result_payload,last_error,error_code,retryable,created_at,started_at,completed_at,resource_id,request_payload", request.url.parameters["select"])
+            assertEquals("id,user_id,job_type,status,stage,attempts,result_payload,last_error,error_code,retryable,created_at,started_at,completed_at,resource_id,request_payload,max_attempts,resource_type", request.url.parameters["select"])
             assertEquals(KEY, request.headers["apikey"])
             assertNull(request.headers[HttpHeaders.Authorization])
         }
@@ -46,16 +55,103 @@ class SupabaseJobStatusReaderTests {
             val status = reader.findForUser(jobId, userId)!!
             assertEquals(jobId, status.jobId)
             assertEquals(JobStatus.QUEUED, status.status)
+            assertEquals(3, status.maxAttempts)
             assertEquals(84, (status.result as Map<*, *>)["overallScore"])
             assertEquals(listOf("clear", null), (status.result as Map<*, *>)["tags"])
             assertEquals(7.5, ((status.result as Map<*, *>)["details"] as Map<*, *>)["rating"])
             assertEquals(resourceId, status.inputRefs.resumeId)
-            assertEquals(jobDescriptionId, status.inputRefs.jobDescriptionId)
+            assertEquals(jobDescriptionId, status.inputRefs.targetJobId)
             assertNull(status.createdAt)
             assertNull(status.startedAt)
             assertNull(status.completedAt)
             assertNull(status.error)
         } finally { client.close() }
+    }
+
+    @Test
+    fun `same job fixture has the same status contract through JDBC and SDK readers`() = runBlocking {
+        val resumeId = UUID.randomUUID()
+        val practiceSetId = UUID.randomUUID()
+        val attemptId = UUID.randomUUID()
+        val createdAt = Instant.parse("2026-09-30T12:34:56Z")
+        val requestPayload = """{"resumeId":"$resumeId","jobDescriptionId":"$jobDescriptionId","practiceSetId":"$practiceSetId","attemptId":"$attemptId","prompt":"PRIVATE_PROMPT_MARKER"}"""
+        val resultPayload = """{"overallScore":84,"tags":["clear",null],"details":{"rating":7.5}}"""
+        val localJob = BackgroundJob(
+            id = jobId,
+            userId = userId,
+            jobType = JobType.ANALYSIS,
+            resourceType = "resource",
+            resourceId = resourceId,
+            status = JobStatus.QUEUED,
+            stage = JobStage.QUEUED,
+            requestPayload = mapper.readTree(requestPayload),
+            resultPayload = mapper.readTree(resultPayload),
+            requestFingerprint = "fixture-fingerprint",
+            attempts = 2,
+            maxAttempts = 3,
+            errorCode = null,
+            lastError = null,
+            retryable = null,
+            runAfter = null,
+            createdAt = createdAt,
+            updatedAt = createdAt,
+            enqueuedAt = null,
+            startedAt = null,
+            completedAt = null,
+            leaseToken = null,
+            leaseExpiresAt = null
+        )
+        val jobStore = Mockito.mock(BackgroundJobStore::class.java)
+        Mockito.`when`(jobStore.findForUser(jobId, userId)).thenReturn(Optional.of(localJob))
+        val jdbcReader = JobStatusReaderConfiguration().localJobStatusReader(jobStore)
+        val (client, reader) = reader(row(
+            requestPayload = requestPayload,
+            resultPayload = resultPayload,
+            createdAt = "\"$createdAt\"",
+            resourceType = "\"resource\""
+        ))
+        try {
+            assertEquals(jdbcReader.findForUser(jobId, userId), reader.findForUser(jobId, userId))
+        } finally { client.close() }
+    }
+
+    @Test
+    fun `null JSON and nullable status fields stay null`() = runBlocking {
+        val (client, reader) = reader(row(requestPayload = "null", resourceType = "null"))
+        try {
+            val status = reader.findForUser(jobId, userId)!!
+            assertNull(status.result)
+            assertNull(status.error)
+            assertNull(status.createdAt)
+            assertNull(status.startedAt)
+            assertNull(status.completedAt)
+            assertNull(status.inputRefs.resumeId)
+            assertNull(status.inputRefs.targetJobId)
+            assertNull(status.inputRefs.practiceSetId)
+            assertNull(status.inputRefs.attemptId)
+        } finally { client.close() }
+    }
+
+    @Test
+    fun `resume fallback is resource aware and malformed reference UUIDs stay null`() = runBlocking {
+        val invalidRefs = """{"resumeId":"invalid","jobDescriptionId":"invalid","practiceSetId":"invalid","attemptId":"invalid"}"""
+        val (resumeClient, resumeReader) = reader(row(requestPayload = invalidRefs, resourceType = "\"resume\""))
+        try {
+            val refs = resumeReader.findForUser(jobId, userId)!!.inputRefs
+            assertEquals(resourceId, refs.resumeId)
+            assertNull(refs.targetJobId)
+            assertNull(refs.practiceSetId)
+            assertNull(refs.attemptId)
+        } finally { resumeClient.close() }
+
+        val (attemptClient, attemptReader) = reader(row(requestPayload = invalidRefs, resourceType = "\"attempt\""))
+        try {
+            val refs = attemptReader.findForUser(jobId, userId)!!.inputRefs
+            assertNull(refs.resumeId)
+            assertNull(refs.targetJobId)
+            assertNull(refs.practiceSetId)
+            assertNull(refs.attemptId)
+        } finally { attemptClient.close() }
     }
 
     @Test
@@ -77,7 +173,10 @@ class SupabaseJobStatusReaderTests {
     fun `malformed payloads and mismatched rows become sanitized service unavailable`() = runBlocking {
         val mismatchedOwner = row(user = UUID.randomUUID())
         val mismatchedJob = row(job = UUID.randomUUID())
-        listOf("{", "{}", "[{}]", mismatchedOwner, mismatchedJob).forEach { body ->
+        listOf(
+            "{", "{}", "[{}]", mismatchedOwner, mismatchedJob,
+            row(maxAttempts = "\"three\""), row(resourceType = "42")
+        ).forEach { body ->
             val (client, reader) = reader(body)
             try { assertUnavailable { reader.findForUser(jobId, userId) } } finally { client.close() }
         }
@@ -90,6 +189,12 @@ class SupabaseJobStatusReaderTests {
         })
         try { assertUnavailable { SupabaseJobStatusReader(failedClient, ObjectMapper()).findForUser(jobId, userId) } }
         finally { failedClient.close() }
+
+        val deniedClient = SupabaseClientConfig.createClient(URL, KEY, MockEngine {
+            respond("private authorization detail", HttpStatusCode.Forbidden, jsonHeaders)
+        })
+        try { assertUnavailable { SupabaseJobStatusReader(deniedClient, ObjectMapper()).findForUser(jobId, userId) } }
+        finally { deniedClient.close() }
 
         val slowClient = SupabaseClientConfig.createClient(URL, KEY, MockEngine {
             delay(15_000)
@@ -112,10 +217,13 @@ class SupabaseJobStatusReaderTests {
         user: UUID = userId,
         requestPayload: String = "{}",
         resultPayload: String = "null",
+        createdAt: String = "null",
+        maxAttempts: String = "3",
+        resourceType: String = "\"resume\"",
         lastError: String = "null",
         errorCode: String = "\"STALE_CODE\"",
         retryable: String = "true"
-    ) = """[{"id":"$job","user_id":"$user","job_type":"ANALYSIS","status":"QUEUED","stage":"QUEUED","attempts":2,"result_payload":$resultPayload,"last_error":$lastError,"error_code":$errorCode,"retryable":$retryable,"created_at":null,"started_at":null,"completed_at":null,"resource_id":"$resourceId","request_payload":$requestPayload}]"""
+    ) = """[{"id":"$job","user_id":"$user","job_type":"ANALYSIS","status":"QUEUED","stage":"QUEUED","attempts":2,"result_payload":$resultPayload,"last_error":$lastError,"error_code":$errorCode,"retryable":$retryable,"created_at":$createdAt,"started_at":null,"completed_at":null,"resource_id":"$resourceId","request_payload":$requestPayload,"max_attempts":$maxAttempts,"resource_type":$resourceType}]"""
 
     private fun assertUnavailable(action: () -> Any?) {
         val exception = assertFailsWith<ApiRequestException> { action() }

@@ -7,14 +7,13 @@ import java.util.UUID
 
 @JvmRecord
 data class JobStatusResponse(
-    val jobId: UUID, val jobType: JobType, val status: JobStatus, val stage: JobStage, val attempts: Int,
+    val jobId: UUID, val jobType: JobType, val status: JobStatus, val stage: JobStage, val attempts: Int, val maxAttempts: Int,
     val result: Any?, val error: JobErrorResponse?, val createdAt: Instant?, val startedAt: Instant?,
     val completedAt: Instant?, val inputRefs: JobInputRefs
 ) {
     companion object {
         @JvmStatic fun from(job: BackgroundJob): JobStatusResponse {
-            val error = job.lastError?.let { JobErrorResponse(job.errorCode, it, job.retryable) }
-            return JobStatusResponse(job.id, job.jobType, job.status, job.stage, job.attempts, jsonValue(job.resultPayload), error,
+            return JobStatusResponse(job.id, job.jobType, job.status, job.stage, job.attempts, job.maxAttempts, jsonValue(job.resultPayload), JobErrorResponse.from(job),
                 job.createdAt, job.startedAt, job.completedAt, JobInputRefs.from(job))
         }
 

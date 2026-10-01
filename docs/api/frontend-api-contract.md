@@ -82,8 +82,7 @@ when the job ends, so the UI can show the last failure after a reload.
 }
 ```
 
-`inputRefs` is **changed**. Today it has `{resumeId, jobDescriptionId}`. `jobDescriptionId` becomes
-`targetJobId`, and `practiceSetId` and `attemptId` are added. All four are nullable.
+`inputRefs` contains four nullable references. Older jobs' `jobDescriptionId` is exposed as `targetJobId`.
 
 **`DeleteImpact`** (new): what a delete removes, shown in the confirmation dialog.
 
@@ -137,7 +136,7 @@ kept and marked stale (section 6), not deleted.
 | 7.4 | `POST /api/practice-sets/{setId}/questions` | new | Practice page (add your own question) |
 | 7.5 | `POST /api/practice-sets/{setId}/questions/{questionId}/attempts` | new | Practice page |
 | 7.6 | `POST /api/attempts/{attemptId}/retry` | new | Practice page |
-| 8.1 | `GET /api/jobs/{jobId}` | changed | Every AI step |
+| 8.1 | `GET /api/jobs/{jobId}` | existing | Every AI step |
 | 9.1 | `GET /api/history` | new | History |
 
 ## 3. Resumes
@@ -571,9 +570,10 @@ Errors: `404 ATTEMPT_NOT_FOUND`, `409 ATTEMPT_NOT_FAILED`, `429 RATE_LIMITED`.
 
 ## 8. Jobs
 
-### 8.1 `GET /api/jobs/{jobId}` — changed
+### 8.1 `GET /api/jobs/{jobId}` — existing
 
-Keeps today's `JobStatusResponse` shape and adds `maxAttempts` and the changed `inputRefs`:
+Returns the same contract through JDBC and Supabase polling, including `maxAttempts`, all four nullable input
+references, nested result JSON, nullable timestamps and error values:
 
 ```json
 {
@@ -782,7 +782,8 @@ The frontend assumes each of these. The backend plan must implement and test the
    - Job de-duplication keys on resource IDs (resume, pair, set, attempt), never on request text alone.
    - Two attempts with identical text on different questions, or a retry of a failed attempt, always start a
      new job.
-   - `reused: true` only comes from the same `Idempotency-Key`.
+   - `reused: true` comes only from the same `Idempotency-Key`, or from a submit while a job for the same resource
+     is still running, which returns that running job.
 4. **Cascade delete** as described in 3.7, 4.6 and 5.7. `delete-impact` counts match what the delete removes.
 5. **Duplicate resolution.**
    - Applies to resumes (file bytes, then normalized text), target jobs (normalized text) and experiences

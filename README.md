@@ -144,6 +144,16 @@ npm run dev
 
 Open `http://127.0.0.1:3000`. The backend status endpoint is `http://127.0.0.1:8080/api/status`.
 
+### Or run the full stack in Docker
+
+One command builds and starts PostgreSQL, Redis, LocalStack, the API, the worker and the web app:
+
+```bash
+docker compose --profile app up --build
+```
+
+The API and worker read `.env` for `GEMINI_API_KEY` and the Gemini settings from step 1; Compose points them at its own PostgreSQL, Redis and LocalStack, so the address settings in `.env` are ignored here. Open `http://127.0.0.1:3000`; nginx forwards `/api` to the API, so the API and worker publish no ports. Every published port (web `3000`, PostgreSQL `55432`, Redis `6380`, LocalStack `4566`) binds to `127.0.0.1` only. Stop with `docker compose --profile app down`.
+
 ## Container images
 
 The backend image accepts the same environment variables as a local Spring Boot
@@ -333,7 +343,7 @@ Workers use SQS long polling and PostgreSQL-backed leases. Database retries use 
 | `POST /api/interview/feedback` | Submit answer-feedback work. |
 | `GET /api/jobs/{jobId}` | Poll job status, stage, attempts, result, and error. |
 
-Mutation endpoints accept an optional `Idempotency-Key`. Redis handles short-lived HTTP idempotency and rate limits; PostgreSQL fingerprints reuse identical AI jobs for five minutes.
+Mutation endpoints accept an optional `Idempotency-Key`. Redis handles short-lived HTTP idempotency and rate limits; PostgreSQL allows one running job per resource, so a second submit returns the job already in progress.
 
 ## Verification
 

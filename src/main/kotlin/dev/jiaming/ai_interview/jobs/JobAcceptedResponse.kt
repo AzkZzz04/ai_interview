@@ -8,7 +8,7 @@ data class JobAcceptedResponse(
     val statusUrl: String, val reused: Boolean, val inputRefs: JobInputRefs
 ) {
     constructor(jobId: UUID, jobType: JobType, status: JobStatus, stage: JobStage, statusUrl: String, reused: Boolean) :
-        this(jobId, jobType, status, stage, statusUrl, reused, JobInputRefs(null, null))
+        this(jobId, jobType, status, stage, statusUrl, reused, JobInputRefs(null, null, null, null))
 
     companion object {
         @JvmStatic fun from(job: BackgroundJob, reused: Boolean) = JobAcceptedResponse(

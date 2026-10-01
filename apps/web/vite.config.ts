@@ -8,8 +8,8 @@ export default defineConfig({
       "@": import.meta.dirname
     }
   },
-  // The backend's CORS allows only port 3000, so never fall back to another port.
-  server: { port: 3000, strictPort: true },
+  // /api goes through this origin to the local API, as nginx does in the container, so no CORS is involved.
+  server: { port: 3000, strictPort: true, proxy: { "/api": "http://127.0.0.1:8080" } },
   preview: { port: 3000, strictPort: true },
   test: {
     environment: "jsdom",

@@ -24,6 +24,6 @@ class JobPropertiesTests {
 		JobProperties(
 			true, "http://localhost:4566", "us-east-1", "test", "test",
 			queue, dlq, maxReceiveCount, 2, 20, visibility, heartbeat, maxAttempts,
-			15, 300, 5_000, 30_000, 3_600_000, 120, 7
+			15, 5_000, 30_000, 3_600_000, 120, 7
 		)
 }

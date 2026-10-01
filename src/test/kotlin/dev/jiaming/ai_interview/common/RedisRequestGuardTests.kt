@@ -19,6 +19,8 @@ import org.mockito.junit.jupiter.MockitoSettings
 import org.mockito.quality.Strictness
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
+import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.web.context.request.RequestContextHolder
 import org.springframework.web.context.request.ServletRequestAttributes
@@ -99,6 +101,28 @@ class RedisRequestGuardTests {
         }.isInstanceOf(ResponseStatusException::class.java)
             .hasMessageContaining("409 CONFLICT")
             .hasMessageContaining("Idempotency-Key")
+    }
+
+    @Test
+    fun replaysCachedStatusAndBodyForSameIdempotencyKeyAndPayload() {
+        requestWithIdempotencyKey("create-key")
+        val calls = AtomicInteger()
+        val first = guard.withIdempotentHttpCache("resume-paste", listOf("text"), CachedResponse::class.java) {
+            ResponseEntity.status(HttpStatus.CREATED).body(CachedResponse("run-${calls.incrementAndGet()}"))
+        }
+        val second = guard.withIdempotentHttpCache("resume-paste", listOf("text"), CachedResponse::class.java) {
+            ResponseEntity.ok(CachedResponse("run-${calls.incrementAndGet()}"))
+        }
+
+        assertThat(first.statusCode).isEqualTo(HttpStatus.CREATED)
+        assertThat(second.statusCode).isEqualTo(HttpStatus.CREATED)
+        assertThat(second.body).isEqualTo(CachedResponse("run-1"))
+        assertThat(calls).hasValue(1)
+        assertThatThrownBy {
+            guard.withIdempotentHttpCache("resume-paste", listOf("other text"), CachedResponse::class.java) {
+                ResponseEntity.ok(CachedResponse("should-not-run"))
+            }
+        }.isInstanceOf(ResponseStatusException::class.java).hasMessageContaining("409 CONFLICT")
     }
 
     @Test
