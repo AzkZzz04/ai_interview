@@ -62,32 +62,18 @@ class TargetJobService(
 
     fun deleteImpact(targetJobId: UUID): TargetJobDeleteImpact {
         requireOwned(targetJobId)
-        return TargetJobDeleteImpact()
+        val fits = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM ai_interview_app.job_fits WHERE target_job_id = ? AND user_id = ? AND result_payload IS NOT NULL",
+            Int::class.java, targetJobId, localUserService.localUserId()
+        ) ?: 0
+        return TargetJobDeleteImpact(fits = fits)
     }
 
     @Transactional
     fun delete(targetJobId: UUID) {
         val userId = localUserService.localUserId()
         // Match worker job-then-resource locking; stable ordering also keeps overlapping deletes consistent.
-        val affectedJobIds = jdbcTemplate.query(
-            """
-                SELECT id
-                FROM ai_interview_app.background_jobs
-                WHERE user_id = ?
-                  AND (
-                      (resource_type = 'target-job' AND resource_id = ?)
-                      OR request_payload ->> 'targetJobId' = ?
-                      OR request_payload ->> 'jobDescriptionId' = ?
-                  )
-                ORDER BY id ASC
-                FOR UPDATE
-            """.trimIndent(),
-            { rs, _ -> rs.getObject("id", UUID::class.java) },
-            userId,
-            targetJobId,
-            targetJobId.toString(),
-            targetJobId.toString(),
-        )
+        val affectedJobIds = lockAffectedJobs(userId, targetJobId).toMutableSet()
         val ownedId = jdbcTemplate.query(
             """
                 SELECT id
@@ -99,6 +85,10 @@ class TargetJobService(
             targetJobId,
             userId,
         ).firstOrNull() ?: throw notFound()
+
+        // A fit request can finish creating its job while this delete waits for the target row.
+        // Re-read after taking the row lock so that job cannot outlive its pair.
+        affectedJobIds += lockAffectedJobs(userId, targetJobId)
 
         if (affectedJobIds.isNotEmpty()) {
             val placeholders = affectedJobIds.joinToString { "?" }
@@ -115,6 +105,23 @@ class TargetJobService(
         )
         if (deleted != 1) throw notFound()
     }
+
+    private fun lockAffectedJobs(userId: UUID, targetJobId: UUID): List<UUID> = jdbcTemplate.query(
+        """
+            SELECT id
+            FROM ai_interview_app.background_jobs
+            WHERE user_id = ?
+              AND (
+                  (resource_type = 'target-job' AND resource_id = ?)
+                  OR request_payload ->> 'targetJobId' = ?
+                  OR request_payload ->> 'jobDescriptionId' = ?
+              )
+            ORDER BY id ASC
+            FOR UPDATE
+        """.trimIndent(),
+        { rs, _ -> rs.getObject("id", UUID::class.java) },
+        userId, targetJobId, targetJobId.toString(), targetJobId.toString(),
+    )
 
     private fun requireOwned(targetJobId: UUID) {
         val userId = localUserService.localUserId()

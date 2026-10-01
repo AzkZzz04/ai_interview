@@ -29,6 +29,8 @@ class CoachRagContextService @Autowired constructor(
 
     fun assessmentContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), assessmentQueries(input),
         SelectionProfile("assessment", properties.assessmentContextBudget(), properties.assessmentJobDescriptionMinimum()))
+    fun jobFitContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), jobFitQueries(input),
+        SelectionProfile("job-fit", properties.assessmentContextBudget(), properties.assessmentJobDescriptionMinimum()))
     fun questionContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), questionQueries(input),
         SelectionProfile("questions", properties.questionContextBudget(), properties.questionJobDescriptionMinimum()))
     fun feedbackContext(input: CoachFeedbackInput) = ragContext(input.resume(), input.jobDescription(), feedbackQueries(input),
@@ -140,6 +142,15 @@ class CoachRagContextService @Autowired constructor(
         return listOf("technical depth systems ownership architecture complexity $role $seniority $terms",
             "measurable impact metrics scale latency reliability cost adoption outcomes", "role alignment required skills must have requirements $role $jd",
             "resume gaps missing evidence weak bullets seniority signal $role $seniority")
+    }
+    private fun jobFitQueries(input: CoachAnalysisInput): List<String> {
+        val role = fallback(input.targetRole(), "target job")
+        val jd = jobDescriptionQueryExcerpt(input.jobDescription())
+        return listOf(
+            "required qualifications must-have skills experience and responsibilities $role $jd",
+            "resume evidence accomplishments projects skills tools and measurable impact $role",
+            "job description requirements missing candidate evidence and role alignment $jd",
+        )
     }
     private fun questionQueries(input: CoachAnalysisInput): List<String> {
         val role = fallback(input.targetRole(), "Software Engineer"); val seniority = fallback(input.seniority(), "Mid-level")

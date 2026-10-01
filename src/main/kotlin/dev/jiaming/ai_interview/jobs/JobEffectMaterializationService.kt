@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional
 import dev.jiaming.ai_interview.coach.AnswerFeedbackResponse
 import dev.jiaming.ai_interview.coach.AssessmentResponse
 import dev.jiaming.ai_interview.coach.InterviewQuestionsResponse
+import com.fasterxml.jackson.databind.JsonNode
 import dev.jiaming.ai_interview.interview.AnalysisPersistenceInput
 import dev.jiaming.ai_interview.interview.FeedbackPersistenceInput
 import dev.jiaming.ai_interview.interview.InterviewPersistenceService
@@ -51,6 +52,32 @@ class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate,
                 id, userId, resumeId, response.jobTitle, response.overall, resultJson, java.sql.Timestamp.from(response.scoredAt)
             )
         }
+    }
+    @Transactional
+    fun materializeJobFit(job: BackgroundJob, leaseToken: UUID, fitId: UUID, response: JsonNode) {
+        lockOwnedLease(job.id, leaseToken)
+        if (!response.isObject) throw IllegalArgumentException("Job fit result must be a JSON object")
+        val userId = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+        val existingFitId = findEffect(job.id, JobEffectType.JOB_FIT)
+        if (existingFitId != null && existingFitId != fitId) {
+            throw IllegalStateException("Job ${job.id} already materialized a different fit")
+        }
+        if (existingFitId == null) {
+            jdbcTemplate.update("""
+                INSERT INTO ai_interview_app.background_job_effects (job_id, effect_type, resource_id)
+                VALUES (?, ?, ?)
+                ON CONFLICT (job_id, effect_type) DO NOTHING
+                """, job.id, JobEffectType.JOB_FIT.name, fitId)
+            if (findEffect(job.id, JobEffectType.JOB_FIT) != fitId) {
+                throw IllegalStateException("Job ${job.id} already materialized a different fit")
+            }
+        }
+        val updated = jdbcTemplate.update("""
+            UPDATE ai_interview_app.job_fits
+            SET result_payload = ?::jsonb, result_created_at = now()
+            WHERE id = ? AND user_id = ?
+            """, response.toString(), fitId, userId)
+        if (updated != 1) throw IllegalStateException("Job fit $fitId was not found for job owner $userId")
     }
     @Transactional
     fun <T> withOwnedLease(job: BackgroundJob, leaseToken: UUID, work: Supplier<T>): T {

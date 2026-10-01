@@ -45,6 +45,25 @@ class CoachRagContextServiceTests {
     }
 
     @Test
+    fun jobFitContextUsesResumeAndTargetJobRequirementsFromSharedRetrieval() {
+        val indexingService = Mockito.mock(RagIndexingService::class.java)
+        val retrievalService = Mockito.mock(RagRetrievalService::class.java)
+        val service = service(indexingService, retrievalService)
+        val resume = document(DocumentSourceType.RESUME, "resume-hash", "short resume", listOf(
+            DocumentChunk(0, "Experience", "Delivered Kotlin services", "resume:experience:0")
+        ))
+        val jobDescription = document(DocumentSourceType.JOB_DESCRIPTION, "jd-hash", "short job description", listOf(
+            DocumentChunk(0, "Requirements", "Kafka and PostgreSQL required", "job_description:requirements:0")
+        ))
+
+        val context = service.jobFitContext(CoachAnalysisInput(resume, Optional.of(jobDescription), null, null))
+
+        assertThat(context.context).contains("Delivered Kotlin services", "Kafka and PostgreSQL required")
+        assertThat(context.sourceContextIds).containsExactly("resume:experience:0", "job_description:requirements:0")
+        Mockito.verifyNoInteractions(indexingService, retrievalService)
+    }
+
+    @Test
     fun localDocumentContextIsReservedWhenAnotherDocumentUsesVectorRetrieval() {
         val indexingService = Mockito.mock(RagIndexingService::class.java)
         val retrievalService = Mockito.mock(RagRetrievalService::class.java)

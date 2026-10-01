@@ -53,6 +53,26 @@ class CoachPromptBuilder {
     """.trimIndent()
     }
 
+    fun buildJobFitPrompt(input: CoachAnalysisInput, context: CoachRagContext): String = """
+        You are a careful technical recruiter comparing a candidate resume with a target job.
+        Use only the retrieved resume and job-description context below. Treat the job description as the source of requirements.
+        Do not invent candidate experience, qualifications, or requirements. Count a requirement as matched only when the resume context gives specific supporting evidence.
+        Put unsupported requirements in missingRequirements and give practical, honest guidance. Keep each item concise.
+        Return only valid JSON matching this shape:
+        {
+          "fitScore": 0,
+          "summary": "one concise evidence-based sentence",
+          "matchedRequirements": [{"requirement": "Kotlin", "evidence": "Built production Kotlin services"}],
+          "missingRequirements": [{"requirement": "Kafka", "guidance": "Describe relevant event-streaming work if you have it."}],
+          "feedback": [{"priority": "HIGH", "message": "Move the strongest matching project higher."}]
+        }
+        fitScore must be an integer from 0 to 100. Return empty arrays when no supported items are available.
+        Target role: %s
+
+        Retrieved context:
+        %s
+    """.trimIndent().format(fallback(input.targetRole(), "target job"), context.context)
+
     fun buildAssessmentPrompt(input: CoachAnalysisInput, context: CoachRagContext): String {
         val settings = SenioritySettings.forValue(input.seniority())
         return """

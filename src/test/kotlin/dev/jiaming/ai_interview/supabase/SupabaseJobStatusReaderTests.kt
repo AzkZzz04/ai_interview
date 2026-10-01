@@ -177,6 +177,26 @@ class SupabaseJobStatusReaderTests {
     }
 
     @Test
+    fun `maps job fit refs from the payload instead of the fit pair resource`() = runBlocking {
+        val resumeId = UUID.randomUUID()
+        val targetJobId = UUID.randomUUID()
+        val (client, reader) = reader(row(
+            jobType = "JOB_FIT",
+            stage = "MATCHING_JOB",
+            requestPayload = """{"resumeId":"$resumeId","targetJobId":"$targetJobId"}""",
+            resultPayload = """{"fitScore":68,"summary":"Good.","matchedRequirements":[],"missingRequirements":[],"feedback":[]}""",
+            resourceType = "\"job-fit\""
+        ))
+        try {
+            val status = reader.findForUser(jobId, userId)!!
+            assertEquals(JobType.JOB_FIT, status.jobType)
+            assertEquals(resumeId, status.inputRefs.resumeId)
+            assertEquals(targetJobId, status.inputRefs.targetJobId)
+            assertEquals(68, (status.result as Map<*, *>)["fitScore"])
+        } finally { client.close() }
+    }
+
+    @Test
     fun `resume fallback is resource aware and malformed reference UUIDs stay null`() = runBlocking {
         val invalidRefs = """{"resumeId":"invalid","jobDescriptionId":"invalid","practiceSetId":"invalid","attemptId":"invalid"}"""
         val (resumeClient, resumeReader) = reader(row(requestPayload = invalidRefs, resourceType = "\"resume\""))

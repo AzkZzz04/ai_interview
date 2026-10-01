@@ -131,8 +131,13 @@ class ResumeLibraryService(
             val key = ownedResume.storageKey
             if (!key.isNullOrBlank()) persistenceService.enqueueStorageCleanup(key)
             jdbcTemplate.update(
-                "DELETE FROM ai_interview_app.background_jobs WHERE user_id = ? AND resource_type = 'resume' AND resource_id = ?",
-                userId, resumeId
+                """
+                    DELETE FROM ai_interview_app.background_jobs
+                    WHERE user_id = ? AND (
+                        (resource_type = 'resume' AND resource_id = ?)
+                        OR request_payload ->> 'resumeId' = ?
+                    )
+                """.trimIndent(), userId, resumeId, resumeId.toString()
             )
             jdbcTemplate.update("DELETE FROM ai_interview_app.resumes WHERE id = ? AND user_id = ?", resumeId, userId)
             key
@@ -151,10 +156,13 @@ class ResumeLibraryService(
         jdbcTemplate.query(
             """
                 SELECT id FROM ai_interview_app.background_jobs
-                WHERE user_id = ? AND resource_type = 'resume' AND resource_id = ?
+                WHERE user_id = ? AND (
+                    (resource_type = 'resume' AND resource_id = ?)
+                    OR request_payload ->> 'resumeId' = ?
+                )
                 ORDER BY id FOR UPDATE
                 """.trimIndent(),
-            RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId, resumeId
+            RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId, resumeId, resumeId.toString()
         )
     }
 

@@ -8,6 +8,10 @@ import dev.jiaming.ai_interview.experience.ExperienceSplitResult
 import dev.jiaming.ai_interview.score.ResumeScoreFix
 import dev.jiaming.ai_interview.score.ResumeScoreResult
 import dev.jiaming.ai_interview.score.ResumeScoreRewrite
+import dev.jiaming.ai_interview.fit.FitFeedback
+import dev.jiaming.ai_interview.fit.JobFitResult
+import dev.jiaming.ai_interview.fit.MatchedRequirement
+import dev.jiaming.ai_interview.fit.MissingRequirement
 import org.springframework.stereotype.Component
 import java.io.IOException
 import java.time.Instant
@@ -90,6 +94,20 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         sourceContextIds(response.sourceContextIds, fallbackSourceContextIds)
     )
 
+    fun normalizeJobFit(response: JobFitResponse): JobFitResult = JobFitResult(
+        fitScore = clampScore(response.fitScore ?: 0),
+        summary = fallback(response.summary, "The fit was assessed, but no summary was returned."),
+        matchedRequirements = response.matchedRequirements.orEmpty().filterNotNull()
+            .filter { !it.requirement.isNullOrBlank() && !it.evidence.isNullOrBlank() }
+            .take(12).map { MatchedRequirement(it.requirement!!.trim(), it.evidence!!.trim()) },
+        missingRequirements = response.missingRequirements.orEmpty().filterNotNull()
+            .filter { !it.requirement.isNullOrBlank() && !it.guidance.isNullOrBlank() }
+            .take(12).map { MissingRequirement(it.requirement!!.trim(), it.guidance!!.trim()) },
+        feedback = response.feedback.orEmpty().filterNotNull()
+            .filter { !it.message.isNullOrBlank() }.take(8)
+            .map { FitFeedback(normalizeFitPriority(it.priority), it.message!!.trim()) },
+    )
+
     private fun nonEmpty(values: List<String>?): List<String> = values.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).take(6)
         .ifEmpty { listOf("No specific evidence returned") }
     private fun sourceContextIds(responseIds: List<String>?, fallbackIds: List<String>): List<String> {
@@ -107,6 +125,7 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         return cleaned.ifEmpty { listOf(RecommendationResponse("Resume", "high", "Add more specific evidence, scope, and measurable outcomes.")) }
     }
     private fun normalizePriority(value: String?) = fallback(value, "medium").lowercase(Locale.ROOT).let { if (it in setOf("high", "medium", "low")) it else "medium" }
+    private fun normalizeFitPriority(value: String?) = fallback(value, "MEDIUM").uppercase(Locale.ROOT).let { if (it in setOf("HIGH", "MEDIUM", "LOW")) it else "MEDIUM" }
     private fun normalizeDifficulty(value: String?) = when {
         fallback(value, "Core").lowercase(Locale.ROOT).contains("warm") -> "Warmup"
         fallback(value, "Core").lowercase(Locale.ROOT).contains("deep") -> "Deep Dive"

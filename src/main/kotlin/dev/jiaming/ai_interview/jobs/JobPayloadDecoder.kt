@@ -41,6 +41,13 @@ class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobS
         return payload
     }
 
+    fun jobFit(job: BackgroundJob): JobFitPayload {
+        if (!isCurrent(job.requestPayload, JobFitPayload.CURRENT_VERSION)) {
+            throw IllegalArgumentException("Invalid ${JobFitPayload::class.java.simpleName} job payload")
+        }
+        return convert(job.requestPayload, JobFitPayload::class.java)
+    }
+
     fun decode(job: BackgroundJob, leaseToken: UUID, payloadType: Class<*>): Any {
         val payload: Any = when (job.jobType) {
             JobType.RESUME_EXTRACTION -> convert(job.requestPayload, ResumeExtractionJobPayload::class.java)
@@ -48,6 +55,7 @@ class JobPayloadDecoder(private val objectMapper: ObjectMapper, private val jobS
             JobType.ANALYSIS -> analysis(job, leaseToken)
             JobType.ANSWER_FEEDBACK -> feedback(job, leaseToken)
             JobType.EXPERIENCE_SPLIT -> convert(job.requestPayload, ExperienceSplitJobPayload::class.java)
+            JobType.JOB_FIT -> jobFit(job)
         }
         require(payloadType.isInstance(payload)) { "Decoded payload for ${job.jobType} is not ${payloadType.simpleName}" }
         return payload

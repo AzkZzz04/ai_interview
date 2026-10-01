@@ -27,6 +27,10 @@ class DeleteImpactService(private val jdbcTemplate: JdbcTemplate) {
             "SELECT count(*) FROM ai_interview_app.resume_scores WHERE resume_id = ? AND user_id = ?",
             Int::class.java, resumeId, userId
         ) ?: 0
-        return DeleteImpact(scores, 0, 0, 0, 0, 0)
+        val fits = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM ai_interview_app.job_fits WHERE resume_id = ? AND user_id = ? AND result_payload IS NOT NULL",
+            Int::class.java, resumeId, userId
+        ) ?: 0
+        return DeleteImpact(scores, fits, 0, 0, 0, 0)
     }
 }

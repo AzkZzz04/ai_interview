@@ -22,6 +22,11 @@ class AiResumeCoachService(
         return responseMapper.normalizeAssessment(generateStructured(promptBuilder.buildAssessmentPrompt(input, context), AssessmentResponse::class.java), context.sourceContextIds)
     }
 
+    fun assessJobFit(input: CoachAnalysisInput): dev.jiaming.ai_interview.fit.JobFitResult {
+        val context = ragContextService.jobFitContext(input)
+        return responseMapper.normalizeJobFit(generateStructured(promptBuilder.buildJobFitPrompt(input, context), JobFitResponse::class.java))
+    }
+
     fun generateQuestions(input: CoachAnalysisInput): InterviewQuestionsResponse {
         val context = ragContextService.questionContext(input)
         return responseMapper.normalizeQuestions(generateStructured(promptBuilder.buildQuestionPrompt(input, context), InterviewQuestionsResponse::class.java), context.sourceContextIds)

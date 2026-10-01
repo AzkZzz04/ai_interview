@@ -31,6 +31,19 @@ class CoachPromptBuilderSeniorityTests {
 		assertThat(prompt).contains("correct fundamentals", "structured reasoning", "coachability").contains("learning-oriented next step")
 	}
 
+	@Test
+	fun jobFitPromptRequiresEvidenceAndUsesTheJobDescriptionAsRequirements() {
+		val jobDescription = ResolvedDocument(DocumentSourceType.JOB_DESCRIPTION, UUID.randomUUID(), "job-hash", "REQUIREMENTS\nKotlin and Kafka", emptyList())
+		val prompt = promptBuilder.buildJobFitPrompt(
+			CoachAnalysisInput(resume(), Optional.of(jobDescription), "Platform Engineer", null),
+			CoachRagContext("fit", "Resume: Kotlin services\nJob: Kafka required", listOf("resume:projects:0"), false),
+		)
+
+		assertThat(prompt).contains("only the retrieved resume and job-description context", "specific supporting evidence", "missingRequirements")
+		assertThat(prompt).contains("fitScore", "matchedRequirements", "feedback", "Platform Engineer", "Kafka required")
+		assertThat(prompt).doesNotContain("Seniority")
+	}
+
 	private fun analysisInput() = CoachAnalysisInput(resume(), Optional.empty(), "Software Engineer", "Intern")
 	private fun resume() = ResolvedDocument(DocumentSourceType.RESUME, UUID.randomUUID(), "hash", "PROJECTS\nBuilt a project", listOf(DocumentChunk(0, "Projects", "Built a project", "resume:projects:0")))
 }
