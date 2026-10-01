@@ -133,4 +133,4 @@ Apply it only to the integration environment, after stopping every API and worke
 ./gradlew supabaseMigrate --args=bootstrap-runtime --no-daemon
 ~~~
 
-V18 cannot be undone in place: the dropped tables and deleted jobs are gone, so rolling back to the old flow means restoring the preserved old environment. Status: not yet applied to mjzycnjhtwyqcblwbjvy.
+V18 cannot be undone in place: the dropped tables and deleted jobs are gone, so rolling back to the old flow means restoring the preserved old environment. Status: applied to mjzycnjhtwyqcblwbjvy on 2026-10-01 with its consumers stopped (the legacy tables were empty and no legacy jobs existed), followed by `bootstrap-runtime`. The live smoke passed once the new runtime password propagated, and the full journey passed on the Supabase Compose stack at V18, including duplicate saves, a re-score kept in history, and further attempts with correct deltas.
