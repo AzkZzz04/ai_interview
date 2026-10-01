@@ -121,3 +121,16 @@ Supabase Compose (`--profile supabase`), mocks off, through the API the web app 
 Rollback rehearsal: with the Supabase stack's API, worker and web stopped, the old local environment kept serving its own data with none of the new Supabase rows merged in. Queues (`ai-interview-jobs` vs `ai-interview-supabase-jobs`, separate LocalStacks) and Redis prefixes were separate, so no old process can consume new work.
 
 Still open: Supavisor pool capacity for 12–20 connections (read Pool Size in the dashboard), and a direct anonymous/authenticated Data API request (database grants already deny both roles).
+
+## Legacy flow removal (V18, U13)
+
+V18 removes the old analysis and interview flow from the application schema. It deletes `ANALYSIS` jobs and resume-backed `ANSWER_FEEDBACK` jobs together with their effects, keeps attempt-backed feedback jobs, narrows `background_job_effect_type_check` to `ANSWER_FEEDBACK`, `RESUME_SCORE`, `JOB_FIT`, `EXPERIENCE_SUGGESTIONS` and `PRACTICE_QUESTIONS`, and drops `question_embeddings`, `answer_embeddings`, `interview_answers`, `interview_questions`, `interview_sessions` and `resume_assessments` from `ai_interview_app`. The legacy `public.*` tables and `public.vector_store` (1,024 dimensions, HNSW cosine index, gemini-embedding-001) are untouched.
+
+Apply it only to the integration environment, after stopping every API and worker that runs the old code, since they write the dropped tables. Then re-run the runtime-role bootstrap (KTD17) before starting the new API and worker:
+
+~~~sh
+./gradlew supabaseMigrate --no-daemon
+./gradlew supabaseMigrate --args=bootstrap-runtime --no-daemon
+~~~
+
+V18 cannot be undone in place: the dropped tables and deleted jobs are gone, so rolling back to the old flow means restoring the preserved old environment. Status: not yet applied to mjzycnjhtwyqcblwbjvy.

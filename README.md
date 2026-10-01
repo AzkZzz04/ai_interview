@@ -36,15 +36,15 @@ flowchart TB
   Extract -->|"read pending file"| S3
   Extract -->|"mark resume ready"| Store
 
-  Handler --> Analysis["ANALYSIS\nassessment + questions"]
+  Handler --> Coaching["RESUME_SCORE · JOB_FIT · EXPERIENCE_SUGGESTIONS\nPRACTICE_QUESTIONS · EXPERIENCE_SPLIT"]
   Handler --> Feedback["ANSWER_FEEDBACK\nscore practice answer"]
-  Analysis -->|"strict document references"| Refs
+  Coaching -->|"strict document references"| Refs
   Feedback -->|"strict document references"| Refs
-  Analysis --> RAG["RAG index + context builder\nsection-block-v3 · per-source RRF"]
+  Coaching --> RAG["RAG index + context builder\nsection-block-v3 · per-source RRF"]
   Feedback --> RAG
   RAG <-->|"embeddings and retrieval"| Store
   RAG -->|"grounded context"| Gemini["Gemini 3.6 Flash\nstructured generation"]
-  Analysis -->|"assessment and questions"| Gemini
+  Coaching -->|"scores, fit, suggestions and questions"| Gemini
   Feedback -->|"answer feedback"| Gemini
   Gemini -->|"structured output"| Worker
 
@@ -57,9 +57,9 @@ flowchart TB
 
 1. The API rate-limits and deduplicates requests, then resolves a ready resume and optional job description to validated, content-hashed document references.
 2. It atomically creates or reuses a durable job in PostgreSQL; only after that transaction commits does the dispatcher send its `jobId` to SQS.
-3. A worker claims the PostgreSQL lease and invokes the handler for extraction, analysis, or answer feedback. It records stages and reusable checkpoints as it runs.
-4. Analysis and feedback handlers reload their document references strictly, build or reuse RAG indexes, retrieve Resume and JD evidence independently, and merge candidates with deterministic Reciprocal Rank Fusion (RRF).
-5. Gemini receives selected, traceable evidence and returns structured output; the worker persists effects and results while the frontend polls job status until it is complete, partial, or failed.
+3. A worker claims the PostgreSQL lease and invokes the handler for its job type: extraction, resume score, job fit, experience suggestions, practice questions, experience split, or answer feedback. It records stages and reusable checkpoints as it runs.
+4. AI handlers reload their document references strictly, build or reuse RAG indexes, retrieve Resume and JD evidence independently, and merge candidates with deterministic Reciprocal Rank Fusion (RRF).
+5. Gemini receives selected, traceable evidence and returns structured output; the worker persists effects and results while the frontend polls job status until it is complete or failed.
 
 PostgreSQL is the source of truth for job state. SQS wakes workers; it does not carry document content or determine job completion.
 
@@ -334,17 +334,17 @@ JOB_RUNTIME_MODE=api     # submit/query jobs only
 JOB_RUNTIME_MODE=worker  # consume jobs only
 ```
 
-Workers use SQS long polling and PostgreSQL-backed leases. Database retries use full jitter; terminal failures are routed to the DLQ. `PARTIAL` jobs preserve successful Gemini output and only fill missing portions with fallback content.
+Workers use SQS long polling and PostgreSQL-backed leases. Database retries use full jitter; terminal failures are routed to the DLQ.
 
 ## API overview
 
 | Endpoint | Purpose |
 | --- | --- |
 | `POST /api/resumes` | Upload a resume and create an extraction job. |
-| `GET /api/resumes/current` | Retrieve the current resume; `404` means none exists. |
-| `POST /api/analyses` | Submit combined assessment and question-generation work. |
-| `POST /api/interview/feedback` | Submit answer-feedback work. |
+| `POST /api/practice-sets/{setId}/questions/{questionId}/attempts` | Submit an answer attempt for feedback. |
 | `GET /api/jobs/{jobId}` | Poll job status, stage, attempts, result, and error. |
+
+The [frontend API contract](docs/api/frontend-api-contract.md) lists every endpoint.
 
 Mutation endpoints accept an optional `Idempotency-Key`. Redis handles short-lived HTTP idempotency and rate limits; PostgreSQL allows one running job per resource, so a second submit returns the job already in progress.
 

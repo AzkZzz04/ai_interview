@@ -60,7 +60,7 @@ when the job ends, so the UI can show the last failure after a reload.
 |---|---|---|
 | `jobId` | UUID | Poll with `GET /api/jobs/{jobId}`. |
 | `jobType` | `JobType` | See section 8. |
-| `status` | `JobStatus` | `QUEUED`, `PROCESSING`, `RETRYING`, `SUCCEEDED`, `PARTIAL`, `FAILED`. |
+| `status` | `JobStatus` | `QUEUED`, `PROCESSING`, `RETRYING`, `SUCCEEDED`, `FAILED`. |
 | `stage` | `JobStage` | See section 8. |
 | `attempts` | int | Attempts started so far. |
 | `maxAttempts` | int | **new** field, used for copy such as "attempt 2 of 3". |
@@ -605,10 +605,10 @@ references, nested result JSON, nullable timestamps and error values:
 ```
 
 - Job types and stages are extended as in the table below.
-- `result` is set only on `SUCCEEDED` or `PARTIAL`. For resource-backed jobs it equals what the owning resource
+- `result` is set only on `SUCCEEDED`. For resource-backed jobs it equals what the owning resource
   then returns, so the UI may read either. `EXPERIENCE_SPLIT` is review-only and its result exists only on the
   job until the user saves items through 5.3.
-- The new job types end `SUCCEEDED` or `FAILED`, never `PARTIAL`.
+- Every job ends `SUCCEEDED` or `FAILED`.
 - Errors: `404 JOB_NOT_FOUND`, which covers unknown IDs, other users' jobs and jobs of deleted resources.
 
 | Job type | Status | Started by | Stages after `QUEUED` | Result |
@@ -621,7 +621,7 @@ references, nested result JSON, nullable timestamps and error values:
 | `EXPERIENCE_SPLIT` | existing | 5.2 | `SPLITTING_EXPERIENCE` | `ExperienceSplitResult` |
 | `ANSWER_FEEDBACK` | changed (attempt-based input) | 7.5, 7.6 | `SCORING_ANSWER` (existing stage) | `AnswerFeedbackResult` |
 
-A `SUCCEEDED` job ends at stage `COMPLETED`; a `FAILED` job keeps the stage it failed in. `ANALYSIS` and stage `ASSESSING_RESUME` are no longer used by the UI.
+These are the only job types. A `SUCCEEDED` job ends at stage `COMPLETED`; a `FAILED` job keeps the stage it failed in.
 
 ### 8.2 Result shapes
 
@@ -830,27 +830,17 @@ The frontend assumes each of these. The backend plan must implement and test the
     polling after a reload.
 11. **One practice set per pair**, created by 7.1 and never regenerated once `READY`.
 
-## 12. Removable endpoints
+## 12. Removed endpoints
 
-The new UI stops calling these. The backend plan may remove them together with job type `ANALYSIS`, stage
-`ASSESSING_RESUME` and the seniority settings.
-
-| Endpoint | Replaced by |
-|---|---|
-| `POST /api/analyses` | 3.8, 6.2, 7.1 |
-| `POST /api/assessments` | 3.8, 6.2 |
-| `POST /api/interview/questions` | 7.1 |
-| `POST /api/interview/feedback` | 7.5 |
-| `GET /api/resumes/current` | 3.3, 3.4 |
+U13 removed the old analysis, assessment, interview-question, interview-feedback and current-resume endpoints,
+job type `ANALYSIS`, stage `ASSESSING_RESUME`, status `PARTIAL` and the seniority setting. Migration V18 deleted
+their jobs and tables. Section 2 lists every endpoint the backend serves.
 
 ## 13. Mock mode notes
 
 `VITE_API_MOCKS` selects the mock mode:
 
 - `all`: every endpoint is mocked. This is the default in development.
-- `new-only`: endpoints marked `new` or `changed` are mocked, and `existing` ones go to the backend. For
-  `GET /api/jobs/{id}`, the mock answers for job IDs the mock store created and forwards all other IDs.
-- `off`: no mocks. This is the default in production.
+- `off`: no mocks; every request goes to the backend. This is the default in production.
 
-Today only `GET /api/status` is `existing` and compatible, so `new-only` sends little to the backend until the
-backend plan ships endpoints and updates their status here.
+Any other value falls back to the build's default.
