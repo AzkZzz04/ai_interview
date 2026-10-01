@@ -245,6 +245,46 @@ class SupabaseJobStatusReaderTests {
     }
 
     @Test
+    fun `maps attempt feedback jobs to their attempt set and pair refs while legacy feedback keeps its resume ref`() = runBlocking {
+        val attemptId = UUID.randomUUID()
+        val practiceSetId = UUID.randomUUID()
+        val resumeId = UUID.randomUUID()
+        val targetJobId = UUID.randomUUID()
+        val (client, reader) = reader(row(
+            jobType = "ANSWER_FEEDBACK",
+            stage = "SCORING_ANSWER",
+            requestPayload = """{"payloadVersion":3,"attemptId":"$attemptId","practiceSetId":"$practiceSetId","resumeId":"$resumeId","targetJobId":"$targetJobId"}""",
+            resultPayload = """{"score":74,"summary":"Clear.","nextStep":null,"strengths":["Ownership"],"gaps":[],"betterAnswerOutline":[],"followUpQuestion":null}""",
+            resourceType = "\"attempt\""
+        ))
+        try {
+            val status = reader.findForUser(jobId, userId)!!
+            assertEquals(JobType.ANSWER_FEEDBACK, status.jobType)
+            assertEquals(JobStage.SCORING_ANSWER, status.stage)
+            assertEquals(attemptId, status.inputRefs.attemptId)
+            assertEquals(practiceSetId, status.inputRefs.practiceSetId)
+            assertEquals(resumeId, status.inputRefs.resumeId)
+            assertEquals(targetJobId, status.inputRefs.targetJobId)
+            assertEquals(74, (status.result as Map<*, *>)["score"])
+            assertNull((status.result as Map<*, *>)["followUpQuestion"])
+        } finally { client.close() }
+
+        val (legacyClient, legacyReader) = reader(row(
+            jobType = "ANSWER_FEEDBACK",
+            stage = "SCORING_ANSWER",
+            requestPayload = """{"payloadVersion":2,"jobDescriptionId":"$jobDescriptionId","answerText":"PRIVATE_ANSWER"}""",
+            resourceType = "\"interview-answer\""
+        ))
+        try {
+            val refs = legacyReader.findForUser(jobId, userId)!!.inputRefs
+            assertEquals(resourceId, refs.resumeId)
+            assertEquals(jobDescriptionId, refs.targetJobId)
+            assertNull(refs.practiceSetId)
+            assertNull(refs.attemptId)
+        } finally { legacyClient.close() }
+    }
+
+    @Test
     fun `resume fallback is resource aware and malformed reference UUIDs stay null`() = runBlocking {
         val invalidRefs = """{"resumeId":"invalid","jobDescriptionId":"invalid","practiceSetId":"invalid","attemptId":"invalid"}"""
         val (resumeClient, resumeReader) = reader(row(requestPayload = invalidRefs, resourceType = "\"resume\""))

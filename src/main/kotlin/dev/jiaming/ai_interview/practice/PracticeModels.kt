@@ -19,7 +19,7 @@ data class PracticeSetView(
 
 enum class PracticeSetStatus { GENERATING, READY, FAILED }
 
-/** Contract §7 `Question`. Answer attempts arrive with U11; until then `attempts` is always empty. */
+/** Contract §7 `Question`; `attempts` are oldest first. */
 data class PracticeQuestionView(
     val id: UUID,
     val order: Int,
@@ -28,8 +28,38 @@ data class PracticeQuestionView(
     val rationale: String?,
     val category: String?,
     val expectedSignals: List<String>,
-    val attempts: List<Any> = emptyList(),
+    val attempts: List<AttemptView> = emptyList(),
 )
+
+/** Contract §7 `Attempt`. `status` and `scoreDelta` are derived when read (KTD4). */
+data class AttemptView(
+    val id: UUID,
+    val number: Int,
+    val text: String,
+    val status: AttemptStatus,
+    val feedback: AnswerFeedbackResult?,
+    val scoreDelta: Int?,
+    val activeJob: ActiveJob?,
+    val createdAt: Instant,
+)
+
+enum class AttemptStatus { PENDING, SCORED, FAILED }
+
+/** Contract §8.2 `AnswerFeedbackResult`: the attempt's stored feedback and its `ANSWER_FEEDBACK` job result. */
+data class AnswerFeedbackResult(
+    val score: Int,
+    val summary: String,
+    val nextStep: String?,
+    val strengths: List<String>,
+    val gaps: List<String>,
+    val betterAnswerOutline: List<String>,
+    val followUpQuestion: String?,
+)
+
+/** What the feedback handler scores: the attempt's text and its question. */
+data class AttemptScoringInput(val text: String, val questionText: String, val category: String?, val expectedSignals: List<String>)
+
+data class SubmitAttemptRequest(val text: String?)
 
 /** One normalized AI question before it is saved. */
 data class PracticeQuestionDraft(val text: String, val rationale: String, val category: String?, val expectedSignals: List<String>)

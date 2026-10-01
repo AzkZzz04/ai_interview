@@ -56,6 +56,20 @@ class CoachPromptBuilderSeniorityTests {
 		assertThat(prompt).doesNotContain("Seniority", "Mid-level", "exactly 8")
 	}
 
+	@Test
+	fun practiceFeedbackPromptScoresTheQuestionAndPairWithoutSeniority() {
+		val jobDescription = ResolvedDocument(DocumentSourceType.JOB_DESCRIPTION, UUID.randomUUID(), "job-hash", "REQUIREMENTS\nKafka", emptyList())
+		val input = CoachFeedbackInput(resume(), Optional.of(jobDescription), null, null, "Why Kafka?", "Technical depth", listOf("ordering", "trade-offs"), "Because ordering.")
+
+		val prompt = promptBuilder.buildPracticeFeedbackPrompt(input, CoachRagContext("feedback", "Job: Kafka required", emptyList(), false))
+
+		assertThat(prompt).contains("Question: Why Kafka?", "Question category: Technical depth", "Expected signals: ordering, trade-offs", "Job: Kafka required", "Because ordering.")
+		assertThat(prompt).doesNotContain("Seniority", "Mid-level", "calibration", "Target role")
+		assertThat(promptBuilder.buildPracticeFeedbackPrompt(
+			CoachFeedbackInput(resume(), Optional.empty(), null, null, "My own question?", null, emptyList(), "Answer"), context
+		)).contains("Expected signals: none listed")
+	}
+
 	private fun analysisInput() = CoachAnalysisInput(resume(), Optional.empty(), "Software Engineer", "Intern")
 	private fun resume() = ResolvedDocument(DocumentSourceType.RESUME, UUID.randomUUID(), "hash", "PROJECTS\nBuilt a project", listOf(DocumentChunk(0, "Projects", "Built a project", "resume:projects:0")))
 }
