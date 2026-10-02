@@ -48,7 +48,7 @@ class CoachResponseMapperTests {
                 ResumeScoreFixDraft("Experience", "high", "Quantify the result."),
                 ResumeScoreFixDraft("Skills", "invalid", "Group related tools.")
             ),
-            listOf(ResumeScoreRewriteDraft("Experience", "Improved latency.", "Cut latency by [X%] across [N] services."))
+            listOf(ResumeScoreRewriteDraft("Experience", "- Improved latency.", "Cut latency by [X%] across [N] services."))
         )
 
         val normalized = mapper.normalizeResumeScore(draft, "EXPERIENCE\n- Improved latency.", "Backend Engineer")
@@ -65,14 +65,16 @@ class CoachResponseMapperTests {
 	@Test
 	fun rewritesKeepOnlyOriginalsCopiedFromTheResume() {
 		val draft = ResumeScoreDraftResponse(70, null, null, null, listOf(
-			ResumeScoreRewriteDraft("Experience", " Built   the payment API. ", "Built the payment API serving [N] merchants."),
+			ResumeScoreRewriteDraft("Experience", " - Built   the payment API. ", "Built the payment API serving [N] merchants."),
+			ResumeScoreRewriteDraft("Experience", "Cut costs.", "Reduced costs by [X%]."),
+			ResumeScoreRewriteDraft("Experience", "API. Cut", "Improved the API and cut costs."),
 			ResumeScoreRewriteDraft("Experience", "  ", "An improved line with no source."),
 			ResumeScoreRewriteDraft("Experience", "Led a team of 40.", "Led a team of [N]."),
 		))
 
-		val rewrites = mapper.normalizeResumeScore(draft, "EXPERIENCE\n- Built the payment\tAPI. Cut costs.", null).rewrites
+		val rewrites = mapper.normalizeResumeScore(draft, "EXPERIENCE\n  - Built the payment\tAPI.  \nCut  costs.", null).rewrites
 
-		assertThat(rewrites.map { it.original }).containsExactly("Built   the payment API.")
+		assertThat(rewrites.map { it.original }).containsExactly("- Built   the payment API.", "Cut costs.")
 	}
 
 	@Test

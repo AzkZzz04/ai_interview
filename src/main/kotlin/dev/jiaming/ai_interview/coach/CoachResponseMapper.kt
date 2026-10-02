@@ -61,9 +61,9 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         }.ifEmpty {
             listOf(ResumeScoreFix(1, "Experience", "MEDIUM", "Add clear scope and measurable outcomes where you can support them."))
         }
-        val resume = collapseWhitespace(resumeText)
+        val resumeLines = resumeText.lineSequence().map(::collapseWhitespace).toSet()
         val rewrites = response.rewrites.orEmpty().filterNotNull()
-            .filter { !it.rewritten.isNullOrBlank() && !it.original.isNullOrBlank() && collapseWhitespace(it.original) in resume }
+            .filter { !it.rewritten.isNullOrBlank() && !it.original.isNullOrBlank() && collapseWhitespace(it.original) in resumeLines }
             .take(5).map { rewrite ->
                 val rewritten = rewrite.rewritten!!.trim()
                 ResumeScoreRewrite(
