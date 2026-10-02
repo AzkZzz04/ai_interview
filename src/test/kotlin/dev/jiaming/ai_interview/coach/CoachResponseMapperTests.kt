@@ -58,7 +58,7 @@ class CoachResponseMapperTests {
             listOf(ResumeScoreRewriteDraft("Experience", "Improved latency.", "Cut latency by [X%] across [N] services."))
         )
 
-        val normalized = mapper.normalizeResumeScore(draft, "Backend Engineer")
+        val normalized = mapper.normalizeResumeScore(draft, "EXPERIENCE\n- Improved latency.", "Backend Engineer")
 
         assertThat(normalized.overall).isEqualTo(100)
         assertThat(normalized.scores.technicalDepth).isEqualTo(100)
@@ -68,6 +68,19 @@ class CoachResponseMapperTests {
         assertThat(normalized.rewrites.single().placeholders).containsExactly("[X%]", "[N]")
         assertThat(normalized.jobTitle).isEqualTo("Backend Engineer")
     }
+
+	@Test
+	fun rewritesKeepOnlyOriginalsCopiedFromTheResume() {
+		val draft = ResumeScoreDraftResponse(70, null, null, null, listOf(
+			ResumeScoreRewriteDraft("Experience", " Built   the payment API. ", "Built the payment API serving [N] merchants."),
+			ResumeScoreRewriteDraft("Experience", "  ", "An improved line with no source."),
+			ResumeScoreRewriteDraft("Experience", "Led a team of 40.", "Led a team of [N]."),
+		))
+
+		val rewrites = mapper.normalizeResumeScore(draft, "EXPERIENCE\n- Built the payment\tAPI. Cut costs.", null).rewrites
+
+		assertThat(rewrites.map { it.original }).containsExactly("Built   the payment API.")
+	}
 
 	@Test
 	fun normalizesJobFitScoresPrioritiesAndMalformedItemsWithoutInventingLists() {
@@ -108,11 +121,22 @@ class CoachResponseMapperTests {
 	@Test
 	fun practiceQuestionsWithoutARationaleDoNotCountTowardTheMinimum() {
 		val response = mapper.parse(
-			"""{"questions":[{"questionText":"Q1?","rationale":"R1"},{"questionText":"Q2?","rationale":"R2"},{"questionText":"Q3?","rationale":"  "}]}""",
+			"""{"questions":[{"questionText":"Q1?","rationale":"R1","expectedSignals":["S1"]},{"questionText":"Q2?","rationale":"R2","expectedSignals":["S2"]},{"questionText":"Q3?","rationale":"  ","expectedSignals":["S3"]}]}""",
 			PracticeQuestionsResponse::class.java,
 		)
 
 		assertThatThrownBy { mapper.normalizePracticeQuestions(response) }.isInstanceOf(GeminiException::class.java)
+	}
+
+	@Test
+	fun practiceQuestionsWithoutExpectedSignalsDoNotCountTowardTheMinimum() {
+		val response = mapper.parse(
+			"""{"questions":[{"questionText":"Q1?","rationale":"R1","expectedSignals":["S1"]},{"questionText":"Q2?","rationale":"R2","expectedSignals":["S2"]},{"questionText":"Q3?","rationale":"R3","expectedSignals":[" "]}]}""",
+			PracticeQuestionsResponse::class.java,
+		)
+
+		assertThatThrownBy { mapper.normalizePracticeQuestions(response) }
+			.isInstanceOfSatisfying(GeminiException::class.java) { assertThat(it.code()).isEqualTo(GeminiErrorCode.INVALID_RESPONSE) }
 	}
 
 	@Test

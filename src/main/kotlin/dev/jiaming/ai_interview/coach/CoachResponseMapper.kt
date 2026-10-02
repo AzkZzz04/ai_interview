@@ -33,7 +33,7 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         val items = response.items.orEmpty().filterNotNull().map { item ->
             val title = experienceText(item.title, "title", 1, 120)
             val description = experienceText(item.description, "description", 1, 4_000)
-            val organization = item.organization?.let(::normalizeExperienceText)?.takeIf(String::isNotEmpty)?.also {
+            val organization = item.organization?.let(::collapseWhitespace)?.takeIf(String::isNotEmpty)?.also {
                 if (it.length > 120) invalidExperience("organization")
             }
             ExperienceSplitItem(
@@ -48,7 +48,8 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         return ExperienceSplitResult(items)
     }
 
-    fun normalizeResumeScore(response: ResumeScoreDraftResponse, jobTitle: String?): ResumeScoreResult {
+    /** Keeps only rewrites whose original line was copied from [resumeText], so each one points at a real line. */
+    fun normalizeResumeScore(response: ResumeScoreDraftResponse, resumeText: String, jobTitle: String?): ResumeScoreResult {
         val scores = response.scores ?: AssessmentScores(0, 0, 0, 0, 0)
         val normalizedScores = AssessmentScores(
             clampScore(scores.technicalDepth), clampScore(scores.impact), clampScore(scores.clarity),
@@ -59,10 +60,13 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         }.ifEmpty {
             listOf(ResumeScoreFix(1, "Experience", "MEDIUM", "Add clear scope and measurable outcomes where you can support them."))
         }
-        val rewrites = response.rewrites.orEmpty().filterNotNull().filter { !it.rewritten.isNullOrBlank() }.take(5).map { rewrite ->
+        val resume = collapseWhitespace(resumeText)
+        val rewrites = response.rewrites.orEmpty().filterNotNull()
+            .filter { !it.rewritten.isNullOrBlank() && !it.original.isNullOrBlank() && collapseWhitespace(it.original) in resume }
+            .take(5).map { rewrite ->
             val rewritten = rewrite.rewritten!!.trim()
             ResumeScoreRewrite(
-                fallback(rewrite.section, "Experience"), fallback(rewrite.original, ""), rewritten,
+                fallback(rewrite.section, "Experience"), rewrite.original!!.trim(), rewritten,
                 PLACEHOLDER.findAll(rewritten).map { it.value }.distinct().toList()
             )
         }
@@ -94,20 +98,21 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
             .map { FitFeedback(normalizeFitPriority(it.priority), it.message!!.trim()) },
     )
 
-    /** Keeps 3 to 8 questions that have both text and a rationale. Fewer than 3 is invalid, so the caller's repair attempt runs. */
+    /**
+     * Keeps 3 to 8 questions that have text, a rationale and at least one expected signal to score answers against.
+     * Fewer than 3 is invalid, so the caller's repair attempt runs.
+     */
     fun normalizePracticeQuestions(response: PracticeQuestionsResponse): PracticeQuestionDrafts {
         val drafts = response.questions.orEmpty().filterNotNull()
-            .filter { !it.questionText.isNullOrBlank() && !it.rationale.isNullOrBlank() }
-            .take(MAX_PRACTICE_QUESTIONS)
-            .map { question ->
-                PracticeQuestionDraft(
-                    question.questionText!!.trim(), question.rationale!!.trim(), question.category?.trim()?.ifEmpty { null },
-                    question.expectedSignals.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).take(6),
-                )
+            .mapNotNull { question ->
+                val signals = question.expectedSignals.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).take(6)
+                if (question.questionText.isNullOrBlank() || question.rationale.isNullOrBlank() || signals.isEmpty()) return@mapNotNull null
+                PracticeQuestionDraft(question.questionText.trim(), question.rationale.trim(), question.category?.trim()?.ifEmpty { null }, signals)
             }
+            .take(MAX_PRACTICE_QUESTIONS)
         if (drafts.size < MIN_PRACTICE_QUESTIONS) throw GeminiException(
             GeminiErrorCode.INVALID_RESPONSE,
-            "Gemini returned ${drafts.size} practice questions with a rationale; at least $MIN_PRACTICE_QUESTIONS are required",
+            "Gemini returned ${drafts.size} practice questions with a rationale and expected signals; at least $MIN_PRACTICE_QUESTIONS are required",
             false
         )
         return PracticeQuestionDrafts(drafts)
@@ -137,9 +142,9 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
     private fun normalizeFitPriority(value: String?) = fallback(value, "MEDIUM").uppercase(Locale.ROOT).let { if (it in setOf("HIGH", "MEDIUM", "LOW")) it else "MEDIUM" }
     private fun average(scores: AssessmentScores) = Math.round((scores.technicalDepth + scores.impact + scores.clarity + scores.relevance + scores.ats) / 5.0f)
     private fun clampScore(value: Int) = value.coerceIn(0, 100)
-    private fun experienceText(value: String?, field: String, min: Int, max: Int): String = value?.let(::normalizeExperienceText)
+    private fun experienceText(value: String?, field: String, min: Int, max: Int): String = value?.let(::collapseWhitespace)
         ?.takeIf { it.length in min..max } ?: invalidExperience(field)
-    private fun normalizeExperienceText(value: String) = value.trim().replace(Regex("\\s+"), " ")
+    private fun collapseWhitespace(value: String) = value.trim().replace(Regex("\\s+"), " ")
     private fun experienceMonth(value: String?, field: String): String? {
         val month = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
         if (!Regex("\\d{4}-(0[1-9]|1[0-2])").matches(month)) invalidExperience(field)

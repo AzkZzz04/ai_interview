@@ -59,7 +59,7 @@ class AiResumeCoachService(
 
     fun scoreResume(resumeText: String, jobTitle: String?): ResumeScoreResult = responseMapper.normalizeResumeScore(
         generateStructured(promptBuilder.buildResumeScorePrompt(resumeText, jobTitle), ResumeScoreDraftResponse::class.java),
-        jobTitle
+        resumeText, jobTitle
     )
 
     fun splitExperience(text: String): ExperienceSplitResult = generateStructured(
