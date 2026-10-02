@@ -162,7 +162,7 @@ class RedisRequestGuardTests {
     fun aResponseThatCouldNotBeStoredDoesNotLeaveTheKeyReportingInFlight() {
         requestWithIdempotencyKey("retry-key")
         Mockito.doThrow(IllegalStateException("redis write failed"))
-            .`when`(valueOperations).set(Mockito.endsWith(":response"), anyString(), any<Duration>())
+            .`when`(valueOperations).set(anyString(), anyString(), any<Duration>())
         val calls = AtomicInteger()
 
         val first = guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
@@ -174,6 +174,62 @@ class RedisRequestGuardTests {
 
         assertThat(first).isEqualTo(CachedResponse("run-1"))
         assertThat(retry).isEqualTo(CachedResponse("run-2"))
+    }
+
+    @Test
+    fun aCompletedResponseStaysReplayableWhenALaterRedisWriteFails() {
+        requestWithIdempotencyKey("retry-key")
+        val writes = AtomicInteger()
+        Mockito.doAnswer {
+            if (writes.incrementAndGet() > 1) throw IllegalStateException("redis write failed")
+            redis[it.getArgument(0)] = it.getArgument(1)
+            null
+        }.`when`(valueOperations).set(anyString(), anyString(), any<Duration>())
+        val calls = AtomicInteger()
+
+        val first = guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+            CachedResponse("run-${calls.incrementAndGet()}")
+        }
+        val retry = guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+            CachedResponse("run-${calls.incrementAndGet()}")
+        }
+
+        assertThat(retry).isEqualTo(first)
+        assertThat(calls).hasValue(1)
+    }
+
+    @Test
+    fun aReservationReleasedBetweenTheReplaysTwoReadsIsTakenAgainBeforeTheWorkRuns() {
+        requestWithIdempotencyKey("retry-key")
+        val reserveAttempts = AtomicInteger()
+        Mockito.`when`(valueOperations.setIfAbsent(anyString(), anyString(), any<Duration>())).thenAnswer {
+            // The first SETNX sees another request's key, which that request releases before this one reads it.
+            reserveAttempts.incrementAndGet() > 1 && redis.putIfAbsent(it.getArgument(0), it.getArgument(1)) == null
+        }
+
+        val response = guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+            assertThat(redis.keys).hasSize(1)
+            CachedResponse("reserved")
+        }
+
+        assertThat(response).isEqualTo(CachedResponse("reserved"))
+        assertThat(reserveAttempts).hasValue(2)
+    }
+
+    @Test
+    fun aKeyThatKeepsChangingHandsReturnsARetryableErrorWithoutRunningTheWork() {
+        requestWithIdempotencyKey("retry-key")
+        Mockito.`when`(valueOperations.setIfAbsent(anyString(), anyString(), any<Duration>())).thenReturn(false)
+        val calls = AtomicInteger()
+
+        assertThatThrownBy {
+            guard.withIdempotentRetryCache("assessment", listOf("resume"), CachedResponse::class.java) {
+                CachedResponse("run-${calls.incrementAndGet()}")
+            }
+        }.isInstanceOfSatisfying(ResponseStatusException::class.java) {
+            assertThat(it.statusCode).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+        }
+        assertThat(calls).hasValue(0)
     }
 
     @Test

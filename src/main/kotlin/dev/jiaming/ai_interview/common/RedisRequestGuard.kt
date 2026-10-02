@@ -38,13 +38,11 @@ class RedisRequestGuard(
         if (!properties.idempotency.enabled) return work.get()
         val idempotencyKey = idempotencyKey().orElse(null) ?: return work.get()
         val requestFingerprint = fingerprint(action, requestFingerprintSource)
-        val baseKey = key("idem:%s:%s:%s".format(action, clientId(), sha256(idempotencyKey)))
-        val fingerprintKey = "$baseKey:fingerprint"
-        val responseKey = "$baseKey:response"
+        val redisKey = key("idem:%s:%s:%s".format(action, clientId(), sha256(idempotencyKey)))
         val ttl = Duration.ofSeconds(properties.idempotency.ttlSeconds.toLong())
 
         try {
-            val cached = reserveOrReplay(action, fingerprintKey, responseKey, requestFingerprint, responseType)
+            val cached = reserveOrReplay(action, redisKey, requestFingerprint, responseType)
             if (cached != null) return cached
         } catch (exception: ResponseStatusException) {
             throw exception
@@ -54,10 +52,10 @@ class RedisRequestGuard(
         }
 
         val response = try { work.get() } catch (failure: Throwable) {
-            release(action, fingerprintKey)
+            release(action, redisKey)
             throw failure
         }
-        storeResponse(action, fingerprintKey, responseKey, requestFingerprint, response, ttl)
+        storeResponse(action, redisKey, requestFingerprint, response, ttl)
         return response
     }
 
@@ -98,52 +96,52 @@ class RedisRequestGuard(
         }
     }
 
-    // The first request reserves the key; a same-key replay returns its stored response, or a retryable 503 while it still runs.
-    private fun <T> reserveOrReplay(
-        action: String,
-        fingerprintKey: String,
-        responseKey: String,
-        requestFingerprint: String,
-        responseType: Class<T>
-    ): T? {
-        if (redisTemplate.opsForValue().setIfAbsent(fingerprintKey, requestFingerprint, IN_FLIGHT_TTL) == true) return null
-        // ponytail: a reservation released between these two reads lets this request run unreserved.
-        val storedFingerprint = redisTemplate.opsForValue().get(fingerprintKey) ?: return null
-        if (storedFingerprint != requestFingerprint) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key was already used for a different $action request.")
+    // The key holds the request fingerprint while the first request runs, then "<fingerprint> <response JSON>" once it
+    // finishes, so a response is never stored without the fingerprint that replays it. A same-key replay returns that
+    // response, or a retryable 503 while the first request still runs.
+    private fun <T> reserveOrReplay(action: String, redisKey: String, requestFingerprint: String, responseType: Class<T>): T? {
+        repeat(RESERVE_ATTEMPTS) {
+            if (redisTemplate.opsForValue().setIfAbsent(redisKey, requestFingerprint, IN_FLIGHT_TTL) == true) return null
+            // Released between the two reads: try to reserve it again rather than run unreserved.
+            val stored = redisTemplate.opsForValue().get(redisKey) ?: return@repeat
+            if (stored.substringBefore(' ') != requestFingerprint) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key was already used for a different $action request.")
+            }
+            val responseJson = stored.substringAfter(' ', "")
+            if (responseJson.isEmpty()) throw stillRunning(action)
+            try {
+                return objectMapper.readValue(responseJson, responseType)
+            } catch (exception: JsonProcessingException) {
+                log.warn("redis_idempotency_cache_decode_failed action={} reason={}", action, exception.message)
+                return null
+            }
         }
-        val responseJson = redisTemplate.opsForValue().get(responseKey) ?: throw ResponseStatusException(
-            HttpStatus.SERVICE_UNAVAILABLE, "The first $action request with this Idempotency-Key is still running. Try again shortly."
-        )
-        try {
-            return objectMapper.readValue(responseJson, responseType)
-        } catch (exception: JsonProcessingException) {
-            log.warn("redis_idempotency_cache_decode_failed action={} reason={}", action, exception.message)
-            return null
-        }
+        throw stillRunning(action)
     }
 
+    private fun stillRunning(action: String) = ResponseStatusException(
+        HttpStatus.SERVICE_UNAVAILABLE, "The first $action request with this Idempotency-Key is still running. Try again shortly."
+    )
+
     // A failed request leaves nothing to replay, so its retry may run the work again.
-    private fun release(action: String, fingerprintKey: String) {
+    private fun release(action: String, redisKey: String) {
         try {
-            redisTemplate.delete(fingerprintKey)
+            redisTemplate.delete(redisKey)
         } catch (exception: RuntimeException) {
             log.warn("redis_idempotency_release_failed action={} reason={}", action, exception.message)
         }
     }
 
-    // The response is written before the fingerprint gets the full TTL, so a failed store never leaves a key that
-    // reports "still running" for a day; releasing it lets a retry run the work again instead.
-    private fun storeResponse(action: String, fingerprintKey: String, responseKey: String, fingerprint: String, response: Any?, ttl: Duration) {
+    // A failed store releases the key, so it never reports "still running" for a day; a retry runs the work again instead.
+    private fun storeResponse(action: String, redisKey: String, fingerprint: String, response: Any?, ttl: Duration) {
         try {
-            redisTemplate.opsForValue().set(responseKey, objectMapper.writeValueAsString(response), ttl)
-            redisTemplate.opsForValue().set(fingerprintKey, fingerprint, ttl)
+            redisTemplate.opsForValue().set(redisKey, "$fingerprint ${objectMapper.writeValueAsString(response)}", ttl)
         } catch (exception: JsonProcessingException) {
             log.warn("redis_idempotency_cache_encode_failed action={} reason={}", action, exception.message)
-            release(action, fingerprintKey)
+            release(action, redisKey)
         } catch (exception: RuntimeException) {
             log.warn("redis_idempotency_cache_store_failed action={} reason={}", action, exception.message)
-            release(action, fingerprintKey)
+            release(action, redisKey)
         }
     }
 
@@ -183,5 +181,6 @@ class RedisRequestGuard(
         val log = LoggerFactory.getLogger(RedisRequestGuard::class.java)
         // ponytail: fixed bound on how long a crashed request blocks its key; outlives every synchronous API request.
         val IN_FLIGHT_TTL: Duration = Duration.ofMinutes(2)
+        const val RESERVE_ATTEMPTS = 3
     }
 }
