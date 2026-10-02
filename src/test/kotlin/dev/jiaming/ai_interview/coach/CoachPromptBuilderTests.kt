@@ -10,12 +10,12 @@ import org.junit.jupiter.api.Test
 
 class CoachPromptBuilderTests {
 	private val promptBuilder = CoachPromptBuilder()
-	private val context = CoachRagContext("test", "[contextId=resume:projects:0] Built a project", listOf("resume:projects:0"), false)
+	private val context = CoachRagContext("[contextId=resume:projects:0] Built a project", false)
 
 	@Test
 	fun jobFitPromptRequiresEvidenceAndUsesTheJobDescriptionAsRequirements() {
 		val prompt = promptBuilder.buildJobFitPrompt(
-			CoachRagContext("fit", "Resume: Kotlin services\nJob: Kafka required", listOf("resume:projects:0"), false),
+			CoachRagContext("Resume: Kotlin services\nJob: Kafka required", false),
 		)
 
 		assertThat(prompt).contains("only the retrieved resume and job-description context", "specific supporting evidence", "missingRequirements")
@@ -26,7 +26,7 @@ class CoachPromptBuilderTests {
 	@Test
 	fun practiceQuestionPromptAsksForThreeToEightRationales() {
 		val prompt = promptBuilder.buildPracticeQuestionPrompt(
-			CoachRagContext("questions", "Job: Kafka required", listOf("job_description:requirements:0"), false),
+			CoachRagContext("Job: Kafka required", false),
 		)
 
 		assertThat(prompt).contains("between 3 and 8 questions", "rationale", "questionText", "expectedSignals", "Kafka required")
@@ -38,7 +38,7 @@ class CoachPromptBuilderTests {
 		val jobDescription = ResolvedDocument(DocumentSourceType.JOB_DESCRIPTION, UUID.randomUUID(), "job-hash", "REQUIREMENTS\nKafka", emptyList())
 		val input = CoachFeedbackInput(resume(), Optional.of(jobDescription), "Why Kafka?", "Technical depth", listOf("ordering", "trade-offs"), "Because ordering.")
 
-		val prompt = promptBuilder.buildPracticeFeedbackPrompt(input, CoachRagContext("feedback", "Job: Kafka required", emptyList(), false))
+		val prompt = promptBuilder.buildPracticeFeedbackPrompt(input, CoachRagContext("Job: Kafka required", false))
 
 		assertThat(prompt).contains("<question>\nWhy Kafka?\n</question>", "<question_category>\nTechnical depth\n</question_category>",
 			"<expected_signals>\nordering, trade-offs\n</expected_signals>", "Job: Kafka required", "<answer>\nBecause ordering.\n</answer>")

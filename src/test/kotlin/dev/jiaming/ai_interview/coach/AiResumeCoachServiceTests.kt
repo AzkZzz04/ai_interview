@@ -23,7 +23,7 @@ class AiResumeCoachServiceTests {
 
 	@Test fun repairsInvalidJsonExactlyOnce() {
 		val input = input()
-		Mockito.`when`(contextService.jobFitContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(contextService.jobFitContext(input)).thenReturn(CoachRagContext("context", false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn("not-json").thenReturn(jobFitJson())
 		val response = service.assessJobFit(input)
 		assertThat(response.fitScore).isEqualTo(80)
@@ -32,7 +32,7 @@ class AiResumeCoachServiceTests {
 
 	@Test fun rejectsSecondInvalidResponseWithoutThirdGeneration() {
 		val input = input()
-		Mockito.`when`(contextService.jobFitContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(contextService.jobFitContext(input)).thenReturn(CoachRagContext("context", false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn("not-json")
 		assertThatThrownBy { service.assessJobFit(input) }.isInstanceOfSatisfying(GeminiException::class.java) { exception ->
 			assertThat(exception.code()).isEqualTo(GeminiErrorCode.INVALID_RESPONSE)
@@ -44,7 +44,7 @@ class AiResumeCoachServiceTests {
 
 	@Test fun doesNotRepairMaxTokensFailure() {
 		val input = input()
-		Mockito.`when`(contextService.jobFitContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(contextService.jobFitContext(input)).thenReturn(CoachRagContext("context", false))
 		Mockito.`when`(client.generateJson(anyString())).thenThrow(GeminiException(GeminiErrorCode.MAX_TOKENS, "token limit", false))
 		assertThatThrownBy { service.assessJobFit(input) }.isInstanceOfSatisfying(GeminiException::class.java) { exception -> assertThat(exception.code()).isEqualTo(GeminiErrorCode.MAX_TOKENS) }
 		Mockito.verify(client).generateJson(anyString())
@@ -88,7 +88,7 @@ class AiResumeCoachServiceTests {
 
 	@Test fun practiceQuestionsBelowTheMinimumGoThroughTheSingleRepairAttempt() {
 		val input = CoachAnalysisInput(input().resume(), Optional.empty())
-		Mockito.`when`(contextService.practiceQuestionContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(contextService.practiceQuestionContext(input)).thenReturn(CoachRagContext("context", false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn(practiceJson(2)).thenReturn(practiceJson(4))
 
 		val drafts = service.generatePracticeQuestions(input).drafts
@@ -101,7 +101,7 @@ class AiResumeCoachServiceTests {
 
 	@Test fun practiceAnswerFeedbackUsesThePracticePromptAndReturnsTheContractShape() {
 		val input = CoachFeedbackInput(input().resume(), Optional.empty(), "Why Kafka?", null, emptyList(), "Because ordering.")
-		Mockito.`when`(contextService.feedbackContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
+		Mockito.`when`(contextService.feedbackContext(input)).thenReturn(CoachRagContext("context", false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn(
 			"""{"score":140,"summary":"Clear.","nextStep":"Add numbers.","strengths":["Ownership"],"gaps":["Metrics"],"betterAnswerOutline":["Context"],"followUpQuestion":" "}"""
 		)

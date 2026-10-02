@@ -708,7 +708,7 @@ These are the only job types. A `SUCCEEDED` job ends at stage `COMPLETED`; a `FA
 `duplicateOf` is `{ id, title }` when the item is already saved. The UI shows these as "already saved" and leaves
 them out of 5.3.
 
-**`AnswerFeedbackResult`** (existing `AnswerFeedbackResponse` without `modelProvider` and `sourceContextIds`):
+**`AnswerFeedbackResult`** (the normalized form of the model's `AnswerFeedbackResponse`):
 
 ```json
 {

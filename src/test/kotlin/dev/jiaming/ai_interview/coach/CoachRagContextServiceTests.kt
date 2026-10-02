@@ -38,7 +38,7 @@ class CoachRagContextServiceTests {
 
         assertThat(context.vectorBacked).isFalse()
         assertThat(context.context).contains("Built an API", "Built an AI coach", "Java required")
-        assertThat(context.sourceContextIds).containsExactly(
+        assertThat(contextIds(context)).containsExactly(
             "resume:experience:0", "resume:projects:1", "job_description:requirements:0"
         )
         Mockito.verifyNoInteractions(indexingService, retrievalService)
@@ -59,7 +59,7 @@ class CoachRagContextServiceTests {
         val context = service.jobFitContext(CoachAnalysisInput(resume, Optional.of(jobDescription)))
 
         assertThat(context.context).contains("Delivered Kotlin services", "Kafka and PostgreSQL required")
-        assertThat(context.sourceContextIds).containsExactly("resume:experience:0", "job_description:requirements:0")
+        assertThat(contextIds(context)).containsExactly("resume:experience:0", "job_description:requirements:0")
         Mockito.verifyNoInteractions(indexingService, retrievalService)
     }
 
@@ -135,7 +135,7 @@ class CoachRagContextServiceTests {
 
         assertThat(context.vectorBacked).isTrue()
         assertThat(context.context).contains("Java and distributed systems are required")
-        assertThat(context.sourceContextIds).contains("job_description:requirements:0")
+        assertThat(contextIds(context)).contains("job_description:requirements:0")
     }
 
     @Test
@@ -155,7 +155,7 @@ class CoachRagContextServiceTests {
 
         assertThat(context.vectorBacked).isFalse()
         assertThat(context.context).contains("Resume experience")
-        assertThat(context.sourceContextIds).containsExactly("resume:experience:0")
+        assertThat(contextIds(context)).containsExactly("resume:experience:0")
     }
 
     @Test
@@ -178,7 +178,7 @@ class CoachRagContextServiceTests {
 
         val context = service.jobFitContext(CoachAnalysisInput(resume, Optional.of(jobDescription)))
 
-        assertThat(context.sourceContextIds).contains(
+        assertThat(contextIds(context)).contains(
             "job_description:requirements:0", "job_description:requirements:1", "job_description:requirements:2"
         )
         assertThat(context.context).contains("Original JD requirement 0").doesNotContain("Section: Requirements")
@@ -208,12 +208,15 @@ class CoachRagContextServiceTests {
         // Six practice-question queries alternate the order, so both snippets tie on RRF score and best rank.
         val context = service.practiceQuestionContext(CoachAnalysisInput(resume, Optional.empty()))
 
-        assertThat(context.sourceContextIds).startsWith("resume:experience:0", "resume:experience:1")
+        assertThat(contextIds(context)).startsWith("resume:experience:0", "resume:experience:1")
     }
 
     private fun service(indexingService: RagIndexingService, retrievalService: RagRetrievalService) = CoachRagContextService(
         SectionAwareTextChunker(), indexingService, retrievalService, SimpleMeterRegistry()
     )
+
+    private fun contextIds(context: CoachRagContext) =
+        Regex("""\[contextId=(\S+) source=""").findAll(context.context).map { it.groupValues[1] }.distinct().toList()
 
     private fun snippet(contextId: String, source: String, section: String, index: Int, content: String) =
         RagContextSnippet("vector-$contextId", content, mapOf(

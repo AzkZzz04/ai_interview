@@ -46,7 +46,7 @@ class CoachRagContextService @Autowired constructor(
         if (documents.sumOf { safe(it.normalizedText()).length } <= DIRECT_CONTEXT_LIMIT) {
             val snippets = documents.flatMap(::localSnippets)
             meterRegistry.counter("ai.rag.context", "mode", "direct", "workflow", profile.name).increment()
-            return context("direct-context", snippets, Int.MAX_VALUE, false, false)
+            return context(snippets, Int.MAX_VALUE, false, false)
         }
         val indexed = LinkedHashMap<DocumentSourceType, IndexedDocument>()
         val originalContent = originalContent(documents)
@@ -79,7 +79,7 @@ class CoachRagContextService @Autowired constructor(
         val vectorBacked = snippets.any { candidates[it.sourceContextId()]!!.vectorBacked }
         meterRegistry.counter("ai.rag.context", "mode", if (vectorBacked) "retrieval" else "local", "workflow", profile.name).increment()
         log.info("rag_context_ready mode={} workflow={} candidates={} snippets={}", if (vectorBacked) "retrieval" else "local", profile.name, candidates.size, snippets.size)
-        return context("document-indexes", snippets, profile.budget, vectorBacked, true)
+        return context(snippets, profile.budget, vectorBacked, true)
     }
 
     private fun select(candidates: Iterable<Candidate>, profile: SelectionProfile): List<RagContextSnippet> {
@@ -135,9 +135,8 @@ class CoachRagContextService @Autowired constructor(
     }
     private fun restoreOriginalContent(snippet: RagContextSnippet, original: Map<String, String>) =
         RagContextSnippet(snippet.id, original[snippet.sourceContextId()] ?: snippet.content, snippet.metadata, snippet.score)
-    private fun context(key: String, snippets: List<RagContextSnippet>, maxSnippets: Int, vectorBacked: Boolean, truncateContent: Boolean) =
-        CoachRagContext(key, formatSnippets(snippets, maxSnippets, truncateContent),
-            snippets.map { it.sourceContextId() }.filter { !blank(it) }.distinct(), vectorBacked)
+    private fun context(snippets: List<RagContextSnippet>, maxSnippets: Int, vectorBacked: Boolean, truncateContent: Boolean) =
+        CoachRagContext(formatSnippets(snippets, maxSnippets, truncateContent), vectorBacked)
 
     private fun jobFitQueries(input: CoachAnalysisInput): List<String> {
         val jd = jobDescriptionQueryExcerpt(input.jobDescription())
