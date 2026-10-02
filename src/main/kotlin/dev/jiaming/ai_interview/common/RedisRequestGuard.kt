@@ -12,8 +12,8 @@ import java.util.HexFormat
 import java.util.Optional
 import java.util.UUID
 import java.util.function.Supplier
-import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -180,17 +180,17 @@ class RedisRequestGuard(
             heartbeatInterval.toMillis(), heartbeatInterval.toMillis(), TimeUnit.MILLISECONDS
         )
 
-    /** Returns null on a transient Redis error so the next scheduled beat can try again. */
-    internal fun renewReservation(action: String, redisKey: String, reservationValue: String): Boolean? = try {
-        redisTemplate.execute(
-            RENEW_IF_RESERVED_SCRIPT,
-            listOf(redisKey),
-            reservationValue,
-            inFlightTtl.toMillis().toString()
-        ) == 1L
-    } catch (exception: RuntimeException) {
-        log.warn("redis_idempotency_renew_failed action={} reason={}", action, exception.message)
-        null
+    private fun renewReservation(action: String, redisKey: String, reservationValue: String) {
+        try {
+            redisTemplate.execute(
+                RENEW_IF_RESERVED_SCRIPT,
+                listOf(redisKey),
+                reservationValue,
+                inFlightTtl.toMillis().toString()
+            )
+        } catch (exception: RuntimeException) {
+            log.warn("redis_idempotency_renew_failed action={} reason={}", action, exception.message)
+        }
     }
 
     private fun deleteIfValueMatches(redisKey: String, value: String): Boolean =
@@ -230,9 +230,10 @@ class RedisRequestGuard(
 
     private companion object {
         val log = LoggerFactory.getLogger(RedisRequestGuard::class.java)
-        val heartbeatExecutor = Executors.newSingleThreadScheduledExecutor { task ->
+        // ponytail: one thread serializes renewals; use a bounded pool if heartbeat lag approaches the two-minute lease.
+        val heartbeatExecutor = ScheduledThreadPoolExecutor(1) { task ->
             Thread(task, "redis-idempotency-heartbeat").apply { isDaemon = true }
-        }
+        }.apply { removeOnCancelPolicy = true }
         const val RESERVATION_MARKER = "owner:"
         val STORE_IF_RESERVED_SCRIPT = DefaultRedisScript<Long>("""
             if redis.call('GET', KEYS[1]) == ARGV[1] then

@@ -486,7 +486,8 @@ class AttemptIntegrationTests {
                         1L
                     }
                     script.scriptAsString.contains("PEXPIRE") -> 1L
-                    else -> if (redis.remove(key) != null) 1L else 0L
+                    script.scriptAsString.contains("'DEL'") -> if (redis.remove(key) != null) 1L else 0L
+                    else -> error("Unexpected Redis script")
                 }
             }
             Mockito.doAnswer(answer).`when`(template).execute(

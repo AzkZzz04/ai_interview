@@ -97,7 +97,8 @@ class RedisRequestGuardTests {
                 setValue(key, args[1] as String, Duration.ofMillis((args[2] as String).toLong()))
                 1L
             }
-            else -> if (removeValue(key) != null) 1L else 0L
+            script.scriptAsString.contains("'DEL'") -> if (removeValue(key) != null) 1L else 0L
+            else -> error("Unexpected Redis script")
         }
     }
 
