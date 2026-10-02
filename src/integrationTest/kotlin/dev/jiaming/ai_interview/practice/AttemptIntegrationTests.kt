@@ -44,6 +44,7 @@ import org.mockito.Mockito
 import org.mockito.kotlin.any
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
+import org.springframework.data.redis.core.script.RedisScript
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
 import org.springframework.jdbc.datasource.DriverManagerDataSource
@@ -469,7 +470,34 @@ class AttemptIntegrationTests {
             Mockito.doAnswer { redis[it.getArgument(0)] = it.getArgument(1); null }
                 .`when`(values).set(anyString(), anyString(), any<Duration>())
             Mockito.`when`(template.delete(anyString())).thenAnswer { redis.remove(it.getArgument<String>(0)) != null }
+            stubScriptExecution(template)
             return template
+        }
+
+        private fun stubScriptExecution(template: StringRedisTemplate) {
+            val answer = org.mockito.stubbing.Answer<Long> {
+                val script = it.getArgument<RedisScript<Long>>(0)
+                val key = it.getArgument<List<String>>(1).single()
+                val args = it.rawArguments[2] as Array<*>
+                if (redis[key] != args[0]) 0L
+                else when {
+                    script.scriptAsString.contains("'PX'") -> {
+                        redis[key] = args[1] as String
+                        1L
+                    }
+                    script.scriptAsString.contains("PEXPIRE") -> 1L
+                    else -> if (redis.remove(key) != null) 1L else 0L
+                }
+            }
+            Mockito.doAnswer(answer).`when`(template).execute(
+                any<RedisScript<Long>>(), Mockito.anyList<String>(), any<String>()
+            )
+            Mockito.doAnswer(answer).`when`(template).execute(
+                any<RedisScript<Long>>(), Mockito.anyList<String>(), any<String>(), any<String>()
+            )
+            Mockito.doAnswer(answer).`when`(template).execute(
+                any<RedisScript<Long>>(), Mockito.anyList<String>(), any<String>(), any<String>(), any<String>()
+            )
         }
     }
 }

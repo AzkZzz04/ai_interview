@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
+import org.springframework.data.redis.core.script.RedisScript
 import org.assertj.core.api.Assertions.assertThat
 import org.springframework.http.MediaType
 import org.springframework.http.HttpStatus
@@ -275,6 +276,7 @@ class ExperienceControllerTests {
 			redis[it.getArgument(0)] = it.getArgument(1)
 			null
 		}.`when`(valueOperations).set(anyString(), kotlinAny(), kotlinAny<Duration>())
+		stubScriptExecution()
 		return RedisRequestGuard(
 			redisTemplate,
 			RedisUsageProperties(
@@ -282,6 +284,32 @@ class ExperienceControllerTests {
 				RedisUsageProperties.Idempotency(true, 86_400)
 			),
 			ObjectMapper().findAndRegisterModules()
+		)
+	}
+
+	private fun stubScriptExecution() {
+		val answer = org.mockito.stubbing.Answer<Long> {
+			val script = it.getArgument<RedisScript<Long>>(0)
+			val key = it.getArgument<List<String>>(1).single()
+			val args = it.rawArguments[2] as Array<Any>
+			if (redis[key] != args[0]) 0L
+			else when {
+				script.scriptAsString.contains("'PX'") -> {
+					redis[key] = args[1] as String
+					1L
+				}
+				script.scriptAsString.contains("PEXPIRE") -> 1L
+				else -> if (redis.remove(key) != null) 1L else 0L
+			}
+		}
+		Mockito.doAnswer(answer).`when`(redisTemplate).execute(
+			any<RedisScript<Long>>(), Mockito.anyList<String>(), any<String>()
+		)
+		Mockito.doAnswer(answer).`when`(redisTemplate).execute(
+			any<RedisScript<Long>>(), Mockito.anyList<String>(), any<String>(), any<String>()
+		)
+		Mockito.doAnswer(answer).`when`(redisTemplate).execute(
+			any<RedisScript<Long>>(), Mockito.anyList<String>(), any<String>(), any<String>(), any<String>()
 		)
 	}
 }
