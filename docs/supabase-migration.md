@@ -108,7 +108,7 @@ Run the live check explicitly against the selected development project (ordinary
 SUPABASE_LIVE_SMOKE=true ./gradlew integrationTest --tests '*SupabaseLiveSmokeTests' --rerun-tasks --no-daemon
 ~~~
 
-Full workflow operation, deployment capacity and rollback rehearsal remain unverified. Anonymous/authenticated effective database grants were checked; direct authenticated Data API smoke remains pending. The migration is not cutover-complete until the remaining live checks pass.
+The following 2026-10-01 section supersedes this earlier verification snapshot.
 
 ## Verification status (2026-10-01, U17)
 
@@ -120,7 +120,9 @@ Supabase Compose (`--profile supabase`), mocks off, through the API the web app 
 
 Rollback rehearsal: with the Supabase stack's API, worker and web stopped, the old local environment kept serving its own data with none of the new Supabase rows merged in. Queues (`ai-interview-jobs` vs `ai-interview-supabase-jobs`, separate LocalStacks) and Redis prefixes were separate, so no old process can consume new work. On 2026-10-01, stopping only those new app processes left the old `/api/resumes` and `/api/history` responses byte-for-byte unchanged and reachable at HTTP 200; the new web origin was unavailable. After restarting the new app, both environments' saved resume and history responses matched their pre-stop digests, and both returned HTTP 200. Redis, LocalStack, and all volumes were preserved.
 
-Direct Data API checks on 2026-10-01: anonymous `job_status` SELECT returned HTTP 401 / SQLSTATE 42501; a valid temporary authenticated user's SELECT returned HTTP 403 / SQLSTATE 42501; the backend secret-key SELECT returned HTTP 200. The temporary Auth user was deleted. The opt-in live SDK/JDBC smoke passed again after V18. Still open: verify Supavisor session-pool capacity for 12–20 application connections, including rolling overlap, against the project's Pool Size and reserved service capacity before deployment.
+Direct Data API checks on 2026-10-01: anonymous `job_status` SELECT returned HTTP 401 / SQLSTATE 42501; a valid temporary authenticated user's SELECT returned HTTP 403 / SQLSTATE 42501; the backend secret-key SELECT returned HTTP 200. The temporary Auth user was deleted. The opt-in live SDK/JDBC smoke passed again after V18.
+
+Connection capacity on 2026-10-01: the project's Database Settings page showed a shared Supavisor **Pool Size of 20** for each user/database combination and a 200-client pooler limit. A read-only SQL Editor query of `pg_stat_activity` reported `max_connections = 60`, 17 current connections, including 3 for `ai_interview_runtime`. The chart runs one API and two workers with Hikari maximum 4 and minimum idle 0, so the steady application ceiling is 12. Replacing **one pod at a time** raises it to at most 16, leaving four runtime-role pool slots; at the observed non-runtime baseline of 14 connections, the corresponding total is at most 30 of 60. Concurrent API and worker surges could raise the application ceiling to 20, consuming the entire per-role pool, so **do not roll out both Deployments together**. Upgrade the API image, wait until it is ready and its old pod has terminated, then upgrade the worker image and wait until both workers are ready. Recheck Pool Size, `pg_stat_activity`, replicas, and Hikari settings immediately before a real cutover; the 17-connection reading is a snapshot, not a guaranteed service reserve. [Supabase connection limits](https://supabase.com/docs/guides/database/connecting-to-postgres/pooling-and-limits) count Supabase services against the same PostgreSQL maximum.
 
 ## Legacy flow removal (V18, U13)
 
