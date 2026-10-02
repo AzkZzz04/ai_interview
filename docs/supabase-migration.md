@@ -118,9 +118,9 @@ Local Compose, mocks off, through the browser: paste, score, target job, fit, ex
 
 Supabase Compose (`--profile supabase`), mocks off, through the API the web app uses: the same journey completed against the live database, with SDK job polling showing every JDBC transition and an unknown job returning `404 JOB_NOT_FOUND`. Data survived an API/worker restart. The worker received neither the SDK key nor migration credentials; the API received only the SDK key.
 
-Rollback rehearsal: with the Supabase stack's API, worker and web stopped, the old local environment kept serving its own data with none of the new Supabase rows merged in. Queues (`ai-interview-jobs` vs `ai-interview-supabase-jobs`, separate LocalStacks) and Redis prefixes were separate, so no old process can consume new work.
+Rollback rehearsal: with the Supabase stack's API, worker and web stopped, the old local environment kept serving its own data with none of the new Supabase rows merged in. Queues (`ai-interview-jobs` vs `ai-interview-supabase-jobs`, separate LocalStacks) and Redis prefixes were separate, so no old process can consume new work. On 2026-10-01, stopping only those new app processes left the old `/api/resumes` and `/api/history` responses byte-for-byte unchanged and reachable at HTTP 200; the new web origin was unavailable. After restarting the new app, both environments' saved resume and history responses matched their pre-stop digests, and both returned HTTP 200. Redis, LocalStack, and all volumes were preserved.
 
-Still open: Supavisor pool capacity for 12–20 connections (read Pool Size in the dashboard), and a direct anonymous/authenticated Data API request (database grants already deny both roles).
+Direct Data API checks on 2026-10-01: anonymous `job_status` SELECT returned HTTP 401 / SQLSTATE 42501; a valid temporary authenticated user's SELECT returned HTTP 403 / SQLSTATE 42501; the backend secret-key SELECT returned HTTP 200. The temporary Auth user was deleted. The opt-in live SDK/JDBC smoke passed again after V18. Still open: verify Supavisor session-pool capacity for 12–20 application connections, including rolling overlap, against the project's Pool Size and reserved service capacity before deployment.
 
 ## Legacy flow removal (V18, U13)
 
