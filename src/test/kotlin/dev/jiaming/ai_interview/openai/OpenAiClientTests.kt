@@ -68,7 +68,7 @@ class OpenAiClientTests {
 
     @Test
     fun aMissingKeyFailsWithoutCallingOpenAi() {
-        val client = OpenAiClient(ObjectMapper(), { error("must not send") }, SimpleMeterRegistry(), ENDPOINT, "", "gpt-4.1-mini", 0.2, Duration.ofSeconds(5), 2048)
+        val client = OpenAiClient(ObjectMapper(), { error("must not send") }, SimpleMeterRegistry(), ENDPOINT, "", 0.2, Duration.ofSeconds(5), 2048)
         assertThatThrownBy { client.generateJson("prompt") }
             .isInstanceOfSatisfying(GeminiException::class.java) { assertThat(it.code()).isEqualTo(GeminiErrorCode.NOT_CONFIGURED) }
     }
@@ -108,7 +108,7 @@ class OpenAiClientTests {
     }
 
     private fun client(transport: (HttpRequest) -> GeminiTransportResponse) =
-        OpenAiClient(ObjectMapper(), transport, SimpleMeterRegistry(), ENDPOINT, "sk-test", "gpt-4.1-mini", 0.2, Duration.ofSeconds(5), 2048)
+        OpenAiClient(ObjectMapper(), transport, SimpleMeterRegistry(), ENDPOINT, "sk-test", 0.2, Duration.ofSeconds(5), 2048)
 
     private fun choice(finishReason: String, content: String) = ObjectMapper().writeValueAsString(
         mapOf("choices" to listOf(mapOf("finish_reason" to finishReason, "message" to mapOf("role" to "assistant", "content" to content))))
