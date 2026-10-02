@@ -16,13 +16,6 @@ class CoachResponseMapperTests {
 	private val mapper = CoachResponseMapper(ObjectMapper())
 
 	@Test
-	fun rejectsSourceContextIdsThatWereNotRetrieved() {
-		val response = AnswerFeedbackResponse(70, "Clear", null, listOf("Ownership"), listOf("Metrics"), listOf("Context"), null, "gemini", listOf("resume:4", "invented:source:9"))
-		val normalized = mapper.normalizeFeedback(response, listOf("resume:projects:4", "resume:skills:5"))
-		assertThat(normalized.sourceContextIds).containsExactly("resume:projects:4", "resume:skills:5")
-	}
-
-	@Test
 	fun normalizesExperienceSplitFieldsAndLeavesDuplicateChecksForTheOwnerScopedService() {
 		val response = ExperienceSplitResponse(listOf(
 			ExperienceSplitResponseItem("  Senior   Engineer ", " Acme ", "2021-03", null, " Built a reliable service. ")

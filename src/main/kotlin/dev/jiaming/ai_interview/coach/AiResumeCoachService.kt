@@ -22,7 +22,7 @@ class AiResumeCoachService(
 ) {
     fun assessJobFit(input: CoachAnalysisInput): dev.jiaming.ai_interview.fit.JobFitResult {
         val context = ragContextService.jobFitContext(input)
-        return responseMapper.normalizeJobFit(generateStructured(promptBuilder.buildJobFitPrompt(input, context), JobFitResponse::class.java))
+        return responseMapper.normalizeJobFit(generateStructured(promptBuilder.buildJobFitPrompt(context), JobFitResponse::class.java))
     }
 
     // ponytail: per-source budget only (KTD7); add a total prompt cap if users keep hundreds of sources.
@@ -43,18 +43,15 @@ class AiResumeCoachService(
 
     fun generatePracticeQuestions(input: CoachAnalysisInput): PracticeQuestionDrafts {
         val context = ragContextService.practiceQuestionContext(input)
-        return generateStructured(promptBuilder.buildPracticeQuestionPrompt(input, context), PracticeQuestionsResponse::class.java,
+        return generateStructured(promptBuilder.buildPracticeQuestionPrompt(context), PracticeQuestionsResponse::class.java,
             responseMapper::normalizePracticeQuestions)
     }
 
     /** Scores a practice attempt against its question and the pair's resume and job description (KTD7). */
     fun scorePracticeAnswer(input: CoachFeedbackInput): AnswerFeedbackResult {
         val context = ragContextService.feedbackContext(input)
-        val feedback = responseMapper.normalizeFeedback(
-            generateStructured(promptBuilder.buildPracticeFeedbackPrompt(input, context), AnswerFeedbackResponse::class.java), context.sourceContextIds
-        )
-        return AnswerFeedbackResult(feedback.score, feedback.summary.orEmpty(), feedback.nextStep, feedback.strengths.orEmpty(), feedback.gaps.orEmpty(),
-            feedback.betterAnswerOutline.orEmpty(), feedback.followUpQuestion?.ifBlank { null })
+        return generateStructured(promptBuilder.buildPracticeFeedbackPrompt(input, context), AnswerFeedbackResponse::class.java,
+            responseMapper::normalizeFeedback)
     }
 
     fun scoreResume(resumeText: String, jobTitle: String?): ResumeScoreResult = responseMapper.normalizeResumeScore(

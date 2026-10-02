@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import dev.jiaming.ai_interview.common.ApiRequestException
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
+import dev.jiaming.ai_interview.common.lockOwnerShared
 import dev.jiaming.ai_interview.jobs.ActiveJob
 import dev.jiaming.ai_interview.jobs.BackgroundJobStore
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
@@ -48,7 +49,7 @@ class JobFitService(
             JobAcceptedResponse::class.java,
             Supplier {
                 requireNotNull(transactionOperations.execute {
-                    lockOwner(userId)
+                    jdbcTemplate.lockOwnerShared(userId)
                     requireOwnedInputs(userId, resumeId, targetJobId, lockRows = true, requireReady = true)
                     val fitId = upsertAndLockFit(userId, resumeId, targetJobId)
                     val fingerprint = jobSubmissionService.fingerprint(JobType.JOB_FIT.name, fitId)
@@ -82,14 +83,6 @@ class JobFitService(
             RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, targetJobId, userId,
         ).firstOrNull()
         if (target == null) throw ApiRequestException(HttpStatus.NOT_FOUND, "TARGET_JOB_NOT_FOUND", "Target job was not found")
-    }
-
-    private fun lockOwner(userId: UUID) {
-        val owner = jdbcTemplate.query(
-            "SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR KEY SHARE",
-            RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId,
-        ).firstOrNull()
-        if (owner == null) throw IllegalStateException("Fit owner does not exist")
     }
 
     private fun upsertAndLockFit(userId: UUID, resumeId: UUID, targetJobId: UUID): UUID {

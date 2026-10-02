@@ -140,11 +140,10 @@ class CoachRagContextService @Autowired constructor(
             snippets.map { it.sourceContextId() }.filter { !blank(it) }.distinct(), vectorBacked)
 
     private fun jobFitQueries(input: CoachAnalysisInput): List<String> {
-        val role = fallback(input.targetRole(), "target job")
         val jd = jobDescriptionQueryExcerpt(input.jobDescription())
         return listOf(
-            "required qualifications must-have skills experience and responsibilities $role $jd",
-            "resume evidence accomplishments projects skills tools and measurable impact $role",
+            "required qualifications must-have skills experience and responsibilities target job $jd",
+            "resume evidence accomplishments projects skills tools and measurable impact target job",
             "job description requirements missing candidate evidence and role alignment $jd",
         )
     }
@@ -156,8 +155,8 @@ class CoachRagContextService @Autowired constructor(
         )
     }
     private fun questionQueries(input: CoachAnalysisInput): List<String> {
-        val role = fallback(input.targetRole(), "Software Engineer"); val jd = jobDescriptionQueryExcerpt(input.jobDescription())
-        return listOf("strongest projects ownership technical complexity $role", "weakest resume areas missing detail interview probe $role",
+        val jd = jobDescriptionQueryExcerpt(input.jobDescription())
+        return listOf("strongest projects ownership technical complexity Software Engineer", "weakest resume areas missing detail interview probe Software Engineer",
             "system design architecture scaling data flow production tradeoffs", "debugging incident response observability database cache production",
             "collaboration leadership stakeholder tradeoff communication", "job description requirements role specific tooling $jd")
     }

@@ -1,6 +1,7 @@
 package dev.jiaming.ai_interview.interview
 
 import dev.jiaming.ai_interview.common.ContentHasher
+import dev.jiaming.ai_interview.common.lockOwnerExclusive
 import dev.jiaming.ai_interview.document.DocumentChunk
 import dev.jiaming.ai_interview.document.DocumentSourceType
 import dev.jiaming.ai_interview.document.ResolvedDocument
@@ -52,7 +53,7 @@ class JobDescriptionPersistenceService(
         val normalizedText = normalizer.normalize(jobDescription)
         if (normalizedText.isBlank()) throw IllegalArgumentException("Job description text is required")
         val contentHash = contentHasher.sha256(normalizedText)
-        lockOwner(userId)
+        jdbcTemplate.lockOwnerExclusive(userId)
         val existing = findDocumentByContent(userId, contentHash, normalizedText)
         if (existing.isPresent) return TargetJobDocumentSave(existing.get(), false)
 
@@ -88,14 +89,6 @@ class JobDescriptionPersistenceService(
             )
         }
         return TargetJobDocumentSave(findDocument(userId, jobDescriptionId).orElseThrow(), true)
-    }
-
-    private fun lockOwner(userId: UUID) {
-        jdbcTemplate.query(
-            "SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR UPDATE",
-            { rs, _ -> rs.getObject("id", UUID::class.java) },
-            userId,
-        )
     }
 
     private fun queryDocument(sql: String, vararg arguments: Any): Optional<ResolvedDocument> =

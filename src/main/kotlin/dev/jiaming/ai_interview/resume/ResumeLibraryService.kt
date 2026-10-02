@@ -7,6 +7,7 @@ import dev.jiaming.ai_interview.common.DeleteImpactService
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
 import dev.jiaming.ai_interview.common.RequestValidation
+import dev.jiaming.ai_interview.common.lockOwnerExclusive
 import dev.jiaming.ai_interview.jobs.ActiveJob
 import dev.jiaming.ai_interview.jobs.JobErrorResponse
 import dev.jiaming.ai_interview.jobs.JobStage
@@ -122,7 +123,7 @@ class ResumeLibraryService(
         val userId = localUserService.localUserId()
         val storageKey = transactionOperations.execute {
             lockResourceJobs(userId, resumeId)
-            lockOwner(userId)
+            jdbcTemplate.lockOwnerExclusive(userId)
             val ownedResume = jdbcTemplate.query(
                 "SELECT id, storage_key FROM ai_interview_app.resumes WHERE id = ? AND user_id = ? FOR UPDATE",
                 RowMapper { rs, _ -> OwnedResume(rs.getObject("id", UUID::class.java), rs.getString("storage_key")) },
@@ -164,14 +165,6 @@ class ResumeLibraryService(
                 """.trimIndent(),
             RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId, resumeId, resumeId.toString()
         )
-    }
-
-    private fun lockOwner(userId: UUID) {
-        val ids = jdbcTemplate.query(
-            "SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR UPDATE",
-            RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId
-        )
-        if (ids.isEmpty()) throw IllegalStateException("Resume owner does not exist")
     }
 
     private fun toItem(rs: ResultSet): ResumeLibraryItem {

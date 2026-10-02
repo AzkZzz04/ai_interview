@@ -56,7 +56,7 @@ class CoachPromptBuilder {
         inputs = listOf("job_title" to fallback(jobTitle, "Not provided"), "resume" to resumeText)
     )
 
-    fun buildJobFitPrompt(input: CoachAnalysisInput, context: CoachRagContext): String = prompt(
+    fun buildJobFitPrompt(context: CoachRagContext): String = prompt(
         role = "You are a careful technical recruiter comparing one candidate's resume with one target job.",
         steps = listOf(
             "Read the job-description excerpts in <context> and list the job's requirements.",
@@ -81,7 +81,7 @@ class CoachPromptBuilder {
               "feedback": [{ "priority": "HIGH", "message": "Move the strongest matching project higher." }]
             }
         """,
-        inputs = listOf("target_role" to fallback(input.targetRole(), "Not provided"), "context" to context.context)
+        inputs = listOf("context" to context.context)
     )
 
     fun buildExperienceSuggestionsPrompt(resumeText: String, jobDescription: String, sources: List<Pair<SuggestionSource, String>>): String = prompt(
@@ -112,7 +112,7 @@ class CoachPromptBuilder {
         )
     )
 
-    fun buildPracticeQuestionPrompt(input: CoachAnalysisInput, context: CoachRagContext): String = prompt(
+    fun buildPracticeQuestionPrompt(context: CoachRagContext): String = prompt(
         role = "You write interview practice questions for one candidate preparing for one target job.",
         steps = listOf(
             "Read the job-description excerpts in <context> and list the job's distinct requirements.",
@@ -131,7 +131,7 @@ class CoachPromptBuilder {
               ]
             }
         """,
-        inputs = listOf("target_role" to fallback(input.targetRole(), "Not provided"), "context" to context.context)
+        inputs = listOf("context" to context.context)
     )
 
     /** Scores one practice attempt against its question and the pair's resume and job description. */
@@ -146,8 +146,7 @@ class CoachPromptBuilder {
         ),
         rules = listOf(
             "Do not reward claims the answer does not make.",
-            "Do not invent resume details beyond the context.",
-            "For sourceContextIds, copy only contextId values that appear in <context>."
+            "Do not invent resume details beyond the context."
         ),
         outputShape = """
             {
@@ -157,8 +156,7 @@ class CoachPromptBuilder {
               "strengths": ["1-3 strengths"],
               "gaps": ["1-3 gaps"],
               "betterAnswerOutline": ["context", "action", "tradeoff", "result"],
-              "followUpQuestion": "one follow-up question",
-              "sourceContextIds": ["resume:experience:0"]
+              "followUpQuestion": "one follow-up question"
             }
         """,
         inputs = listOf(

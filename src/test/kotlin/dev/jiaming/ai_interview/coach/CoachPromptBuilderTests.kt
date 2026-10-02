@@ -14,22 +14,18 @@ class CoachPromptBuilderTests {
 
 	@Test
 	fun jobFitPromptRequiresEvidenceAndUsesTheJobDescriptionAsRequirements() {
-		val jobDescription = ResolvedDocument(DocumentSourceType.JOB_DESCRIPTION, UUID.randomUUID(), "job-hash", "REQUIREMENTS\nKotlin and Kafka", emptyList())
 		val prompt = promptBuilder.buildJobFitPrompt(
-			CoachAnalysisInput(resume(), Optional.of(jobDescription), "Platform Engineer"),
 			CoachRagContext("fit", "Resume: Kotlin services\nJob: Kafka required", listOf("resume:projects:0"), false),
 		)
 
 		assertThat(prompt).contains("only the retrieved resume and job-description context", "specific supporting evidence", "missingRequirements")
-		assertThat(prompt).contains("fitScore", "matchedRequirements", "feedback", "Platform Engineer", "Kafka required")
+		assertThat(prompt).contains("fitScore", "matchedRequirements", "feedback", "Kafka required")
 		assertThat(prompt).contains("Put each requirement in exactly one list")
 	}
 
 	@Test
 	fun practiceQuestionPromptAsksForThreeToEightRationales() {
-		val jobDescription = ResolvedDocument(DocumentSourceType.JOB_DESCRIPTION, UUID.randomUUID(), "job-hash", "REQUIREMENTS\nKafka", emptyList())
 		val prompt = promptBuilder.buildPracticeQuestionPrompt(
-			CoachAnalysisInput(resume(), Optional.of(jobDescription), null),
 			CoachRagContext("questions", "Job: Kafka required", listOf("job_description:requirements:0"), false),
 		)
 

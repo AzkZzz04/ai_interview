@@ -12,6 +12,7 @@ import dev.jiaming.ai_interview.fit.FitFeedback
 import dev.jiaming.ai_interview.fit.JobFitResult
 import dev.jiaming.ai_interview.fit.MatchedRequirement
 import dev.jiaming.ai_interview.fit.MissingRequirement
+import dev.jiaming.ai_interview.practice.AnswerFeedbackResult
 import dev.jiaming.ai_interview.practice.PracticeQuestionDraft
 import dev.jiaming.ai_interview.practice.PracticeQuestionDrafts
 import dev.jiaming.ai_interview.suggestions.ExperienceSuggestionItem
@@ -64,12 +65,12 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         val rewrites = response.rewrites.orEmpty().filterNotNull()
             .filter { !it.rewritten.isNullOrBlank() && !it.original.isNullOrBlank() && collapseWhitespace(it.original) in resume }
             .take(5).map { rewrite ->
-            val rewritten = rewrite.rewritten!!.trim()
-            ResumeScoreRewrite(
-                fallback(rewrite.section, "Experience"), rewrite.original!!.trim(), rewritten,
-                PLACEHOLDER.findAll(rewritten).map { it.value }.distinct().toList()
-            )
-        }
+                val rewritten = rewrite.rewritten!!.trim()
+                ResumeScoreRewrite(
+                    fallback(rewrite.section, "Experience"), rewrite.original!!.trim(), rewritten,
+                    PLACEHOLDER.findAll(rewritten).map { it.value }.distinct().toList()
+                )
+            }
         return ResumeScoreResult(
             response.overall?.let(::clampScore) ?: average(normalizedScores), normalizedScores,
             fallback(response.summary, "The resume was scored, but no summary was returned."),
@@ -77,11 +78,10 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         )
     }
 
-    fun normalizeFeedback(response: AnswerFeedbackResponse, fallbackSourceContextIds: List<String>): AnswerFeedbackResponse = AnswerFeedbackResponse(
+    fun normalizeFeedback(response: AnswerFeedbackResponse): AnswerFeedbackResult = AnswerFeedbackResult(
         clampScore(response.score), fallback(response.summary, "The answer was scored, but no summary was returned."),
         fallback(response.nextStep, "Add clearer structure, technical detail, and measurable outcomes."), nonEmpty(response.strengths),
-        nonEmpty(response.gaps), nonEmpty(response.betterAnswerOutline), fallback(response.followUpQuestion, ""), "gemini",
-        sourceContextIds(response.sourceContextIds, fallbackSourceContextIds)
+        nonEmpty(response.gaps), nonEmpty(response.betterAnswerOutline), response.followUpQuestion?.trim()?.ifEmpty { null }
     )
 
     fun normalizeJobFit(response: JobFitResponse): JobFitResult = JobFitResult(
@@ -105,7 +105,7 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
     fun normalizePracticeQuestions(response: PracticeQuestionsResponse): PracticeQuestionDrafts {
         val drafts = response.questions.orEmpty().filterNotNull()
             .mapNotNull { question ->
-                val signals = question.expectedSignals.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).take(6)
+                val signals = cleanStrings(question.expectedSignals)
                 if (question.questionText.isNullOrBlank() || question.rationale.isNullOrBlank() || signals.isEmpty()) return@mapNotNull null
                 PracticeQuestionDraft(question.questionText.trim(), question.rationale.trim(), question.category?.trim()?.ifEmpty { null }, signals)
             }
@@ -128,23 +128,15 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
         }.take(8))
     }
 
-    private fun nonEmpty(values: List<String>?): List<String> = values.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).take(6)
-        .ifEmpty { listOf("No specific evidence returned") }
-    private fun sourceContextIds(responseIds: List<String>?, fallbackIds: List<String>): List<String> {
-        val available = cleanContextIds(fallbackIds)
-        val supplied = cleanContextIds(responseIds)
-        if (available.isEmpty()) return supplied
-        val retrieved = supplied.filter(available::contains)
-        return retrieved.ifEmpty { available }
-    }
-    private fun cleanContextIds(values: List<String>?): List<String> = values.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).distinct().take(12)
+    private fun cleanStrings(values: List<String?>?): List<String> = values.orEmpty().filterNotNull().map(String::trim).filter(String::isNotBlank).take(6)
+    private fun nonEmpty(values: List<String>?): List<String> = cleanStrings(values).ifEmpty { listOf("No specific evidence returned") }
     private fun normalizePriority(value: String?) = fallback(value, "medium").lowercase(Locale.ROOT).let { if (it in setOf("high", "medium", "low")) it else "medium" }
     private fun normalizeFitPriority(value: String?) = fallback(value, "MEDIUM").uppercase(Locale.ROOT).let { if (it in setOf("HIGH", "MEDIUM", "LOW")) it else "MEDIUM" }
     private fun average(scores: AssessmentScores) = Math.round((scores.technicalDepth + scores.impact + scores.clarity + scores.relevance + scores.ats) / 5.0f)
     private fun clampScore(value: Int) = value.coerceIn(0, 100)
     private fun experienceText(value: String?, field: String, min: Int, max: Int): String = value?.let(::collapseWhitespace)
         ?.takeIf { it.length in min..max } ?: invalidExperience(field)
-    private fun collapseWhitespace(value: String) = value.trim().replace(Regex("\\s+"), " ")
+    private fun collapseWhitespace(value: String) = value.trim().replace(WHITESPACE, " ")
     private fun experienceMonth(value: String?, field: String): String? {
         val month = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
         if (!Regex("\\d{4}-(0[1-9]|1[0-2])").matches(month)) invalidExperience(field)
@@ -159,6 +151,7 @@ class CoachResponseMapper(private val objectMapper: ObjectMapper) {
 
     private companion object {
         val PLACEHOLDER = Regex("""\[[^\]\r\n]+\]""")
+        val WHITESPACE = Regex("\\s+")
         const val MIN_PRACTICE_QUESTIONS = 3
         const val MAX_PRACTICE_QUESTIONS = 8
     }

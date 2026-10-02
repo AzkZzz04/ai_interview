@@ -2,6 +2,7 @@ package dev.jiaming.ai_interview.score
 
 import dev.jiaming.ai_interview.common.ApiRequestException
 import dev.jiaming.ai_interview.common.LocalUserService
+import dev.jiaming.ai_interview.common.lockOwnerShared
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
 import dev.jiaming.ai_interview.jobs.JobSubmissionService
 import dev.jiaming.ai_interview.jobs.JobType
@@ -22,8 +23,7 @@ class ResumeScoreService(
     @Transactional
     fun submit(resumeId: UUID): JobAcceptedResponse {
         val userId = localUserService.localUserId()
-        // Owner before resume, the order resume deletion locks them in, so the two cannot deadlock.
-        jdbcTemplate.queryForList("SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR KEY SHARE", userId)
+        jdbcTemplate.lockOwnerShared(userId)
         val resume = jdbcTemplate.query(
             "SELECT processing_status, job_title, normalized_text FROM ai_interview_app.resumes WHERE id = ? AND user_id = ? FOR SHARE",
             RowMapper { rs, _ -> ScoreSource(rs.getString("processing_status"), rs.getString("job_title"), rs.getString("normalized_text")) },

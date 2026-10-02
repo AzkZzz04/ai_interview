@@ -69,6 +69,7 @@ class AiResumeCoachServiceTests {
 
 		assertThat(score.overall).isEqualTo(82)
 		assertThat(score.jobTitle).isEqualTo("Backend Engineer")
+		assertThat(score.rewrites).hasSize(1)
 		Mockito.verify(client, Mockito.times(2)).generateJson(anyString())
 		Mockito.verifyNoInteractions(contextService)
 	}
@@ -86,7 +87,7 @@ class AiResumeCoachServiceTests {
 	}
 
 	@Test fun practiceQuestionsBelowTheMinimumGoThroughTheSingleRepairAttempt() {
-		val input = CoachAnalysisInput(input().resume(), Optional.empty(), null)
+		val input = CoachAnalysisInput(input().resume(), Optional.empty())
 		Mockito.`when`(contextService.practiceQuestionContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn(practiceJson(2)).thenReturn(practiceJson(4))
 
@@ -102,7 +103,7 @@ class AiResumeCoachServiceTests {
 		val input = CoachFeedbackInput(input().resume(), Optional.empty(), "Why Kafka?", null, emptyList(), "Because ordering.")
 		Mockito.`when`(contextService.feedbackContext(input)).thenReturn(CoachRagContext("direct", "context", listOf("resume:experience:0"), false))
 		Mockito.`when`(client.generateJson(anyString())).thenReturn(
-			"""{"score":140,"summary":"Clear.","nextStep":"Add numbers.","strengths":["Ownership"],"gaps":["Metrics"],"betterAnswerOutline":["Context"],"followUpQuestion":" ","sourceContextIds":["resume:experience:0"]}"""
+			"""{"score":140,"summary":"Clear.","nextStep":"Add numbers.","strengths":["Ownership"],"gaps":["Metrics"],"betterAnswerOutline":["Context"],"followUpQuestion":" "}"""
 		)
 
 		val feedback = service.scorePracticeAnswer(input)
@@ -119,9 +120,9 @@ class AiResumeCoachServiceTests {
 
 	private fun input(): CoachAnalysisInput {
 		val resume = ResolvedDocument(DocumentSourceType.RESUME, UUID.randomUUID(), "hash", "EXPERIENCE\nBuilt APIs", listOf(DocumentChunk(0, "Experience", "Built APIs", "resume:experience:0")))
-		return CoachAnalysisInput(resume, Optional.empty(), "Backend Engineer")
+		return CoachAnalysisInput(resume, Optional.empty())
 	}
 
 	private fun jobFitJson() = """{"fitScore":80,"summary":"Good match.","matchedRequirements":[{"requirement":"APIs","evidence":"Built APIs"}],"missingRequirements":[],"feedback":[]}"""
-	private fun scoreJson() = """{"overall":82,"scores":{"technicalDepth":82,"impact":80,"clarity":84,"relevance":81,"ats":83},"summary":"Strong backend work.","fixes":[{"section":"Experience","priority":"HIGH","message":"Add scope."}],"rewrites":[{"section":"Experience","original":"Built API.","rewritten":"Built API serving [N] services."}]}"""
+	private fun scoreJson() = """{"overall":82,"scores":{"technicalDepth":82,"impact":80,"clarity":84,"relevance":81,"ats":83},"summary":"Strong backend work.","fixes":[{"section":"Experience","priority":"HIGH","message":"Add scope."}],"rewrites":[{"section":"Experience","original":"Built the payment API.","rewritten":"Built the payment API serving [N] merchants."}]}"""
 }

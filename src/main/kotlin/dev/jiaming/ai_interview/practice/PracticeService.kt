@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import dev.jiaming.ai_interview.common.ApiRequestException
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
+import dev.jiaming.ai_interview.common.lockOwnerShared
 import dev.jiaming.ai_interview.jobs.ActiveJob
 import dev.jiaming.ai_interview.jobs.AttemptFeedbackPayload
 import dev.jiaming.ai_interview.jobs.BackgroundJobStore
@@ -38,7 +39,7 @@ class PracticeService(
         jobSubmissionService.assertApiAvailable()
         val userId = localUserService.localUserId()
         return inTransaction {
-            lockOwner(userId)
+            jdbcTemplate.lockOwnerShared(userId)
             val resumeReady = lockInputs(userId, resumeId, targetJobId)
             val existing = findPairSet(userId, resumeId, targetJobId)
             when {
@@ -72,7 +73,7 @@ class PracticeService(
         jobSubmissionService.assertApiAvailable()
         val userId = localUserService.localUserId()
         return inTransaction {
-            lockOwner(userId)
+            jdbcTemplate.lockOwnerShared(userId)
             val found = findSet(userId, "id = ?", setId) ?: notFound()
             // Lock the pair's rows before the set, in create's order, so a concurrent delete either removes this job or wins first.
             lockInputs(userId, found.resumeId, found.targetJobId)
@@ -217,7 +218,7 @@ class PracticeService(
      * resume or target job delete either removes the new attempt's job or wins first.
      */
     private fun lockQuestion(userId: UUID, condition: String, vararg arguments: Any): QuestionRow? {
-        lockOwner(userId)
+        jdbcTemplate.lockOwnerShared(userId)
         val question = findQuestion(userId, condition, *arguments) ?: return null
         lockInputs(userId, question.resumeId, question.targetJobId)
         return findQuestion(userId, "q.id = ?", question.id, lock = true)
@@ -302,14 +303,6 @@ class PracticeService(
             RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, targetJobId, userId,
         ).firstOrNull() ?: throw ApiRequestException(HttpStatus.NOT_FOUND, "TARGET_JOB_NOT_FOUND", "Target job was not found")
         return resumeStatus == "READY"
-    }
-
-    // Resume deletion takes this row FOR UPDATE, so a job created here is either deleted with the resume or never created.
-    private fun lockOwner(userId: UUID) {
-        jdbcTemplate.query(
-            "SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR KEY SHARE",
-            RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId,
-        ).firstOrNull() ?: throw IllegalStateException("Practice set owner does not exist")
     }
 
     private fun findPairSet(userId: UUID, resumeId: UUID, targetJobId: UUID) =

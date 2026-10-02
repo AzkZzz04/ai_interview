@@ -2,6 +2,7 @@ package dev.jiaming.ai_interview.resume
 
 import dev.jiaming.ai_interview.common.ContentHasher
 import dev.jiaming.ai_interview.common.LocalUserService
+import dev.jiaming.ai_interview.common.lockOwnerExclusive
 import dev.jiaming.ai_interview.document.DocumentChunk
 import dev.jiaming.ai_interview.document.DocumentSourceType
 import dev.jiaming.ai_interview.document.ResolvedDocument
@@ -49,7 +50,7 @@ class ResumePersistenceService(
         resumeId: UUID, storageKey: String, rawText: String, normalizedText: String, chunks: List<ResumeChunkResponse>
     ): ResumeExtractionResult {
         val userId = localUserService.localUserId()
-        lockOwner(userId)
+        jdbcTemplate.lockOwnerExclusive(userId)
         val contentHash = contentHasher.sha256(normalizedText)
         val duplicate = jdbcTemplate.query(
             """
@@ -83,7 +84,7 @@ class ResumePersistenceService(
 
     @Transactional
     fun createPaste(userId: UUID, name: String, jobTitle: String?, rawText: String, normalizedText: String): PastePersistenceResult {
-        lockOwner(userId)
+        jdbcTemplate.lockOwnerExclusive(userId)
         val contentHash = contentHasher.sha256(normalizedText)
         val duplicate = jdbcTemplate.query(
             """
@@ -243,14 +244,6 @@ class ResumePersistenceService(
                 RagContextId.forChunk("resume", chunk.section, chunk.index)
             )
         }
-    }
-
-    private fun lockOwner(userId: UUID) {
-        val owner = jdbcTemplate.query(
-            "SELECT id FROM ai_interview_app.app_users WHERE id = ? FOR UPDATE",
-            RowMapper { rs, _ -> rs.getObject("id", UUID::class.java) }, userId
-        )
-        if (owner.isEmpty()) throw IllegalStateException("Resume owner does not exist")
     }
 
     private fun findStorageKey(resumeId: UUID): Optional<String> = jdbcTemplate.query(
