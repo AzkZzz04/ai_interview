@@ -177,7 +177,7 @@ class RedisRequestGuardTests {
     }
 
     @Test
-    fun aCompletedResponseStaysReplayableWhenALaterRedisWriteFails() {
+    fun theResponseIsStoredWithItsFingerprintInOneWriteSoAFailedSecondWriteCannotLoseIt() {
         requestWithIdempotencyKey("retry-key")
         val writes = AtomicInteger()
         Mockito.doAnswer {

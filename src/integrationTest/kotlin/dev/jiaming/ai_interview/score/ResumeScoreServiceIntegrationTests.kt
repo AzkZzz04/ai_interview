@@ -10,6 +10,8 @@ import dev.jiaming.ai_interview.common.DeleteImpactService
 import dev.jiaming.ai_interview.common.LocalUserService
 import dev.jiaming.ai_interview.common.RedisRequestGuard
 import dev.jiaming.ai_interview.common.RedisUsageProperties
+import dev.jiaming.ai_interview.common.lockOwnerExclusive
+import dev.jiaming.ai_interview.common.lockOwnerShared
 import dev.jiaming.ai_interview.jobs.BackgroundJobStore
 import dev.jiaming.ai_interview.jobs.JobAcceptedResponse
 import dev.jiaming.ai_interview.jobs.JobEffectMaterializationService
@@ -153,6 +155,25 @@ class ResumeScoreServiceIntegrationTests {
             executor.shutdown()
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue()
         }
+    }
+
+    @Test
+    fun submissionsShareTheOwnerLockButADeleteExcludesThem() {
+        val owner = local.localUserId()
+        val other = JdbcTemplate(DriverManagerDataSource(POSTGRES.jdbcUrl, POSTGRES.username, POSTGRES.password))
+        fun otherCanLock(lock: String) =
+            runCatching { other.queryForList("SELECT id FROM ai_interview_app.app_users WHERE id = ? $lock NOWAIT", owner) }.isSuccess
+
+        transactions.execute {
+            jdbc.lockOwnerShared(owner)
+            assertThat(otherCanLock("FOR KEY SHARE")).isTrue()
+            assertThat(otherCanLock("FOR UPDATE")).isFalse()
+        }
+        transactions.execute {
+            jdbc.lockOwnerExclusive(owner)
+            assertThat(otherCanLock("FOR KEY SHARE")).isFalse()
+        }
+        assertThatThrownBy { jdbc.lockOwnerShared(UUID.randomUUID()) }.isInstanceOf(IllegalStateException::class.java)
     }
 
     private fun materialize(resumeId: UUID, result: ResumeScoreResult) {
