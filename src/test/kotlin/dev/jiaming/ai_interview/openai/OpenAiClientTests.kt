@@ -12,7 +12,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import java.io.IOException
 import java.net.http.HttpRequest
+import java.net.http.HttpTimeoutException
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.time.Duration
@@ -56,6 +58,15 @@ class OpenAiClientTests {
     }
 
     @Test
+    fun transportFailuresAndUnreadableBodiesAreRetryable() {
+        assertTransportFailure(GeminiErrorCode.TIMEOUT) { throw HttpTimeoutException("slow") }
+        assertTransportFailure(GeminiErrorCode.UPSTREAM_ERROR) { throw IOException("connection reset") }
+        assertTransportFailure(GeminiErrorCode.UPSTREAM_ERROR) { GeminiTransportResponse(200, "not json") }
+        assertTransportFailure(GeminiErrorCode.TIMEOUT) { throw InterruptedException() }
+        assertThat(Thread.interrupted()).isTrue()
+    }
+
+    @Test
     fun aMissingKeyFailsWithoutCallingOpenAi() {
         val client = OpenAiClient(ObjectMapper(), { error("must not send") }, SimpleMeterRegistry(), ENDPOINT, "", "gpt-4.1-mini", 0.2, Duration.ofSeconds(5), 2048)
         assertThatThrownBy { client.generateJson("prompt") }
@@ -80,6 +91,14 @@ class OpenAiClientTests {
             .isInstanceOfSatisfying(GeminiException::class.java) {
                 assertThat(it.code()).isEqualTo(code)
                 assertThat(it.retryable()).isEqualTo(retryable)
+            }
+    }
+
+    private fun assertTransportFailure(code: String, transport: (HttpRequest) -> GeminiTransportResponse) {
+        assertThatThrownBy { client(transport).generateJson("prompt") }
+            .isInstanceOfSatisfying(GeminiException::class.java) {
+                assertThat(it.code()).isEqualTo(code)
+                assertThat(it.retryable()).isTrue()
             }
     }
 
