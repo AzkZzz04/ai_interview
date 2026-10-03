@@ -94,6 +94,8 @@ val integrationTestSourceSet = sourceSets.create("integrationTest") {
 }
 
 kotlin.sourceSets.maybeCreate("integrationTest").kotlin.srcDir("src/integrationTest/kotlin")
+// Like the test compilation, integration tests may set main's internal members, e.g. RedisRequestGuard's short TTLs.
+kotlin.target.compilations.getByName("integrationTest").associateWith(kotlin.target.compilations.getByName("main"))
 
 configurations[integrationTestSourceSet.implementationConfigurationName]
 	.extendsFrom(configurations.testImplementation.get())
