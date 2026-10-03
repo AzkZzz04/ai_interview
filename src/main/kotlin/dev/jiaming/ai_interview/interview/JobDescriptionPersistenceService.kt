@@ -1,6 +1,7 @@
 package dev.jiaming.ai_interview.interview
 
 import dev.jiaming.ai_interview.common.ContentHasher
+import dev.jiaming.ai_interview.common.lockOwnerExclusive
 import dev.jiaming.ai_interview.document.DocumentChunk
 import dev.jiaming.ai_interview.document.DocumentSourceType
 import dev.jiaming.ai_interview.document.ResolvedDocument
@@ -21,11 +22,8 @@ class JobDescriptionPersistenceService(
     private val contentHasher: ContentHasher,
 ) {
     @Transactional
-    fun save(userId: UUID, jobDescription: String?): Optional<UUID> {
-        if (jobDescription.isNullOrBlank()) return Optional.empty()
-        if (normalizer.normalize(jobDescription).isBlank()) return Optional.empty()
-        return Optional.of(findOrCreateDocument(userId, jobDescription).resourceId())
-    }
+    fun findOrCreateTargetJob(userId: UUID, name: String, jobDescription: String): TargetJobDocumentSave =
+        findOrCreate(userId, jobDescription, name)
 
     fun findDocument(userId: UUID, jobDescriptionId: UUID): Optional<ResolvedDocument> = queryDocument(
         """
@@ -43,7 +41,7 @@ class JobDescriptionPersistenceService(
                 SELECT id, normalized_text, content_hash
                 FROM ai_interview_app.job_descriptions
                 WHERE user_id = ? AND content_hash = ? AND normalized_text = ?
-                ORDER BY created_at DESC
+                ORDER BY created_at, id
                 LIMIT 1
             """.trimIndent(),
             userId,
@@ -51,24 +49,25 @@ class JobDescriptionPersistenceService(
             normalizedText,
         )
 
-    @Transactional
-    fun findOrCreateDocument(userId: UUID, jobDescription: String): ResolvedDocument {
+    private fun findOrCreate(userId: UUID, jobDescription: String, name: String): TargetJobDocumentSave {
         val normalizedText = normalizer.normalize(jobDescription)
         if (normalizedText.isBlank()) throw IllegalArgumentException("Job description text is required")
         val contentHash = contentHasher.sha256(normalizedText)
+        jdbcTemplate.lockOwnerExclusive(userId)
         val existing = findDocumentByContent(userId, contentHash, normalizedText)
-        if (existing.isPresent) return existing.get()
+        if (existing.isPresent) return TargetJobDocumentSave(existing.get(), false)
 
         val jobDescriptionId = UUID.randomUUID()
         jdbcTemplate.update(
             """
                 INSERT INTO ai_interview_app.job_descriptions (
-                    id, user_id, raw_text, normalized_text, content_hash, parsed_requirements
+                    id, user_id, name, raw_text, normalized_text, content_hash, parsed_requirements
                 )
-                VALUES (?, ?, ?, ?, ?, '[]'::jsonb)
+                VALUES (?, ?, ?, ?, ?, ?, '[]'::jsonb)
             """.trimIndent(),
             jobDescriptionId,
             userId,
+            name,
             jobDescription,
             normalizedText,
             contentHash,
@@ -89,7 +88,7 @@ class JobDescriptionPersistenceService(
                 RagContextId.forChunk("job_description", chunk.section, chunk.index),
             )
         }
-        return findDocument(userId, jobDescriptionId).orElseThrow()
+        return TargetJobDocumentSave(findDocument(userId, jobDescriptionId).orElseThrow(), true)
     }
 
     private fun queryDocument(sql: String, vararg arguments: Any): Optional<ResolvedDocument> =
@@ -123,4 +122,7 @@ class JobDescriptionPersistenceService(
         },
         jobDescriptionId,
     )
+
 }
+
+data class TargetJobDocumentSave(val document: ResolvedDocument, val created: Boolean)

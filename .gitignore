@@ -2,6 +2,7 @@ HELP.md
 .env
 .env.*
 !.env.example
+!.env.ai-serving.example
 .gradle
 .kotlin/
 build/
@@ -43,3 +44,4 @@ out/
 
 ### VS Code ###
 .vscode/
+.supabase/

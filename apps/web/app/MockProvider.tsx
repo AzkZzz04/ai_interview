@@ -13,7 +13,7 @@ export function MockProvider({ children, mode = API_MOCKS }: { children: ReactNo
     let cancelled = false;
     // Loaded lazily so production builds with mocks off never fetch msw.
     import("@/mocks/browser")
-      .then(({ startMockWorker }) => startMockWorker(mode))
+      .then(({ startMockWorker }) => startMockWorker())
       .then(
         () => !cancelled && setStatus("ready"),
         () => !cancelled && setStatus("failed")

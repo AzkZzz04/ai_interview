@@ -27,7 +27,7 @@ export function JobProgress({ job, timedOut, onCheckAgain, onRetry, retrying, st
       </div>
     );
   }
-  if (!job || job.status === "SUCCEEDED" || job.status === "PARTIAL") return null;
+  if (!job || job.status === "SUCCEEDED") return null;
   if (timedOut) {
     return (
       <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm">

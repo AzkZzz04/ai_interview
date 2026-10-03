@@ -13,21 +13,21 @@ import org.mockito.Mockito
 
 class JobExecutionContextTests {
 	@Test
-	fun laterCheckpointRetainsEarlierAssessmentEnvelope() {
+	fun laterCheckpointRetainsEarlierCheckpoint() {
 		val objectMapper = ObjectMapper()
 		val store = Mockito.mock(BackgroundJobStore::class.java)
 		val leaseToken = UUID.randomUUID()
 		val job = job(objectMapper, null)
 		val context = JobExecutionContext(job, leaseToken, store, Mockito.mock(JobEffectMaterializationService::class.java), Mockito.mock(JobMetrics::class.java), objectMapper)
 
-		context.saveCheckpoint("assessment", objectMapper.createObjectNode().put("overallScore", 80))
-		context.saveCheckpoint("questions", objectMapper.createArrayNode().add("question"))
+		context.saveCheckpoint("split", objectMapper.createObjectNode().put("items", 1))
+		context.saveCheckpoint("result", objectMapper.createArrayNode().add("item"))
 
 		val checkpoints = ArgumentCaptor.forClass(JsonNode::class.java)
 		Mockito.verify(store, Mockito.times(2)).checkpointResult(eq(job.id), eq(leaseToken), checkpoints.capture())
 		val latest = checkpoints.allValues.last()
-		assertThat(latest.hasNonNull("assessment")).isTrue()
-		assertThat(latest.hasNonNull("questions")).isTrue()
+		assertThat(latest.hasNonNull("split")).isTrue()
+		assertThat(latest.hasNonNull("result")).isTrue()
 	}
 
 	@Test
@@ -39,18 +39,18 @@ class JobExecutionContextTests {
 		val job = job(objectMapper, objectMapper.createObjectNode())
 		val context = JobExecutionContext(job, leaseToken, store, Mockito.mock(JobEffectMaterializationService::class.java), metrics, objectMapper)
 
-		context.stage(JobStage.ASSESSING_RESUME)
-		context.stage(JobStage.GENERATING_QUESTIONS)
+		context.stage(JobStage.RETRIEVING_EXPERIENCE)
+		context.stage(JobStage.MATCHING_EXPERIENCE)
 		context.finish()
 
-		Mockito.verify(store).updateStage(job.id, leaseToken, JobStage.ASSESSING_RESUME)
-		Mockito.verify(store).updateStage(job.id, leaseToken, JobStage.GENERATING_QUESTIONS)
-		Mockito.verify(metrics).stageDuration(eq(JobType.ANALYSIS), eq(JobStage.ASSESSING_RESUME), any())
-		Mockito.verify(metrics).stageDuration(eq(JobType.ANALYSIS), eq(JobStage.GENERATING_QUESTIONS), any())
+		Mockito.verify(store).updateStage(job.id, leaseToken, JobStage.RETRIEVING_EXPERIENCE)
+		Mockito.verify(store).updateStage(job.id, leaseToken, JobStage.MATCHING_EXPERIENCE)
+		Mockito.verify(metrics).stageDuration(eq(JobType.EXPERIENCE_SUGGESTIONS), eq(JobStage.RETRIEVING_EXPERIENCE), any())
+		Mockito.verify(metrics).stageDuration(eq(JobType.EXPERIENCE_SUGGESTIONS), eq(JobStage.MATCHING_EXPERIENCE), any())
 	}
 
 	private fun job(objectMapper: ObjectMapper, result: JsonNode?): BackgroundJob {
 		val now = Instant.now()
-		return BackgroundJob(UUID.randomUUID(), UUID.randomUUID(), JobType.ANALYSIS, "resume", UUID.randomUUID(), JobStatus.PROCESSING, JobStage.QUEUED, objectMapper.createObjectNode(), result, "fingerprint", 1, 3, null, null, null, now, now, now, now, now, null, UUID.randomUUID(), now.plusSeconds(300))
+		return BackgroundJob(UUID.randomUUID(), UUID.randomUUID(), JobType.EXPERIENCE_SUGGESTIONS, "resume", UUID.randomUUID(), JobStatus.PROCESSING, JobStage.QUEUED, objectMapper.createObjectNode(), result, "fingerprint", 1, 3, null, null, null, now, now, now, now, now, null, UUID.randomUUID(), now.plusSeconds(300))
 	}
 }

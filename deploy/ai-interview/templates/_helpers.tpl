@@ -31,7 +31,54 @@ app.kubernetes.io/instance: {{ .Release.Name }}
     - sh
     - -ec
     - |
+      {{- if .Values.postgres.enabled }}
       until nc -z {{ include "ai-interview.fullname" . }}-postgres {{ .Values.postgres.service.port }}; do sleep 2; done
+      {{- end }}
       until nc -z {{ include "ai-interview.fullname" . }}-redis {{ .Values.redis.service.port }}; do sleep 2; done
       until nc -z {{ include "ai-interview.fullname" . }}-localstack {{ .Values.localstack.service.port }}; do sleep 2; done
+{{- end -}}
+
+{{- define "ai-interview.validateDatabase" -}}
+{{- if not .Values.postgres.enabled -}}
+{{- $databaseSecret := required "externalDatabase.existingSecret is required when postgres.enabled=false" .Values.externalDatabase.existingSecret -}}
+{{- end -}}
+{{- if .Values.supabase.enabled -}}
+{{- if .Values.postgres.enabled -}}{{ fail "supabase.enabled requires postgres.enabled=false" }}{{- end -}}
+{{- $url := required "supabase.url is required" .Values.supabase.url -}}
+{{- $sdk := required "supabase.sdkExistingSecret is required" .Values.supabase.sdkExistingSecret -}}
+{{- $ca := required "supabase.caExistingSecret is required" .Values.supabase.caExistingSecret -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "ai-interview.externalDatabaseEnv" -}}
+{{- if not .Values.postgres.enabled }}
+{{- range $key := list "DATABASE_URL" "DATABASE_USERNAME" "DATABASE_PASSWORD" }}
+- name: {{ $key }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ $.Values.externalDatabase.existingSecret }}
+      key: {{ $key }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "ai-interview.caMount" -}}
+{{- if .Values.supabase.enabled }}
+volumeMounts:
+  - name: supabase-ca
+    mountPath: /etc/supabase
+    readOnly: true
+{{- end }}
+{{- end -}}
+
+{{- define "ai-interview.caVolume" -}}
+{{- if .Values.supabase.enabled }}
+volumes:
+  - name: supabase-ca
+    secret:
+      secretName: {{ .Values.supabase.caExistingSecret }}
+      items:
+        - key: ca.crt
+          path: ca.crt
+{{- end }}
 {{- end -}}

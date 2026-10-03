@@ -1,3 +1,4 @@
+{{- if .Values.postgres.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -85,11 +86,14 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+{{- end }}
 {{- if .Values.postgres.persistence.enabled }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
+  annotations:
+    helm.sh/resource-policy: keep
   name: {{ include "ai-interview.fullname" . }}-postgres
   labels:
     {{- include "ai-interview.labels" . | nindent 4 }}

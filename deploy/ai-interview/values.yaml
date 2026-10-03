@@ -46,6 +46,7 @@ gemini:
   embeddingModel: gemini-embedding-001
 
 postgres:
+  enabled: true
   image: pgvector/pgvector:pg16
   auth:
     database: ai_interview
@@ -79,9 +80,19 @@ localstack:
 app:
   ragEmbeddingDimensions: 1024
   ragChunkSchema: section-block-v3
+  redisKeyPrefix: "ai-interview:v3:"
   workerConcurrency: 2
   jobHeartbeatSeconds: 60
   jobMaxAttempts: 3
   jobRetryBaseSeconds: 15
-  jobReuseWindowSeconds: 300
   shutdownGraceSeconds: 120
+
+# External credentials contain only DATABASE_URL, DATABASE_USERNAME, DATABASE_PASSWORD.
+externalDatabase:
+  existingSecret: ""
+supabase:
+  enabled: false
+  url: ""
+  sdkExistingSecret: ""
+  caExistingSecret: ""
+  maximumPoolSize: 4

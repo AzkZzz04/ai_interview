@@ -12,7 +12,7 @@ export type JobType =
   | "EXPERIENCE_SPLIT"
   | "ANSWER_FEEDBACK";
 
-export type JobStatus = "QUEUED" | "PROCESSING" | "RETRYING" | "SUCCEEDED" | "PARTIAL" | "FAILED";
+export type JobStatus = "QUEUED" | "PROCESSING" | "RETRYING" | "SUCCEEDED" | "FAILED";
 
 export type JobStage =
   | "QUEUED"
@@ -74,7 +74,7 @@ export type JobStatusResponse<TResult = unknown> = {
 };
 
 export function isTerminal(status: JobStatus | undefined) {
-  return status === "SUCCEEDED" || status === "PARTIAL" || status === "FAILED";
+  return status === "SUCCEEDED" || status === "FAILED";
 }
 
 // §10 error codes the UI handles (the backend may add more; unknown codes fall back to generic copy).

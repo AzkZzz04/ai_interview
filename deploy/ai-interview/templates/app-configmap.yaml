@@ -1,3 +1,4 @@
+{{- include "ai-interview.validateDatabase" . }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -5,8 +6,17 @@ metadata:
   labels:
     {{- include "ai-interview.labels" . | nindent 4 }}
 data:
+  {{- if .Values.postgres.enabled }}
   DATABASE_URL: {{ printf "jdbc:postgresql://%s-postgres:%v/%s" (include "ai-interview.fullname" .) .Values.postgres.service.port .Values.postgres.auth.database | quote }}
   DATABASE_USERNAME: {{ .Values.postgres.auth.username | quote }}
+  {{- end }}
+  {{- if .Values.supabase.enabled }}
+  SPRING_PROFILES_ACTIVE: supabase
+  SUPABASE_URL: {{ .Values.supabase.url | quote }}
+  SUPABASE_SSL_ROOT_CERT: /etc/supabase/ca.crt
+  DATABASE_MAX_POOL_SIZE: {{ .Values.supabase.maximumPoolSize | quote }}
+  {{- end }}
+  REDIS_KEY_PREFIX: {{ .Values.app.redisKeyPrefix | quote }}
   REDIS_HOST: {{ printf "%s-redis" (include "ai-interview.fullname" .) | quote }}
   REDIS_PORT: {{ .Values.redis.service.port | quote }}
   S3_ENDPOINT: {{ printf "http://%s-localstack:%v" (include "ai-interview.fullname" .) .Values.localstack.service.port | quote }}
@@ -27,7 +37,6 @@ data:
   JOB_HEARTBEAT_SECONDS: {{ .Values.app.jobHeartbeatSeconds | quote }}
   JOB_MAX_ATTEMPTS: {{ .Values.app.jobMaxAttempts | quote }}
   JOB_RETRY_BASE_SECONDS: {{ .Values.app.jobRetryBaseSeconds | quote }}
-  JOB_REUSE_WINDOW_SECONDS: {{ .Values.app.jobReuseWindowSeconds | quote }}
   JOB_SHUTDOWN_GRACE_SECONDS: {{ .Values.app.shutdownGraceSeconds | quote }}
   AI_CHAT_MODEL: google-genai
   AI_EMBEDDING_MODEL: google-genai

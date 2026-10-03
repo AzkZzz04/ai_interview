@@ -60,7 +60,7 @@ when the job ends, so the UI can show the last failure after a reload.
 |---|---|---|
 | `jobId` | UUID | Poll with `GET /api/jobs/{jobId}`. |
 | `jobType` | `JobType` | See section 8. |
-| `status` | `JobStatus` | `QUEUED`, `PROCESSING`, `RETRYING`, `SUCCEEDED`, `PARTIAL`, `FAILED`. |
+| `status` | `JobStatus` | `QUEUED`, `PROCESSING`, `RETRYING`, `SUCCEEDED`, `FAILED`. |
 | `stage` | `JobStage` | See section 8. |
 | `attempts` | int | Attempts started so far. |
 | `maxAttempts` | int | **new** field, used for copy such as "attempt 2 of 3". |
@@ -82,8 +82,7 @@ when the job ends, so the UI can show the last failure after a reload.
 }
 ```
 
-`inputRefs` is **changed**. Today it has `{resumeId, jobDescriptionId}`. `jobDescriptionId` becomes
-`targetJobId`, and `practiceSetId` and `attemptId` are added. All four are nullable.
+`inputRefs` contains four nullable references. Older jobs' `jobDescriptionId` is exposed as `targetJobId`.
 
 **`DeleteImpact`** (new): what a delete removes, shown in the confirmation dialog.
 
@@ -106,39 +105,39 @@ kept and marked stale (section 6), not deleted.
 | # | Method and path | Status | Used by |
 |---|---|---|---|
 | 2.1 | `GET /api/status` | existing | Health badge (optional) |
-| 3.1 | `POST /api/resumes` (multipart) | changed | Resume picker, library |
-| 3.2 | `POST /api/resumes/paste` | new | Resume picker, library |
-| 3.3 | `GET /api/resumes` | new | Resume picker, library, home |
-| 3.4 | `GET /api/resumes/{resumeId}` | new | Score page, home |
-| 3.5 | `PATCH /api/resumes/{resumeId}` | new | Rename, job-title edit |
-| 3.6 | `GET /api/resumes/{resumeId}/delete-impact` | new | Delete dialog |
-| 3.7 | `DELETE /api/resumes/{resumeId}` | new | Library |
-| 3.8 | `POST /api/resumes/{resumeId}/score` | new | Score page |
-| 4.1 | `POST /api/target-jobs` | new | Target job picker, library |
-| 4.2 | `GET /api/target-jobs` | new | Target job picker, library, home |
-| 4.3 | `GET /api/target-jobs/{targetJobId}` | new | Fit page, library |
-| 4.4 | `PATCH /api/target-jobs/{targetJobId}` | new | Rename |
-| 4.5 | `GET /api/target-jobs/{targetJobId}/delete-impact` | new | Delete dialog |
-| 4.6 | `DELETE /api/target-jobs/{targetJobId}` | new | Library |
-| 5.1 | `POST /api/experiences` | new | Experience library (project form) |
-| 5.2 | `POST /api/experiences/linkedin-split` | new | Experience library (LinkedIn paste) |
-| 5.3 | `POST /api/experiences/batch` | new | Experience library (save reviewed items) |
-| 5.4 | `GET /api/experiences` | new | Experience library |
-| 5.5 | `PATCH /api/experiences/{experienceId}` | new | Rename |
-| 5.6 | `GET /api/experiences/{experienceId}/delete-impact` | new | Delete dialog |
-| 5.7 | `DELETE /api/experiences/{experienceId}` | new | Experience library |
-| 6.1 | `GET /api/resumes/{resumeId}/target-jobs/{targetJobId}/fit` | new | Fit page |
-| 6.2 | `POST /api/resumes/{resumeId}/target-jobs/{targetJobId}/fit` | new | Fit page |
-| 6.3 | `GET /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | new | Fit page |
-| 6.4 | `POST /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | new | Fit page |
-| 7.1 | `POST /api/practice-sets` | new | Mode chooser |
-| 7.2 | `GET /api/practice-sets/{setId}` | new | Practice page |
-| 7.3 | `POST /api/practice-sets/{setId}/retry` | new | Practice page (generation failed) |
-| 7.4 | `POST /api/practice-sets/{setId}/questions` | new | Practice page (add your own question) |
-| 7.5 | `POST /api/practice-sets/{setId}/questions/{questionId}/attempts` | new | Practice page |
-| 7.6 | `POST /api/attempts/{attemptId}/retry` | new | Practice page |
-| 8.1 | `GET /api/jobs/{jobId}` | changed | Every AI step |
-| 9.1 | `GET /api/history` | new | History |
+| 3.1 | `POST /api/resumes` (multipart) | existing | Resume picker, library |
+| 3.2 | `POST /api/resumes/paste` | existing | Resume picker, library |
+| 3.3 | `GET /api/resumes` | existing | Resume picker, library, home |
+| 3.4 | `GET /api/resumes/{resumeId}` | existing | Score page, home |
+| 3.5 | `PATCH /api/resumes/{resumeId}` | existing | Rename, job-title edit |
+| 3.6 | `GET /api/resumes/{resumeId}/delete-impact` | existing | Delete dialog |
+| 3.7 | `DELETE /api/resumes/{resumeId}` | existing | Library |
+| 3.8 | `POST /api/resumes/{resumeId}/score` | existing | Score page |
+| 4.1 | `POST /api/target-jobs` | existing | Target job picker, library |
+| 4.2 | `GET /api/target-jobs` | existing | Target job picker, library, home |
+| 4.3 | `GET /api/target-jobs/{targetJobId}` | existing | Fit page, library |
+| 4.4 | `PATCH /api/target-jobs/{targetJobId}` | existing | Rename |
+| 4.5 | `GET /api/target-jobs/{targetJobId}/delete-impact` | existing | Delete dialog |
+| 4.6 | `DELETE /api/target-jobs/{targetJobId}` | existing | Library |
+| 5.1 | `POST /api/experiences` | existing | Experience library (project form) |
+| 5.2 | `POST /api/experiences/linkedin-split` | existing | Experience library (LinkedIn paste) |
+| 5.3 | `POST /api/experiences/batch` | existing | Experience library (save reviewed items) |
+| 5.4 | `GET /api/experiences` | existing | Experience library |
+| 5.5 | `PATCH /api/experiences/{experienceId}` | existing | Rename |
+| 5.6 | `GET /api/experiences/{experienceId}/delete-impact` | existing | Delete dialog |
+| 5.7 | `DELETE /api/experiences/{experienceId}` | existing | Experience library |
+| 6.1 | `GET /api/resumes/{resumeId}/target-jobs/{targetJobId}/fit` | existing | Fit page |
+| 6.2 | `POST /api/resumes/{resumeId}/target-jobs/{targetJobId}/fit` | existing | Fit page |
+| 6.3 | `GET /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | existing | Fit page |
+| 6.4 | `POST /api/resumes/{resumeId}/target-jobs/{targetJobId}/suggestions` | existing | Fit page |
+| 7.1 | `POST /api/practice-sets` | existing | Mode chooser |
+| 7.2 | `GET /api/practice-sets/{setId}` | existing | Practice page |
+| 7.3 | `POST /api/practice-sets/{setId}/retry` | existing | Practice page (generation failed) |
+| 7.4 | `POST /api/practice-sets/{setId}/questions` | existing | Practice page (add your own question) |
+| 7.5 | `POST /api/practice-sets/{setId}/questions/{questionId}/attempts` | existing | Practice page |
+| 7.6 | `POST /api/attempts/{attemptId}/retry` | existing | Practice page |
+| 8.1 | `GET /api/jobs/{jobId}` | existing | Every AI step |
+| 9.1 | `GET /api/history` | existing | History |
 
 ## 3. Resumes
 
@@ -270,7 +269,7 @@ Body: `{}`. Starts a `RESUME_SCORE` job and returns `202` with `JobAccepted`.
 
 **`TargetJobCreated`**: `{ "targetJob": TargetJobDetail, "duplicate": boolean }`.
 
-### 4.1 `POST /api/target-jobs` — new
+### 4.1 `POST /api/target-jobs` — existing
 
 ```json
 { "name": "Acme — Senior Backend", "text": "…" }
@@ -282,23 +281,23 @@ Body: `{}`. Starts a `RESUME_SCORE` job and returns `202` with `JobAccepted`.
 - The same normalized text returns `200` with `duplicate: true` and the existing item (R4).
 - Errors: `400 INVALID_REQUEST`.
 
-### 4.2 `GET /api/target-jobs` — new
+### 4.2 `GET /api/target-jobs` — existing
 
 Returns `200` with `{ "items": TargetJob[] }`.
 
-### 4.3 `GET /api/target-jobs/{targetJobId}` — new
+### 4.3 `GET /api/target-jobs/{targetJobId}` — existing
 
 Returns `200` with `TargetJobDetail`. Errors: `404 TARGET_JOB_NOT_FOUND`.
 
-### 4.4 `PATCH /api/target-jobs/{targetJobId}` — new
+### 4.4 `PATCH /api/target-jobs/{targetJobId}` — existing
 
 Body: `{ "name": string }`. Returns `200` with `TargetJob`. `text` is not accepted.
 
-### 4.5 `GET /api/target-jobs/{targetJobId}/delete-impact` — new
+### 4.5 `GET /api/target-jobs/{targetJobId}/delete-impact` — existing
 
 Returns `200` with `DeleteImpact`. `scores` is always `0` and `staleSuggestionSets` is always `0`.
 
-### 4.6 `DELETE /api/target-jobs/{targetJobId}` — new
+### 4.6 `DELETE /api/target-jobs/{targetJobId}` — existing
 
 Returns `204`. Cascades to fits, suggestion sets, practice sets, questions and attempts for every pair that uses
 this job, and cancels their in-flight jobs.
@@ -330,23 +329,28 @@ this job, and cancels their in-flight jobs.
 
 **`ExperienceInput`**: the same fields without `id`, `source` and `createdAt`.
 
-### 5.1 `POST /api/experiences` — new
+### 5.1 `POST /api/experiences` — existing
 
 Body: `ExperienceInput`. Returns `201` with `{ "experience": Experience, "duplicate": boolean }`.
 
 - A duplicate (same normalized title and description) returns `200` with `duplicate: true`.
 - Errors: `400 INVALID_REQUEST`.
 
-### 5.2 `POST /api/experiences/linkedin-split` — new
+### 5.2 `POST /api/experiences/linkedin-split` — existing
 
 Body: `{ "text": string }`, 50–20,000 chars. Starts an `EXPERIENCE_SPLIT` job and returns `202` with
 `JobAccepted`.
 
 The job result is `ExperienceSplitResult` (section 8.2). Nothing is saved until the user confirms with 5.3.
 
+The split and review are browser-assisted: the dialog keeps the pasted text, job ID and removed-item choices in
+localStorage scoped to the current app/API environment. Closing the dialog preserves recovery data. Explicit
+discard or successful save clears it. If the job is missing or expired, the dialog keeps the text and offers an
+explicit resplit; it never resubmits automatically.
+
 Errors: `400 INVALID_REQUEST`, `429 RATE_LIMITED`.
 
-### 5.3 `POST /api/experiences/batch` — new
+### 5.3 `POST /api/experiences/batch` — existing
 
 Body: `{ "items": ExperienceInput[] }`, 1–30 items, with `source` recorded as `LINKEDIN`. Returns `201`:
 
@@ -360,13 +364,20 @@ Body: `{ "items": ExperienceInput[] }`, 1–30 items, with `source` recorded as 
 `created` holds full `Experience` objects (shortened above). Items already saved are skipped, not duplicated
 (R3). The UI shows each skipped item with a note.
 
-### 5.4 `GET /api/experiences` — new
+A list outside 1–30 items returns `400 INVALID_REQUEST` with a message naming `items`. Duplicate matching is
+per user and uses whitespace-collapsed, case-insensitive title and description; organization and dates do not
+participate. The batch checks again when saving, so changes after review cannot create a duplicate.
+
+### 5.4 `GET /api/experiences` — existing
 
 Returns `200` with `{ "items": Experience[] }`.
 
-### 5.5 `PATCH /api/experiences/{experienceId}` — new
+### 5.5 `PATCH /api/experiences/{experienceId}` — existing
 
-Body: `{ "title": string }`. Returns `200` with `Experience`. Errors: `404 EXPERIENCE_NOT_FOUND`.
+Body: `{ "title": string }`. Returns `200` with the updated `Experience`. Renaming recomputes the duplicate
+hash from the normalized title and unchanged description. Errors: `400 INVALID_REQUEST` for an invalid title,
+`404 EXPERIENCE_NOT_FOUND` for a missing or other user's experience, and `409 CONFLICT` if another owned
+experience already has the same normalized title and description.
 
 ### 5.6 `GET /api/experiences/{experienceId}/delete-impact` — new
 
@@ -571,9 +582,10 @@ Errors: `404 ATTEMPT_NOT_FOUND`, `409 ATTEMPT_NOT_FAILED`, `429 RATE_LIMITED`.
 
 ## 8. Jobs
 
-### 8.1 `GET /api/jobs/{jobId}` — changed
+### 8.1 `GET /api/jobs/{jobId}` — existing
 
-Keeps today's `JobStatusResponse` shape and adds `maxAttempts` and the changed `inputRefs`:
+Returns the same contract through JDBC and Supabase polling, including `maxAttempts`, all four nullable input
+references, nested result JSON, nullable timestamps and error values:
 
 ```json
 {
@@ -593,9 +605,10 @@ Keeps today's `JobStatusResponse` shape and adds `maxAttempts` and the changed `
 ```
 
 - Job types and stages are extended as in the table below.
-- `result` is set only on `SUCCEEDED` or `PARTIAL`. It equals what the owning resource then returns, so the UI
-  may read either.
-- The new job types end `SUCCEEDED` or `FAILED`, never `PARTIAL`.
+- `result` is set only on `SUCCEEDED`. For resource-backed jobs it equals what the owning resource
+  then returns, so the UI may read either. `EXPERIENCE_SPLIT` is review-only and its result exists only on the
+  job until the user saves items through 5.3.
+- Every job ends `SUCCEEDED` or `FAILED`.
 - Errors: `404 JOB_NOT_FOUND`, which covers unknown IDs, other users' jobs and jobs of deleted resources.
 
 | Job type | Status | Started by | Stages after `QUEUED` | Result |
@@ -605,10 +618,10 @@ Keeps today's `JobStatusResponse` shape and adds `maxAttempts` and the changed `
 | `JOB_FIT` | new | 6.2 | `MATCHING_JOB` | `JobFitResult` |
 | `EXPERIENCE_SUGGESTIONS` | new | 6.4 | `RETRIEVING_EXPERIENCE`, `MATCHING_EXPERIENCE` | `ExperienceSuggestionsResult` |
 | `PRACTICE_QUESTIONS` | new | 7.1, 7.3 | `GENERATING_QUESTIONS` (existing stage) | `{ questions: Question[] }` |
-| `EXPERIENCE_SPLIT` | new | 5.2 | `SPLITTING_EXPERIENCE` | `ExperienceSplitResult` |
+| `EXPERIENCE_SPLIT` | existing | 5.2 | `SPLITTING_EXPERIENCE` | `ExperienceSplitResult` |
 | `ANSWER_FEEDBACK` | changed (attempt-based input) | 7.5, 7.6 | `SCORING_ANSWER` (existing stage) | `AnswerFeedbackResult` |
 
-A `SUCCEEDED` job ends at stage `COMPLETED`; a `FAILED` job keeps the stage it failed in. `ANALYSIS` and stage `ASSESSING_RESUME` are no longer used by the UI.
+These are the only job types. A `SUCCEEDED` job ends at stage `COMPLETED`; a `FAILED` job keeps the stage it failed in.
 
 ### 8.2 Result shapes
 
@@ -695,7 +708,7 @@ A `SUCCEEDED` job ends at stage `COMPLETED`; a `FAILED` job keeps the stage it f
 `duplicateOf` is `{ id, title }` when the item is already saved. The UI shows these as "already saved" and leaves
 them out of 5.3.
 
-**`AnswerFeedbackResult`** (existing `AnswerFeedbackResponse` without `modelProvider` and `sourceContextIds`):
+**`AnswerFeedbackResult`** (the normalized form of the model's `AnswerFeedbackResponse`):
 
 ```json
 {
@@ -754,7 +767,7 @@ the UI never shows the code or the provider name.
 | `QUESTION_NOT_FOUND` | 404 | new | |
 | `ATTEMPT_NOT_FOUND` | 404 | new | |
 | `JOB_NOT_FOUND` | 404 | existing | |
-| `CONFLICT` | 409 | existing | An idempotency key was reused with a different body. |
+| `CONFLICT` | 409 | existing | An idempotency key was reused with a different body, or an experience rename would duplicate another owned item. |
 | `RESUME_NOT_READY` | 409 | existing code, new use | |
 | `NO_EXPERIENCE_SOURCES` | 409 | new | |
 | `PRACTICE_SET_NOT_READY` | 409 | new | |
@@ -782,7 +795,8 @@ The frontend assumes each of these. The backend plan must implement and test the
    - Job de-duplication keys on resource IDs (resume, pair, set, attempt), never on request text alone.
    - Two attempts with identical text on different questions, or a retry of a failed attempt, always start a
      new job.
-   - `reused: true` only comes from the same `Idempotency-Key`.
+   - `reused: true` comes only from the same `Idempotency-Key`, or from a submit while a job for the same resource
+     is still running, which returns that running job.
 4. **Cascade delete** as described in 3.7, 4.6 and 5.7. `delete-impact` counts match what the delete removes.
 5. **Duplicate resolution.**
    - Applies to resumes (file bytes, then normalized text), target jobs (normalized text) and experiences
@@ -816,27 +830,17 @@ The frontend assumes each of these. The backend plan must implement and test the
     polling after a reload.
 11. **One practice set per pair**, created by 7.1 and never regenerated once `READY`.
 
-## 12. Removable endpoints
+## 12. Removed endpoints
 
-The new UI stops calling these. The backend plan may remove them together with job type `ANALYSIS`, stage
-`ASSESSING_RESUME` and the seniority settings.
-
-| Endpoint | Replaced by |
-|---|---|
-| `POST /api/analyses` | 3.8, 6.2, 7.1 |
-| `POST /api/assessments` | 3.8, 6.2 |
-| `POST /api/interview/questions` | 7.1 |
-| `POST /api/interview/feedback` | 7.5 |
-| `GET /api/resumes/current` | 3.3, 3.4 |
+U13 removed the old analysis, assessment, interview-question, interview-feedback and current-resume endpoints,
+job type `ANALYSIS`, stage `ASSESSING_RESUME`, status `PARTIAL` and the seniority setting. Migration V18 deleted
+their jobs and tables. Section 2 lists every endpoint the backend serves.
 
 ## 13. Mock mode notes
 
 `VITE_API_MOCKS` selects the mock mode:
 
 - `all`: every endpoint is mocked. This is the default in development.
-- `new-only`: endpoints marked `new` or `changed` are mocked, and `existing` ones go to the backend. For
-  `GET /api/jobs/{id}`, the mock answers for job IDs the mock store created and forwards all other IDs.
-- `off`: no mocks. This is the default in production.
+- `off`: no mocks; every request goes to the backend. This is the default in production.
 
-Today only `GET /api/status` is `existing` and compatible, so `new-only` sends little to the backend until the
-backend plan ships endpoints and updates their status here.
+Any other value falls back to the build's default.

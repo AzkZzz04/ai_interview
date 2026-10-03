@@ -1,17 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AddResumeDialog } from "@/components/library/AddResumeDialog";
 import { EmptyState, ErrorState, ListSkeleton } from "@/components/library/ListStates";
 import { ResumeRow } from "@/components/library/ResumeRow";
 import { UploadWatcher } from "@/components/library/UploadWatcher";
 import { PageHeader } from "@/components/shell/AppShell";
 import { useResumes } from "@/lib/query/library";
+import { readResumeUploadJobs, RESUME_UPLOAD_JOBS_KEY, saveResumeUploadJobs } from "@/lib/resumeUploadJobs";
 
 export default function ResumesPage() {
   const resumes = useResumes();
   // Upload jobs to watch: an upload whose text matches a saved resume turns into a duplicate notice.
-  const [uploadJobs, setUploadJobs] = useState<string[]>([]);
+  const [uploadJobs, setUploadJobs] = useState<string[]>(readResumeUploadJobs);
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === RESUME_UPLOAD_JOBS_KEY) setUploadJobs(readResumeUploadJobs());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  const addUploadJob = (jobId: string) => setUploadJobs((jobs) => {
+    const next = jobs.includes(jobId) ? jobs : [...jobs, jobId];
+    saveResumeUploadJobs(next);
+    return next;
+  });
+  const dismissUploadJob = (jobId: string) => setUploadJobs((jobs) => {
+    const next = jobs.filter((id) => id !== jobId);
+    saveResumeUploadJobs(next);
+    return next;
+  });
   const add = (
-    <AddResumeDialog onAdded={(resume) => resume.activeJob && setUploadJobs((jobs) => [...jobs, resume.activeJob!.jobId])} />
+    <AddResumeDialog onAdded={(resume) => resume.activeJob && addUploadJob(resume.activeJob.jobId)} />
   );
 
   return (
@@ -19,7 +37,7 @@ export default function ResumesPage() {
       <PageHeader title="Resumes" description="Named resumes you can score and tailor." action={add} />
       <div className="space-y-3">
         {uploadJobs.map((jobId) => (
-          <UploadWatcher key={jobId} jobId={jobId} onDismiss={() => setUploadJobs((jobs) => jobs.filter((id) => id !== jobId))} />
+          <UploadWatcher key={jobId} jobId={jobId} onDismiss={() => dismissUploadJob(jobId)} />
         ))}
         {resumes.isPending ? <ListSkeleton /> : null}
         {resumes.isError ? <ErrorState error={resumes.error} onRetry={() => resumes.refetch()} /> : null}

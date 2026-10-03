@@ -8,7 +8,5 @@ data class AnswerFeedbackResponse(
     val strengths: List<String>?,
     val gaps: List<String>?,
     val betterAnswerOutline: List<String>?,
-    val followUpQuestion: String?,
-    val modelProvider: String?,
-    val sourceContextIds: List<String>?
+    val followUpQuestion: String?
 )

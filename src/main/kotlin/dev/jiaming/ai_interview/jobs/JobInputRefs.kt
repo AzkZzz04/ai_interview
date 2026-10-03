@@ -4,14 +4,17 @@ import com.fasterxml.jackson.databind.JsonNode
 import java.util.UUID
 
 @JvmRecord
-data class JobInputRefs(val resumeId: UUID?, val jobDescriptionId: UUID?) {
+data class JobInputRefs(val resumeId: UUID?, val targetJobId: UUID?, val practiceSetId: UUID?, val attemptId: UUID?) {
     companion object {
-        @JvmStatic fun from(job: BackgroundJob): JobInputRefs {
-            val payload = job.requestPayload
-            var resumeId = uuid(payload, "resumeId")
-            val jobDescriptionId = uuid(payload, "jobDescriptionId")
-            if (resumeId == null) resumeId = job.resourceId
-            return JobInputRefs(resumeId, jobDescriptionId)
+        // Resource types whose resource_id is a resume.
+        val RESUME_RESOURCE_TYPES = setOf("resume")
+
+        @JvmStatic fun from(job: BackgroundJob): JobInputRefs = from(job.requestPayload, job.resourceId, job.resourceType)
+
+        internal fun from(payload: JsonNode?, resourceId: UUID?, resourceType: String?): JobInputRefs {
+            val resumeId = uuid(payload, "resumeId") ?: resourceId?.takeIf { resourceType != null && resourceType in RESUME_RESOURCE_TYPES }
+            val targetJobId = uuid(payload, "targetJobId") ?: uuid(payload, "jobDescriptionId")
+            return JobInputRefs(resumeId, targetJobId, uuid(payload, "practiceSetId"), uuid(payload, "attemptId"))
         }
 
         private fun uuid(payload: JsonNode?, field: String): UUID? {

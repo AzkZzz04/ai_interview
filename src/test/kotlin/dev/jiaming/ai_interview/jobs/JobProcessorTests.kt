@@ -17,34 +17,42 @@ class JobProcessorTests {
 		val materialization = Mockito.mock(JobEffectMaterializationService::class.java)
 		val metrics = Mockito.mock(JobMetrics::class.java)
 		val decoder = Mockito.mock(JobPayloadDecoder::class.java)
-		val payload = AnalysisJobPayload(UUID.randomUUID(), null, "Backend", "Mid-level")
+		val payload = JobFitPayload(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())
 		val expected = objectMapper.createObjectNode().put("ok", true)
 		val handler = TestHandler(expected)
-		val registry = JobHandlerRegistry(listOf(NoOpHandler(JobType.RESUME_EXTRACTION, Any::class.java), handler, NoOpHandler(JobType.ANSWER_FEEDBACK, Any::class.java)))
+		val registry = JobHandlerRegistry(listOf(
+			NoOpHandler(JobType.RESUME_EXTRACTION, Any::class.java),
+			NoOpHandler(JobType.RESUME_SCORE, Any::class.java),
+			NoOpHandler(JobType.ANSWER_FEEDBACK, Any::class.java),
+			NoOpHandler(JobType.EXPERIENCE_SPLIT, Any::class.java),
+			handler,
+			NoOpHandler(JobType.EXPERIENCE_SUGGESTIONS, Any::class.java),
+			NoOpHandler(JobType.PRACTICE_QUESTIONS, Any::class.java)
+		))
 		val processor = JobProcessor(decoder, registry, store, materialization, metrics, objectMapper)
 		val job = job()
 		val leaseToken = UUID.randomUUID()
-		Mockito.`when`(decoder.decode(job, leaseToken, AnalysisJobPayload::class.java)).thenReturn(payload)
+		Mockito.`when`(decoder.decode(job, JobFitPayload::class.java)).thenReturn(payload)
 
 		val result = processor.process(job, leaseToken)
 
 		assertThat(result).isSameAs(expected)
 		assertThat(handler.payload).isSameAs(payload)
 		assertThat(handler.context.job()).isSameAs(job)
-		Mockito.verify(decoder).decode(job, leaseToken, AnalysisJobPayload::class.java)
+		Mockito.verify(decoder).decode(job, JobFitPayload::class.java)
 	}
 
 	private fun job(): BackgroundJob {
 		val now = Instant.now()
-		return BackgroundJob(UUID.randomUUID(), UUID.randomUUID(), JobType.ANALYSIS, "resume", UUID.randomUUID(), JobStatus.PROCESSING, JobStage.QUEUED, objectMapper.createObjectNode(), null, "fingerprint", 1, 3, null, null, null, now, now, now, now, now, null, UUID.randomUUID(), now.plusSeconds(300))
+		return BackgroundJob(UUID.randomUUID(), UUID.randomUUID(), JobType.JOB_FIT, "job-fit", UUID.randomUUID(), JobStatus.PROCESSING, JobStage.QUEUED, objectMapper.createObjectNode(), null, "fingerprint", 1, 3, null, null, null, now, now, now, now, now, null, UUID.randomUUID(), now.plusSeconds(300))
 	}
 
-	private class TestHandler(private val result: JsonNode) : JobHandler<AnalysisJobPayload> {
-		lateinit var payload: AnalysisJobPayload
+	private class TestHandler(private val result: JsonNode) : JobHandler<JobFitPayload> {
+		lateinit var payload: JobFitPayload
 		lateinit var context: JobExecutionContext
-		override fun type() = JobType.ANALYSIS
-		override fun payloadType() = AnalysisJobPayload::class.java
-		override fun handle(payload: AnalysisJobPayload, context: JobExecutionContext): JsonNode {
+		override fun type() = JobType.JOB_FIT
+		override fun payloadType() = JobFitPayload::class.java
+		override fun handle(payload: JobFitPayload, context: JobExecutionContext): JsonNode {
 			this.payload = payload
 			this.context = context
 			return result

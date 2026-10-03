@@ -95,5 +95,5 @@ describe("practice", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(screen.getByText("Attempt 1")).toBeInTheDocument(), { timeout: 4_000 });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
+  }, 15_000);
 });

@@ -786,7 +786,6 @@ export function createMockStore(options: MockStoreOptions = {}) {
     getFit, runFit, getSuggestions, runSuggestions,
     createPracticeSet, getPracticeSet, retryPracticeSet, addQuestion, submitAttempt, retryAttempt,
     history,
-    hasJob: (jobId: string) => Boolean(load().jobs[jobId]),
     failNext,
     reset
   };

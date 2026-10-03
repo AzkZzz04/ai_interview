@@ -1,7 +1,6 @@
-import { http, HttpResponse, passthrough, type JsonBodyType } from "msw";
+import { http, HttpResponse, type JsonBodyType } from "msw";
 import { MockHttpError, type MockStore } from "./store";
 
-type Mode = "all" | "new-only";
 type Params = Record<string, string>;
 
 const api = (path: string) => `*/api${path}`;
@@ -33,18 +32,11 @@ async function json(request: Request): Promise<Record<string, unknown>> {
   }
 }
 
-/**
- * Every contract endpoint (docs/api/frontend-api-contract.md). All of them are `new` or `changed` today, so
- * `new-only` mocks them too; the only difference is that job polls for IDs the mock never created pass through.
- */
-export function createHandlers(store: MockStore, mode: Mode = "all") {
+/** Every contract endpoint (docs/api/frontend-api-contract.md). */
+export function createHandlers(store: MockStore) {
   const pair = "/resumes/:resumeId/target-jobs/:targetJobId";
   return [
-    http.get(api("/jobs/:jobId"), ({ params }) => {
-      const { jobId } = params as Params;
-      if (mode === "new-only" && !store.hasJob(jobId)) return passthrough();
-      return respond(() => store.getJob(jobId));
-    }),
+    http.get(api("/jobs/:jobId"), ({ params }) => respond(() => store.getJob((params as Params).jobId))),
 
     http.post(api("/resumes"), async ({ request }) => {
       const form = await request.formData();

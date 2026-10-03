@@ -64,6 +64,13 @@ class ApiExceptionHandlerContractTests {
     }
 
     @Test
+    fun unsupportedMediaTypeMapsToUnsupportedFileType() {
+        perform("unsupported-type")
+            .andExpect(status().isUnsupportedMediaType)
+            .andExpect(jsonPath("$.code").value("UNSUPPORTED_FILE_TYPE"))
+    }
+
+    @Test
     fun geminiFailureBecomesBadGatewayWithProviderCode() {
         perform("gemini")
             .andExpect(status().isBadGateway)
@@ -107,6 +114,7 @@ class ApiExceptionHandlerContractTests {
             "rate-limited" -> throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "slow down")
             "unavailable" -> throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "worker only")
             "bad-request" -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "bad")
+            "unsupported-type" -> throw ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "PDF only")
             "gemini" -> throw GeminiException(GeminiErrorCode.SAFETY, "blocked", false)
             "extraction" -> throw ResumeExtractionException("Encrypted PDF")
             "too-large" -> throw MaxUploadSizeExceededException(10)

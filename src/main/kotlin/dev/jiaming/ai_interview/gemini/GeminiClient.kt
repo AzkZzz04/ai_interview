@@ -7,14 +7,13 @@ import dev.jiaming.ai_interview.coach.StructuredGenerationClient
 import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
 import java.io.IOException
 import java.net.URI
 import java.net.URLEncoder
-import java.net.http.HttpClient
 import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.net.http.HttpTimeoutException
 import java.nio.charset.StandardCharsets
 import java.time.Duration
@@ -22,6 +21,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 @Component
+@ConditionalOnProperty(prefix = "app.ai", name = ["chat-provider"], havingValue = "gemini", matchIfMissing = true)
 class GeminiClient(
     private val objectMapper: ObjectMapper,
     private val transport: GeminiTransport,
@@ -68,7 +68,12 @@ class GeminiClient(
                 .header("Content-Type", "application/json").header("x-goog-api-key", apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody(prompt))).build()
             val response = transport.send(request)
-            if (response.statusCode !in 200..299) throw httpFailure(response.statusCode)
+            if (response.statusCode !in 200..299) {
+                // Google's error status (e.g. UNAVAILABLE, RESOURCE_EXHAUSTED) only; never the prompt or the full body.
+                val reason = runCatching { objectMapper.readTree(response.body).path("error").path("status").asText("") }.getOrDefault("")
+                log.warn("gemini_request_rejected model={} status={} reason={}", model, response.statusCode, reason)
+                throw httpFailure(response.statusCode)
+            }
             val result = extractText(response.body)
             recordCall("success", startedAt)
             return result
@@ -155,12 +160,5 @@ class GeminiClient(
     companion object {
         private val log = LoggerFactory.getLogger(GeminiClient::class.java)
         private const val DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
-        private fun jdkTransport(): GeminiTransport {
-            val httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
-            return GeminiTransport { request ->
-                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-                GeminiTransportResponse(response.statusCode(), response.body())
-            }
-        }
     }
 }

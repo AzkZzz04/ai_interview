@@ -27,12 +27,18 @@ class CoachRagContextService @Autowired constructor(
         retrievalService: RagRetrievalService, meterRegistry: MeterRegistry) :
         this(chunker, indexingService, retrievalService, meterRegistry, RagProperties(1024, 8, "gemini-embedding-001", "section-block-v3"))
 
-    fun assessmentContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), assessmentQueries(input),
-        SelectionProfile("assessment", properties.assessmentContextBudget(), properties.assessmentJobDescriptionMinimum()))
-    fun questionContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), questionQueries(input),
-        SelectionProfile("questions", properties.questionContextBudget(), properties.questionJobDescriptionMinimum()))
+    fun jobFitContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), jobFitQueries(input),
+        SelectionProfile("job-fit", properties.assessmentContextBudget(), properties.assessmentJobDescriptionMinimum()))
+    fun practiceQuestionContext(input: CoachAnalysisInput) = ragContext(input.resume(), input.jobDescription(), questionQueries(input),
+        SelectionProfile("practice-questions", properties.questionContextBudget(), properties.questionJobDescriptionMinimum()))
     fun feedbackContext(input: CoachFeedbackInput) = ragContext(input.resume(), input.jobDescription(), feedbackQueries(input),
         SelectionProfile("feedback", properties.feedbackContextBudget(), properties.feedbackJobDescriptionMinimum()))
+
+    // Suggestions send a resume whole within the direct-context budget; a longer one is narrowed to what retrieval finds for the job.
+    fun suggestionSourceText(resume: ResolvedDocument, jobDescription: ResolvedDocument): String =
+        if (safe(resume.normalizedText()).length <= DIRECT_CONTEXT_LIMIT) resume.normalizedText()
+        else ragContext(resume, Optional.empty(), suggestionQueries(jobDescription),
+            SelectionProfile("suggestions", properties.assessmentContextBudget(), 0)).context
 
     private fun ragContext(resume: ResolvedDocument, jobDescription: Optional<ResolvedDocument>, queries: List<String>, profile: SelectionProfile): CoachRagContext {
         val documents = mutableListOf(resume)
@@ -40,7 +46,7 @@ class CoachRagContextService @Autowired constructor(
         if (documents.sumOf { safe(it.normalizedText()).length } <= DIRECT_CONTEXT_LIMIT) {
             val snippets = documents.flatMap(::localSnippets)
             meterRegistry.counter("ai.rag.context", "mode", "direct", "workflow", profile.name).increment()
-            return context("direct-context", snippets, Int.MAX_VALUE, false, false)
+            return context(snippets, Int.MAX_VALUE, false, false)
         }
         val indexed = LinkedHashMap<DocumentSourceType, IndexedDocument>()
         val originalContent = originalContent(documents)
@@ -73,7 +79,7 @@ class CoachRagContextService @Autowired constructor(
         val vectorBacked = snippets.any { candidates[it.sourceContextId()]!!.vectorBacked }
         meterRegistry.counter("ai.rag.context", "mode", if (vectorBacked) "retrieval" else "local", "workflow", profile.name).increment()
         log.info("rag_context_ready mode={} workflow={} candidates={} snippets={}", if (vectorBacked) "retrieval" else "local", profile.name, candidates.size, snippets.size)
-        return context("document-indexes", snippets, profile.budget, vectorBacked, true)
+        return context(snippets, profile.budget, vectorBacked, true)
     }
 
     private fun select(candidates: Iterable<Candidate>, profile: SelectionProfile): List<RagContextSnippet> {
@@ -129,28 +135,32 @@ class CoachRagContextService @Autowired constructor(
     }
     private fun restoreOriginalContent(snippet: RagContextSnippet, original: Map<String, String>) =
         RagContextSnippet(snippet.id, original[snippet.sourceContextId()] ?: snippet.content, snippet.metadata, snippet.score)
-    private fun context(key: String, snippets: List<RagContextSnippet>, maxSnippets: Int, vectorBacked: Boolean, truncateContent: Boolean) =
-        CoachRagContext(key, formatSnippets(snippets, maxSnippets, truncateContent),
-            snippets.map { it.sourceContextId() }.filter { !blank(it) }.distinct(), vectorBacked)
+    private fun context(snippets: List<RagContextSnippet>, maxSnippets: Int, vectorBacked: Boolean, truncateContent: Boolean) =
+        CoachRagContext(formatSnippets(snippets, maxSnippets, truncateContent), vectorBacked)
 
-    private fun assessmentQueries(input: CoachAnalysisInput): List<String> {
-        val role = fallback(input.targetRole(), "Software Engineer"); val seniority = fallback(input.seniority(), "Mid-level")
-        val terms = SenioritySettings.forValue(input.seniority()).retrievalTerms
+    private fun jobFitQueries(input: CoachAnalysisInput): List<String> {
         val jd = jobDescriptionQueryExcerpt(input.jobDescription())
-        return listOf("technical depth systems ownership architecture complexity $role $seniority $terms",
-            "measurable impact metrics scale latency reliability cost adoption outcomes", "role alignment required skills must have requirements $role $jd",
-            "resume gaps missing evidence weak bullets seniority signal $role $seniority")
+        return listOf(
+            "required qualifications must-have skills experience and responsibilities target job $jd",
+            "resume evidence accomplishments projects skills tools and measurable impact target job",
+            "job description requirements missing candidate evidence and role alignment $jd",
+        )
+    }
+    private fun suggestionQueries(jobDescription: ResolvedDocument): List<String> {
+        val jd = jobDescriptionQueryExcerpt(Optional.of(jobDescription))
+        return listOf(
+            "required qualifications skills and responsibilities $jd",
+            "accomplishments projects tools and measurable impact relevant to $jd",
+        )
     }
     private fun questionQueries(input: CoachAnalysisInput): List<String> {
-        val role = fallback(input.targetRole(), "Software Engineer"); val seniority = fallback(input.seniority(), "Mid-level")
-        val terms = SenioritySettings.forValue(input.seniority()).retrievalTerms; val jd = jobDescriptionQueryExcerpt(input.jobDescription())
-        return listOf("strongest projects ownership technical complexity $role $seniority $terms", "weakest resume areas missing detail interview probe $role",
+        val jd = jobDescriptionQueryExcerpt(input.jobDescription())
+        return listOf("strongest projects ownership technical complexity Software Engineer", "weakest resume areas missing detail interview probe Software Engineer",
             "system design architecture scaling data flow production tradeoffs", "debugging incident response observability database cache production",
             "collaboration leadership stakeholder tradeoff communication", "job description requirements role specific tooling $jd")
     }
     private fun feedbackQueries(input: CoachFeedbackInput) = listOf(fallback(input.questionText(), ""), input.expectedSignals().joinToString(" "),
-        fallback(input.category(), "") + " " + fallback(input.targetRole(), ""),
-        "source experience and project context expected evidence answer evaluation " + SenioritySettings.forValue(input.seniority()).retrievalTerms)
+        fallback(input.category(), ""), "source experience and project context expected evidence answer evaluation")
 
     private fun localSnippets(document: ResolvedDocument): List<RagContextSnippet> {
         val chunks = if (document.persistedChunks().isEmpty()) chunker.chunk(document.normalizedText()).map {

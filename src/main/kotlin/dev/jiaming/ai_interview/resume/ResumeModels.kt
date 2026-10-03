@@ -2,6 +2,9 @@ package dev.jiaming.ai_interview.resume
 
 import java.time.Instant
 import java.util.UUID
+import dev.jiaming.ai_interview.jobs.ActiveJob
+import dev.jiaming.ai_interview.score.ResumeScoreResult
+import dev.jiaming.ai_interview.score.ResumeScoreSummary
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 @JvmRecord
@@ -51,18 +54,56 @@ data class ResumeFileContent(
 )
 
 @JvmRecord
-data class ResumeUploadResponse(
+data class ResumeLibraryItem(
     val id: String,
+    val name: String,
+    val jobTitle: String?,
+    val source: String,
     val originalFilename: String?,
-    val contentType: String?,
-    val detectedContentType: String?,
-    val sizeBytes: Long,
-    val rawTextLength: Int,
-    val normalizedTextLength: Int,
-    val normalizedText: String,
-    val chunks: List<ResumeChunkResponse>,
-    val processedAt: Instant
+    val status: String,
+    val latestScore: ResumeScoreSummary?,
+    val activeJob: ActiveJob?,
+    val createdAt: Instant,
+    val updatedAt: Instant
 )
+
+@JvmRecord
+data class ResumeLibraryDetail(
+    val id: String,
+    val name: String,
+    val jobTitle: String?,
+    val source: String,
+    val originalFilename: String?,
+    val status: String,
+    val latestScore: ResumeScoreSummary?,
+    val activeJob: ActiveJob?,
+    val createdAt: Instant,
+    val updatedAt: Instant,
+    val text: String?,
+    val score: ResumeScoreResult?
+) {
+    fun toItem() = ResumeLibraryItem(id, name, jobTitle, source, originalFilename, status, latestScore, activeJob, createdAt, updatedAt)
+}
+
+@JvmRecord
+data class ResumePage(val items: List<ResumeLibraryItem>)
+
+@JvmRecord
+data class ResumeCreated(val resume: ResumeLibraryItem, val duplicate: Boolean)
+
+@JvmRecord
+data class DuplicateResume(val id: String, val name: String)
+
+@JvmRecord
+data class ResumeExtractionResult(val resumeId: String, val duplicateOf: DuplicateResume?)
+
+@JvmRecord
+data class PasteResumeRequest(val name: String, val jobTitle: String?, val text: String)
+
+@JvmRecord
+data class PastePersistenceResult(val resumeId: UUID, val duplicate: Boolean)
+
+internal data class ResumeSubmissionOutcome(val resumeId: UUID, val duplicate: Boolean, val storageKey: String?)
 
 @JvmRecord
 data class TextChunk(val index: Int, val section: String, val content: String)

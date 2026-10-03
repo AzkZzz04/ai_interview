@@ -1,5 +1,6 @@
 spring:
   config:
+    # The private .env.supabase file is bootstrap-only; serving processes must not import it.
     import: optional:file:.env[.properties]
   application:
     name: ai_interview
@@ -50,6 +51,11 @@ spring:
         schema-name: public
         table-name: vector_store
 
+server:
+  # Tomcat takes the client address from X-Forwarded-For sent by private-network proxies (nginx, the Vite dev proxy),
+  # so RedisRequestGuard rate-limits the real client. nginx overwrites the header, so clients cannot forge it.
+  forward-headers-strategy: native
+
 management:
   endpoints:
     web:
@@ -61,6 +67,18 @@ management:
         enabled: true
 
 app:
+  ai:
+    # gemini (default) or openai; embeddings always stay on Gemini.
+    chat-provider: ${AI_CHAT_PROVIDER:gemini}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    temperature: ${OPENAI_TEMPERATURE:0.2}
+    request-timeout-seconds: ${OPENAI_REQUEST_TIMEOUT_SECONDS:90}
+    max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:4096}
+  supabase:
+    enabled: ${SUPABASE_SDK_ENABLED:false}
+    url: ${SUPABASE_URL:}
+    secret-key: ${SUPABASE_SECRET_KEY:}
   runtime:
     mode: ${JOB_RUNTIME_MODE:all}
   gemini:
@@ -122,7 +140,6 @@ app:
     heartbeat-seconds: ${JOB_HEARTBEAT_SECONDS:60}
     max-attempts: ${JOB_MAX_ATTEMPTS:3}
     retry-base-seconds: ${JOB_RETRY_BASE_SECONDS:15}
-    reuse-window-seconds: ${JOB_REUSE_WINDOW_SECONDS:300}
     dispatch-interval-ms: ${JOB_DISPATCH_INTERVAL_MS:5000}
     lease-reaper-interval-ms: ${JOB_LEASE_REAPER_INTERVAL_MS:30000}
     cleanup-interval-ms: ${JOB_CLEANUP_INTERVAL_MS:3600000}

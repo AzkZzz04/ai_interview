@@ -36,15 +36,15 @@ flowchart TB
   Extract -->|"read pending file"| S3
   Extract -->|"mark resume ready"| Store
 
-  Handler --> Analysis["ANALYSIS\nassessment + questions"]
+  Handler --> Coaching["RESUME_SCORE · JOB_FIT · EXPERIENCE_SUGGESTIONS\nPRACTICE_QUESTIONS · EXPERIENCE_SPLIT"]
   Handler --> Feedback["ANSWER_FEEDBACK\nscore practice answer"]
-  Analysis -->|"strict document references"| Refs
+  Coaching -->|"strict document references"| Refs
   Feedback -->|"strict document references"| Refs
-  Analysis --> RAG["RAG index + context builder\nsection-block-v3 · per-source RRF"]
+  Coaching --> RAG["RAG index + context builder\nsection-block-v3 · per-source RRF"]
   Feedback --> RAG
   RAG <-->|"embeddings and retrieval"| Store
   RAG -->|"grounded context"| Gemini["Gemini 3.6 Flash\nstructured generation"]
-  Analysis -->|"assessment and questions"| Gemini
+  Coaching -->|"scores, fit, suggestions and questions"| Gemini
   Feedback -->|"answer feedback"| Gemini
   Gemini -->|"structured output"| Worker
 
@@ -57,9 +57,9 @@ flowchart TB
 
 1. The API rate-limits and deduplicates requests, then resolves a ready resume and optional job description to validated, content-hashed document references.
 2. It atomically creates or reuses a durable job in PostgreSQL; only after that transaction commits does the dispatcher send its `jobId` to SQS.
-3. A worker claims the PostgreSQL lease and invokes the handler for extraction, analysis, or answer feedback. It records stages and reusable checkpoints as it runs.
-4. Analysis and feedback handlers reload their document references strictly, build or reuse RAG indexes, retrieve Resume and JD evidence independently, and merge candidates with deterministic Reciprocal Rank Fusion (RRF).
-5. Gemini receives selected, traceable evidence and returns structured output; the worker persists effects and results while the frontend polls job status until it is complete, partial, or failed.
+3. A worker claims the PostgreSQL lease and invokes the handler for its job type: extraction, resume score, job fit, experience suggestions, practice questions, experience split, or answer feedback. It records stages and reusable checkpoints as it runs.
+4. AI handlers reload their document references strictly, build or reuse RAG indexes, retrieve Resume and JD evidence independently, and merge candidates with deterministic Reciprocal Rank Fusion (RRF).
+5. Gemini receives selected, traceable evidence and returns structured output; the worker persists effects and results while the frontend polls job status until it is complete or failed.
 
 PostgreSQL is the source of truth for job state. SQS wakes workers; it does not carry document content or determine job completion.
 
@@ -143,6 +143,18 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:3000`. The backend status endpoint is `http://127.0.0.1:8080/api/status`.
+
+### Or run the full stack in Docker
+
+One command builds and starts PostgreSQL, Redis, LocalStack, the API, the worker and the web app:
+
+```bash
+docker compose --profile app up --build
+```
+
+The API and worker read `.env` for `GEMINI_API_KEY` and the Gemini settings from step 1; Compose points them at its own PostgreSQL, Redis and LocalStack, so the address settings in `.env` are ignored here. Open `http://127.0.0.1:3000`; nginx forwards `/api` to the API, so the API and worker publish no ports. Every published port (web `3000`, PostgreSQL `55432`, Redis `6380`, LocalStack `4566`) binds to `127.0.0.1` only. Stop with `docker compose --profile app down`.
+
+For the isolated Supabase-backed full stack, use the separate Compose project and ports in [the migration runbook](docs/supabase-migration.md). It keeps the bundled PostgreSQL volume available for the local stack.
 
 ## Container images
 
@@ -297,6 +309,21 @@ imagePullSecrets:
 The initial `:local` image references remain in the values file until the first
 successful GitHub Actions run writes the real image SHAs.
 
+## Supabase runtime
+
+The Supabase profile keeps application writes, transactions, jobs, and vectors on
+JDBC; only job-status polling uses the PostgREST client. The client is enabled by
+the `supabase` profile and disabled in worker-only mode. It uses a five-second
+timeout, no retries or redirects, and closes at application shutdown.
+
+Keep `.env.supabase` private for the standalone migration/bootstrap command.
+Spring serving processes do not import it. The Compose Supabase profile maps an
+explicit runtime allowlist, gives the SDK key only to the API, and never sends
+migration credentials to API, worker, or web. Keep Gemini settings in the
+separate ignored `.env.ai-serving` file; never copy the general `.env` into this
+stack. Use the full [Supabase migration runbook](docs/supabase-migration.md) for
+startup and credential handling.
+
 ## Runtime modes
 
 The same Spring Boot build supports API and worker deployment independently:
@@ -307,19 +334,19 @@ JOB_RUNTIME_MODE=api     # submit/query jobs only
 JOB_RUNTIME_MODE=worker  # consume jobs only
 ```
 
-Workers use SQS long polling and PostgreSQL-backed leases. Database retries use full jitter; terminal failures are routed to the DLQ. `PARTIAL` jobs preserve successful Gemini output and only fill missing portions with fallback content.
+Workers use SQS long polling and PostgreSQL-backed leases. Database retries use full jitter; terminal failures are routed to the DLQ.
 
 ## API overview
 
 | Endpoint | Purpose |
 | --- | --- |
 | `POST /api/resumes` | Upload a resume and create an extraction job. |
-| `GET /api/resumes/current` | Retrieve the current resume; `404` means none exists. |
-| `POST /api/analyses` | Submit combined assessment and question-generation work. |
-| `POST /api/interview/feedback` | Submit answer-feedback work. |
+| `POST /api/practice-sets/{setId}/questions/{questionId}/attempts` | Submit an answer attempt for feedback. |
 | `GET /api/jobs/{jobId}` | Poll job status, stage, attempts, result, and error. |
 
-Mutation endpoints accept an optional `Idempotency-Key`. Redis handles short-lived HTTP idempotency and rate limits; PostgreSQL fingerprints reuse identical AI jobs for five minutes.
+The [frontend API contract](docs/api/frontend-api-contract.md) lists every endpoint.
+
+Mutation endpoints accept an optional `Idempotency-Key`. Redis handles short-lived HTTP idempotency and rate limits; PostgreSQL allows one running job per resource, so a second submit returns the job already in progress.
 
 ## Verification
 
@@ -352,3 +379,5 @@ The script refuses non-local hosts, databases other than `interview_guide`, and 
 ## Further documentation
 
 See [project design](docs/project-design.md) for the architecture, domain model, API surface, and implementation details.
+
+For the opt-in Supabase profile, schema bootstrap, deployment secrets, and rollback, see [Supabase migration](docs/supabase-migration.md).
