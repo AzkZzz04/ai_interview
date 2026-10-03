@@ -121,15 +121,6 @@ class ResumePersistenceService(
         )
     }
 
-    fun findPendingStorageCleanup(limit: Int): List<String> = jdbcTemplate.query(
-        "SELECT storage_key FROM ai_interview_app.storage_cleanup ORDER BY created_at LIMIT ?",
-        RowMapper { rs, _ -> rs.getString("storage_key") }, limit
-    )
-
-    fun acknowledgeStorageCleanup(storageKey: String) {
-        jdbcTemplate.update("DELETE FROM ai_interview_app.storage_cleanup WHERE storage_key = ?", storageKey)
-    }
-
     fun deletePending(resumeId: UUID) {
         jdbcTemplate.update("DELETE FROM ai_interview_app.resumes WHERE id = ? AND processing_status = 'PENDING'", resumeId)
     }
@@ -221,29 +212,22 @@ class ResumePersistenceService(
     }
 
     private fun insertChunks(resumeId: UUID, normalizedText: String) {
-        for (chunk in chunker.chunk(normalizedText)) {
-            jdbcTemplate.update(
-                """
-                    INSERT INTO ai_interview_app.resume_chunks (id, resume_id, chunk_index, section, content, metadata)
-                    VALUES (?, ?, ?, ?, ?, jsonb_build_object('sourceType', 'resume', 'contextId', ?))
-                    """.trimIndent(),
-                UUID.randomUUID(), resumeId, chunk.index, chunk.section, chunk.content, RagContextId.forChunk("resume", chunk)
-            )
-        }
+        for (chunk in chunker.chunk(normalizedText)) insertChunk(resumeId, chunk.index, chunk.section, chunk.content)
     }
 
     private fun replaceChunks(resumeId: UUID, chunks: List<ResumeChunkResponse>) {
         jdbcTemplate.update("DELETE FROM ai_interview_app.resume_chunks WHERE resume_id = ?", resumeId)
-        for (chunk in chunks) {
-            jdbcTemplate.update(
-                """
-                    INSERT INTO ai_interview_app.resume_chunks (id, resume_id, chunk_index, section, content, metadata)
-                    VALUES (?, ?, ?, ?, ?, jsonb_build_object('sourceType', 'resume', 'contextId', ?))
-                    """.trimIndent(),
-                UUID.randomUUID(), resumeId, chunk.index, chunk.section, chunk.content,
-                RagContextId.forChunk("resume", chunk.section, chunk.index)
-            )
-        }
+        for (chunk in chunks) insertChunk(resumeId, chunk.index, chunk.section, chunk.content)
+    }
+
+    private fun insertChunk(resumeId: UUID, index: Int, section: String, content: String) {
+        jdbcTemplate.update(
+            """
+                INSERT INTO ai_interview_app.resume_chunks (id, resume_id, chunk_index, section, content, metadata)
+                VALUES (?, ?, ?, ?, ?, jsonb_build_object('sourceType', 'resume', 'contextId', ?))
+                """.trimIndent(),
+            UUID.randomUUID(), resumeId, index, section, content, RagContextId.forChunk("resume", section, index)
+        )
     }
 
     private fun findStorageKey(resumeId: UUID): Optional<String> = jdbcTemplate.query(
@@ -251,5 +235,5 @@ class ResumePersistenceService(
         RowMapper { rs, _ -> rs.getString("storage_key") }, resumeId
     ).stream().filter { !it.isNullOrBlank() }.findFirst()
 
-    private fun truncate(value: String?): String? = if (value == null || value.length <= 4_000) value else value.substring(0, 4_000)
+    private fun truncate(value: String?): String? = value?.take(4_000)
 }

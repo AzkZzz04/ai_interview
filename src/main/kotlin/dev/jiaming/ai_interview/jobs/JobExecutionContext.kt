@@ -25,7 +25,7 @@ class JobExecutionContext internal constructor(
     private var stageStartedAt: Instant? = null
 
     fun job() = job
-    fun userId(): UUID = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+    fun userId(): UUID = job.requireUserId()
     fun stage(stage: JobStage) {
         finishActiveStage()
         jobStore.updateStage(job.id, leaseToken, stage)

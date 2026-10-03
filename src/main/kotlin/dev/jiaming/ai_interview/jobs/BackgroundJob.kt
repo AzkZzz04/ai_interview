@@ -12,4 +12,6 @@ data class BackgroundJob(
     val lastError: String?, val retryable: Boolean?, val runAfter: Instant?, val createdAt: Instant,
     val updatedAt: Instant, val enqueuedAt: Instant?, val startedAt: Instant?, val completedAt: Instant?,
     val leaseToken: UUID?, val leaseExpiresAt: Instant?
-)
+) {
+    fun requireUserId(): UUID = userId ?: throw IllegalArgumentException("Background job has no user: $id")
+}

@@ -18,7 +18,7 @@ class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate, pr
     @Transactional
     fun materializeResumeScore(job: BackgroundJob, leaseToken: UUID, resumeId: UUID, response: ResumeScoreResult): UUID {
         lockOwnedLease(job.id, leaseToken)
-        val userId = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+        val userId = job.requireUserId()
         return materialize(job.id, JobEffectType.RESUME_SCORE) { id ->
             val resultJson = try { objectMapper.writeValueAsString(response) }
             catch (exception: JsonProcessingException) { throw IllegalStateException("Could not serialize resume score", exception) }
@@ -35,7 +35,7 @@ class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate, pr
     fun materializeJobFit(job: BackgroundJob, leaseToken: UUID, fitId: UUID, response: JsonNode) {
         lockOwnedLease(job.id, leaseToken)
         if (!response.isObject) throw IllegalArgumentException("Job fit result must be a JSON object")
-        val userId = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+        val userId = job.requireUserId()
         claimEffect(job.id, JobEffectType.JOB_FIT, fitId)
         val updated = jdbcTemplate.update("""
             UPDATE ai_interview_app.job_fits
@@ -47,7 +47,7 @@ class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate, pr
     @Transactional
     fun materializePracticeQuestions(job: BackgroundJob, leaseToken: UUID, practiceSetId: UUID, drafts: List<PracticeQuestionDraft>): UUID {
         lockOwnedLease(job.id, leaseToken)
-        val userId = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+        val userId = job.requireUserId()
         return materialize(job.id, JobEffectType.PRACTICE_QUESTIONS) { _ ->
             // Takes the set's row lock first, so user-question adds wait for the AI questions instead of interleaving.
             val updated = jdbcTemplate.update(
@@ -71,7 +71,7 @@ class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate, pr
     fun materializeExperienceSuggestions(job: BackgroundJob, leaseToken: UUID, suggestionsId: UUID, result: JsonNode, sourceIds: List<UUID>) {
         lockOwnedLease(job.id, leaseToken)
         if (!result.isObject) throw IllegalArgumentException("Experience suggestions result must be a JSON object")
-        val userId = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+        val userId = job.requireUserId()
         claimEffect(job.id, JobEffectType.EXPERIENCE_SUGGESTIONS, suggestionsId)
         val updated = jdbcTemplate.update("""
             UPDATE ai_interview_app.experience_suggestions
@@ -83,7 +83,7 @@ class JobEffectMaterializationService(private val jdbcTemplate: JdbcTemplate, pr
     @Transactional
     fun materializeAttemptFeedback(job: BackgroundJob, leaseToken: UUID, attemptId: UUID, feedback: AnswerFeedbackResult): UUID {
         lockOwnedLease(job.id, leaseToken)
-        val userId = job.userId ?: throw IllegalArgumentException("Background job has no user: ${job.id}")
+        val userId = job.requireUserId()
         return materialize(job.id, JobEffectType.ANSWER_FEEDBACK) { _ ->
             val updated = jdbcTemplate.update(
                 "UPDATE ai_interview_app.answer_attempts SET feedback = ?::jsonb, score = ? WHERE id = ? AND user_id = ?",

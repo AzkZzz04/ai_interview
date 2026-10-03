@@ -81,7 +81,9 @@ data class ResumeLibraryDetail(
     val updatedAt: Instant,
     val text: String?,
     val score: ResumeScoreResult?
-)
+) {
+    fun toItem() = ResumeLibraryItem(id, name, jobTitle, source, originalFilename, status, latestScore, activeJob, createdAt, updatedAt)
+}
 
 @JvmRecord
 data class ResumePage(val items: List<ResumeLibraryItem>)

@@ -9,7 +9,6 @@ import java.security.NoSuchAlgorithmException
 import java.time.Duration
 import java.time.Instant
 import java.util.HexFormat
-import java.util.Optional
 import java.util.UUID
 import java.util.function.Supplier
 import java.util.concurrent.ScheduledFuture
@@ -44,7 +43,7 @@ class RedisRequestGuard(
         work: Supplier<T>
     ): T {
         if (!properties.idempotency.enabled) return work.get()
-        val idempotencyKey = idempotencyKey().orElse(null) ?: return work.get()
+        val idempotencyKey = idempotencyKey() ?: return work.get()
         val requestFingerprint = fingerprint(action, requestFingerprintSource)
         val redisKey = key("idem:%s:%s:%s".format(action, clientId(), sha256(idempotencyKey)))
         val ttl = Duration.ofSeconds(properties.idempotency.ttlSeconds.toLong())
@@ -128,8 +127,7 @@ class RedisRequestGuard(
                 throw ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key was already used for a different $action request.")
             }
             val responseJson = stored.substringAfter(' ', "")
-            if (responseJson.startsWith(RESERVATION_MARKER)) throw stillRunning(action)
-            if (responseJson.isEmpty()) throw stillRunning(action)
+            if (responseJson.isEmpty() || responseJson.startsWith(RESERVATION_MARKER)) throw stillRunning(action)
             try {
                 return objectMapper.readValue(responseJson, responseType)
             } catch (exception: JsonProcessingException) {
@@ -202,13 +200,13 @@ class RedisRequestGuard(
         return if (!remoteAddress.isNullOrBlank()) sanitize(remoteAddress) else "local"
     }
 
-    private fun idempotencyKey(): Optional<String> {
-        val attributes = RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes ?: return Optional.empty()
+    private fun idempotencyKey(): String? {
+        val attributes = RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes ?: return null
         val value = attributes.request.getHeader("Idempotency-Key")
-        return if (!value.isNullOrBlank()) Optional.of(value.trim()) else Optional.empty()
+        return value?.trim()?.takeIf(String::isNotBlank)
     }
 
-    private fun sanitize(value: String) = value.replace(Regex("[^A-Za-z0-9._:-]"), "_")
+    private fun sanitize(value: String) = value.replace(UNSAFE_KEY_CHARACTERS, "_")
 
     private fun fingerprint(action: String, requestFingerprintSource: Any?): String = try {
         sha256(objectMapper.writeValueAsString(java.util.List.of(action, requestFingerprintSource)))
@@ -230,6 +228,7 @@ class RedisRequestGuard(
 
     private companion object {
         val log = LoggerFactory.getLogger(RedisRequestGuard::class.java)
+        val UNSAFE_KEY_CHARACTERS = Regex("[^A-Za-z0-9._:-]")
         // ponytail: one thread serializes renewals; use a bounded pool if heartbeat lag approaches the two-minute lease.
         val heartbeatExecutor = ScheduledThreadPoolExecutor(1) { task ->
             Thread(task, "redis-idempotency-heartbeat").apply { isDaemon = true }

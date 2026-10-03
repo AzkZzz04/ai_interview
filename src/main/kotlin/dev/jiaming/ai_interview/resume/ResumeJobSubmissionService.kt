@@ -95,10 +95,6 @@ class ResumeJobSubmissionService(
             .body(ResumeCreated(item, outcome.duplicate))
     }
 
-    private fun ResumeLibraryDetail.toItem() = ResumeLibraryItem(
-        id, name, jobTitle, source, originalFilename, status, latestScore, activeJob, createdAt, updatedAt
-    )
-
     private fun defaultName(filename: String?): String = filename.orEmpty()
         .substringBeforeLast('.', filename.orEmpty()).trim().take(80).ifBlank { "Untitled resume" }
 

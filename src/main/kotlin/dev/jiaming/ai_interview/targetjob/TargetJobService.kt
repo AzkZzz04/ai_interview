@@ -22,7 +22,7 @@ class TargetJobService(
     fun create(name: String, text: String): TargetJobCreateResult {
         val userId = localUserService.localUserId()
         val saved = jobDescriptionPersistenceService.findOrCreateTargetJob(userId, name, text)
-        val targetJob = findDetail(userId, saved.document.resourceId()).orElseThrow(::notFound)
+        val targetJob = findDetail(userId, saved.document.resourceId()) ?: throw notFound()
         return TargetJobCreateResult(targetJob, !saved.created)
     }
 
@@ -42,11 +42,12 @@ class TargetJobService(
 
     fun get(targetJobId: UUID): TargetJobDetail {
         val userId = localUserService.localUserId()
-        return findDetail(userId, targetJobId).orElseThrow(::notFound)
+        return findDetail(userId, targetJobId) ?: throw notFound()
     }
 
     @Transactional
     fun rename(targetJobId: UUID, name: String): TargetJob {
+        val userId = localUserService.localUserId()
         val updated = jdbcTemplate.update(
             """
                 UPDATE ai_interview_app.job_descriptions
@@ -55,15 +56,15 @@ class TargetJobService(
             """.trimIndent(),
             name,
             targetJobId,
-            localUserService.localUserId(),
+            userId,
         )
         if (updated != 1) throw notFound()
-        return findSummary(localUserService.localUserId(), targetJobId).orElseThrow(::notFound)
+        return findSummary(userId, targetJobId) ?: throw notFound()
     }
 
     fun deleteImpact(targetJobId: UUID): TargetJobDeleteImpact {
-        requireOwned(targetJobId)
         val userId = localUserService.localUserId()
+        requireOwned(userId, targetJobId)
         val fits = jdbcTemplate.queryForObject(
             "SELECT count(*) FROM ai_interview_app.job_fits WHERE target_job_id = ? AND user_id = ? AND result_payload IS NOT NULL",
             Int::class.java, targetJobId, userId
@@ -74,7 +75,7 @@ class TargetJobService(
         ) ?: 0
         val suggestionSets = jdbcTemplate.queryForObject(
             "SELECT count(*) FROM ai_interview_app.experience_suggestions WHERE target_job_id = ? AND user_id = ? AND result_payload IS NOT NULL",
-            Int::class.java, targetJobId, localUserService.localUserId()
+            Int::class.java, targetJobId, userId
         ) ?: 0
         val attempts = countPracticeAttempts(jdbcTemplate, userId, "target_job_id", targetJobId)
         return TargetJobDeleteImpact(fits = fits, suggestionSets = suggestionSets, practiceSets = practiceSets, attempts = attempts)
@@ -134,8 +135,7 @@ class TargetJobService(
         userId, targetJobId, targetJobId.toString(), targetJobId.toString(),
     )
 
-    private fun requireOwned(targetJobId: UUID) {
-        val userId = localUserService.localUserId()
+    private fun requireOwned(userId: UUID, targetJobId: UUID) {
         val exists = jdbcTemplate.query(
             "SELECT id FROM ai_interview_app.job_descriptions WHERE id = ? AND user_id = ?",
             { rs, _ -> rs.getObject("id", UUID::class.java) },
@@ -154,7 +154,7 @@ class TargetJobService(
         { rs, _ -> rs.toTargetJob() },
         targetJobId,
         userId,
-    ).stream().findFirst()
+    ).firstOrNull()
 
     private fun findDetail(userId: UUID, targetJobId: UUID) = jdbcTemplate.query(
         """
@@ -173,7 +173,7 @@ class TargetJobService(
         },
         targetJobId,
         userId,
-    ).stream().findFirst()
+    ).firstOrNull()
 
     private fun ResultSet.toTargetJob() = TargetJob(
         getObject("id", UUID::class.java),

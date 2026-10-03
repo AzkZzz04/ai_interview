@@ -186,7 +186,7 @@ class ExperienceService(
         "An experience with this title and description already exists"
     )
 
-    private fun normalize(value: String) = value.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
+    private fun normalize(value: String) = value.trim().replace(WHITESPACE, " ").lowercase(Locale.ROOT)
 
     private data class ExperienceDraft(
         val title: String,
@@ -197,6 +197,7 @@ class ExperienceService(
     )
 
     private companion object {
+        val WHITESPACE = Regex("\\s+")
         val experienceRowMapper = RowMapper { rs, _ -> mapExperience(rs) }
 
         fun mapExperience(rs: ResultSet) = Experience(

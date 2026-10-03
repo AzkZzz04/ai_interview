@@ -23,7 +23,6 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionOperations
-import org.springframework.web.server.ResponseStatusException
 
 @Service
 class ResumeLibraryService(
@@ -99,7 +98,7 @@ class ResumeLibraryService(
 
         val userId = localUserService.localUserId()
         val updated = requireNotNull(transactionOperations.execute {
-            if (body.has("name") || body.has("jobTitle")) {
+            if (namePresent || jobTitlePresent) {
                 val count = jdbcTemplate.update(
                     """
                         UPDATE ai_interview_app.resumes
@@ -205,10 +204,6 @@ class ResumeLibraryService(
             }
         )
     }
-
-    private fun ResumeLibraryDetail.toItem() = ResumeLibraryItem(
-        id, name, jobTitle, source, originalFilename, status, latestScore, activeJob, createdAt, updatedAt
-    )
 
     private fun apiStatus(status: String) = if (status == "PENDING") "PROCESSING" else status
 

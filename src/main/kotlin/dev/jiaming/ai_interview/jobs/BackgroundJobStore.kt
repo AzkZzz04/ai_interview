@@ -151,7 +151,7 @@ class BackgroundJobStore(private val jdbcTemplate: JdbcTemplate, private val obj
     }
     private fun json(value: JsonNode?) = value?.toString() ?: JsonNodeFactory.instance.objectNode().toString()
     private fun instant(rs: ResultSet, column: String): Instant? = rs.getTimestamp(column)?.toInstant()
-    private fun truncate(value: String?) = if (value == null || value.length <= 4_000) value else value.substring(0, 4_000)
+    private fun truncate(value: String?) = value?.take(4_000)
 
     companion object {
         private val RESUME_RESOURCE_TYPES = JobInputRefs.RESUME_RESOURCE_TYPES.joinToString { "'$it'" }
