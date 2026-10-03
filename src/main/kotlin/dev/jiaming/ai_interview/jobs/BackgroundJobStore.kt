@@ -44,6 +44,16 @@ class BackgroundJobStore(private val jdbcTemplate: JdbcTemplate, private val obj
             ORDER BY created_at DESC LIMIT 1
             """, userId, resourceType, resourceId)
     }
+    /** [findLatestForResource] for many resources of one type in a single query, keyed by resource ID. */
+    fun findLatestForResources(userId: UUID, resourceType: String, resourceIds: Collection<UUID>, jobTypes: Collection<JobType> = emptyList()): Map<UUID, BackgroundJob> {
+        if (resourceIds.isEmpty()) return emptyMap()
+        val typeFilter = if (jobTypes.isEmpty()) "" else "AND job_type IN (${jobTypes.joinToString { "'${it.name}'" }})"
+        return jdbcTemplate.query("""
+            SELECT DISTINCT ON (resource_id) $JOB_COLUMNS FROM ai_interview_app.background_jobs
+            WHERE user_id = ? AND resource_type = ? AND resource_id IN (${resourceIds.joinToString { "?" }}) $typeFilter
+            ORDER BY resource_id, created_at DESC
+            """, { rs, _ -> mapJob(rs) }, userId, resourceType, *resourceIds.toTypedArray()).associateBy { it.resourceId!! }
+    }
     fun deleteByResources(resourceType: String, resourceIds: Collection<UUID>): Int {
         if (resourceIds.isEmpty()) return 0
         return jdbcTemplate.update("DELETE FROM ai_interview_app.background_jobs WHERE resource_type = ? AND resource_id IN (${resourceIds.joinToString { "?" }})",

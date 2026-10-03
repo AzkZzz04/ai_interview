@@ -245,11 +245,11 @@ class PracticeService(
         attemptViews(userId, attemptRows(userId, "a.question_id = ?", questionId)).single { it.id == attemptId }
 
     // KTD4: SCORED when feedback exists, else FAILED when the latest job failed, else PENDING. scoreDelta skips unscored attempts.
-    // ponytail: one job lookup per attempt; batch it if sets ever hold many attempts.
     private fun attemptViews(userId: UUID, rows: List<AttemptRow>): List<AttemptView> {
+        val jobs = backgroundJobStore.findLatestForResources(userId, AttemptFeedbackPayload.RESOURCE, rows.map { it.id }, listOf(JobType.ANSWER_FEEDBACK))
         var previousScore: Int? = null
         return rows.map { row ->
-            val job = backgroundJobStore.findLatestForResource(userId, AttemptFeedbackPayload.RESOURCE, row.id, listOf(JobType.ANSWER_FEEDBACK)).orElse(null)
+            val job = jobs[row.id]
             val status = when {
                 row.feedback != null -> AttemptStatus.SCORED
                 job?.status == JobStatus.FAILED -> AttemptStatus.FAILED

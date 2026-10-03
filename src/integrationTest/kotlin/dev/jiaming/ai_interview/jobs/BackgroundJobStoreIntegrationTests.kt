@@ -62,6 +62,14 @@ class BackgroundJobStoreIntegrationTests {
         assertThat(store.findLatestForResource(userId, "resume", resume).map(ActiveJob::from)).contains(ActiveJob(newer.id, JobType.JOB_FIT, JobStatus.QUEUED, JobStage.QUEUED, 0, 3, null))
         assertThat(store.findLatestForResource(userId, "resume", resume, listOf(JobType.RESUME_EXTRACTION)).map { it.id }).contains(older.id); assertThat(store.findLatestForResource(userId, "practice-set", resume)).isEmpty()
     }
+    @Test fun latestForResourcesReturnsEachResourcesNewestJobInOneLookup() {
+        val first = UUID.randomUUID(); val second = UUID.randomUUID(); val payload = ObjectMapper().createObjectNode()
+        val firstOlder = store.createIfAbsent(userId, JobType.ANSWER_FEEDBACK, "attempt", first, payload, null, 3).orElseThrow(); val firstNewer = store.createIfAbsent(userId, JobType.ANSWER_FEEDBACK, "attempt", first, payload, null, 3).orElseThrow(); val secondOnly = store.createIfAbsent(userId, JobType.ANSWER_FEEDBACK, "attempt", second, payload, null, 3).orElseThrow()
+        jdbcTemplate.update("UPDATE ai_interview_app.background_jobs SET created_at = now() - interval '1 minute' WHERE id = ?", firstOlder.id)
+        val latest = store.findLatestForResources(userId, "attempt", listOf(first, second, UUID.randomUUID()), listOf(JobType.ANSWER_FEEDBACK))
+        assertThat(latest.mapValues { it.value.id }).containsExactlyInAnyOrderEntriesOf(mapOf(first to firstNewer.id, second to secondOnly.id))
+        assertThat(store.findLatestForResources(userId, "attempt", emptyList())).isEmpty(); assertThat(store.findLatestForResources(userId, "attempt", listOf(first), listOf(JobType.JOB_FIT))).isEmpty()
+    }
     @Test fun deleteByResourcesRemovesTheirJobsSoPollsAndLeaseWritesFail() {
         val resume = UUID.randomUUID(); val doomed = submissions.submit(JobType.JOB_FIT, "resume", resume, PAYLOAD); val kept = submissions.submit(JobType.JOB_FIT, "resume", UUID.randomUUID(), PAYLOAD); val lease = UUID.randomUUID(); store.claim(doomed.jobId, lease, LEASE)
         assertThat(store.deleteByResources("resume", listOf(resume))).isEqualTo(1); assertThat(store.deleteByResources("resume", emptyList())).isZero()
