@@ -19,6 +19,7 @@ import org.mockito.Mockito
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
@@ -73,6 +74,23 @@ class ResumeControllerTests {
 			.content("""{"name":"Backend","jobTitle":null,"text":"${"x".repeat(100)}"}"""))
 			.andExpect(status().isCreated)
 			.andExpect(jsonPath("$.resume.source").value("PASTE"))
+	}
+
+	@Test
+	fun patchReadsTheBodyWithTheJacksonConverterTheApplicationUses() {
+		val resumeId = UUID.randomUUID()
+		val item = ResumeLibraryItem(resumeId.toString(), "Backend", null, "PASTE", null, "READY", null, null, Instant.now(), Instant.now())
+		Mockito.`when`(libraryService.patch(eq(resumeId), any<Map<String, Any?>>())).thenReturn(item)
+		// Spring Boot 4 registers only the Jackson 3 converter; the default standalone setup would hide a body it cannot read.
+		val bootMockMvc = standaloneSetup(ResumeController(submissionService, libraryService, scoreService, guard))
+			.setMessageConverters(JacksonJsonHttpMessageConverter()).build()
+
+		bootMockMvc.perform(patch("/api/resumes/{id}", resumeId).contentType(MediaType.APPLICATION_JSON)
+			.content("""{"name":"Backend","jobTitle":null}"""))
+			.andExpect(status().isOk)
+			.andExpect(jsonPath("$.name").value("Backend"))
+		// An explicit null still reaches the service, so it clears the job title instead of leaving it unchanged.
+		Mockito.verify(libraryService).patch(resumeId, mapOf("name" to "Backend", "jobTitle" to null))
 	}
 
 	@Test

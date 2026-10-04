@@ -105,7 +105,8 @@ class ResumeLibraryIntegrationTests {
         val renamed = library.patch(id, mapper.readTree("""{"name":"Backend 2026"}"""))
         assertThat(renamed.name).isEqualTo("Backend 2026")
         assertThat(renamed.jobTitle).isEqualTo("Platform")
-        val cleared = library.patch(id, mapper.readTree("""{"jobTitle":null}"""))
+        // The controller passes the request body as a map; an explicit null in it must still clear the title.
+        val cleared = library.patch(id, mapOf("jobTitle" to null))
         assertThat(cleared.name).isEqualTo("Backend 2026")
         assertThat(cleared.jobTitle).isNull()
 
