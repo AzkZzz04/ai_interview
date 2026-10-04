@@ -37,7 +37,9 @@ class ResumeControllerTests {
 	private val scoreService = Mockito.mock(ResumeScoreService::class.java)
 	private val guard = RedisRequestGuard(StringRedisTemplate(), RedisUsageProperties("resume-controller-test:",
 		RedisUsageProperties.RateLimit(false, 60, 12, 20), RedisUsageProperties.Idempotency(false, 86_400)), ObjectMapper())
-	private val mockMvc = standaloneSetup(ResumeController(submissionService, libraryService, scoreService, guard)).build()
+	// Spring Boot 4 registers only the Jackson 3 converter; the default standalone setup would hide a body it cannot read.
+	private val mockMvc = standaloneSetup(ResumeController(submissionService, libraryService, scoreService, guard))
+		.setMessageConverters(JacksonJsonHttpMessageConverter()).build()
 
 	@Test
 	fun uploadsResumeAndReturnsAcceptedJob() {
@@ -81,11 +83,8 @@ class ResumeControllerTests {
 		val resumeId = UUID.randomUUID()
 		val item = ResumeLibraryItem(resumeId.toString(), "Backend", null, "PASTE", null, "READY", null, null, Instant.now(), Instant.now())
 		Mockito.`when`(libraryService.patch(eq(resumeId), any<Map<String, Any?>>())).thenReturn(item)
-		// Spring Boot 4 registers only the Jackson 3 converter; the default standalone setup would hide a body it cannot read.
-		val bootMockMvc = standaloneSetup(ResumeController(submissionService, libraryService, scoreService, guard))
-			.setMessageConverters(JacksonJsonHttpMessageConverter()).build()
 
-		bootMockMvc.perform(patch("/api/resumes/{id}", resumeId).contentType(MediaType.APPLICATION_JSON)
+		mockMvc.perform(patch("/api/resumes/{id}", resumeId).contentType(MediaType.APPLICATION_JSON)
 			.content("""{"name":"Backend","jobTitle":null}"""))
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.name").value("Backend"))

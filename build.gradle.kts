@@ -103,7 +103,7 @@ configurations[integrationTestSourceSet.runtimeOnlyConfigurationName]
 	.extendsFrom(configurations.testRuntimeOnly.get())
 
 val integrationTest by tasks.registering(Test::class) {
-	description = "Runs PostgreSQL and LocalStack integration tests."
+	description = "Runs PostgreSQL, Redis and LocalStack integration tests."
 	group = "verification"
 	testClassesDirs = integrationTestSourceSet.output.classesDirs
 	classpath = integrationTestSourceSet.runtimeClasspath
